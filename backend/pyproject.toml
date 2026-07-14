@@ -1,0 +1,59 @@
+[project]
+name = "whattowear"
+version = "0.1.0"
+description = "What to Wear — grounded-assembly RAG styling engine (cert challenge + product seed)."
+requires-python = ">=3.12"
+dependencies = [
+    # --- core RAG / LLM (via Vercel AI Gateway) ---
+    "langchain>=1.3.0,<2.0.0",
+    "langchain-community>=0.4.0,<1.0.0",
+    "langchain-openai>=1.2.0,<2.0.0",
+    "langchain-qdrant>=1.0.0,<2.0.0",
+    "langchain-text-splitters>=1.0.0,<2.0.0",
+    "langchain-cohere>=0.4.0,<1.0.0",
+    "langchain-tavily>=0.2.0,<1.0.0",
+    "langchain-experimental>=0.3.0,<1.0.0",
+    "tiktoken>=0.8.0,<1.0.0",
+    "langgraph>=1.0.0,<2.0.0",
+    "qdrant-client>=1.15.0,<2.0.0",
+    "openai>=2.0.0,<3.0.0",
+    "langsmith>=0.8.0,<0.9.0",
+    # --- ingestion ---
+    "wikipedia>=1.4.0,<2.0.0",
+    "pymupdf>=1.24.0,<2.0.0",
+    "ebooklib>=0.18,<1.0.0",
+    "beautifulsoup4>=4.12.0,<5.0.0",
+    "markdownify>=0.13.0,<1.0.0",
+    "pyyaml>=6.0,<7.0.0",
+    # --- external APIs ---
+    "requests>=2.32.0,<3.0.0",
+    # --- data / test API ---
+    "pandas>=2.2.0,<4.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "python-dotenv>=1.1.0,<2.0.0",
+    "fastapi>=0.115.0,<1.0.0",
+    "uvicorn>=0.30.0,<1.0.0",
+]
+
+# NOTE on evals: the vibrantlabs Ragas fork forces langchain-community==0.3.31
+# (it imports a legacy Vertex AI module removed in 0.4), which conflicts with
+# langchain-cohere>=0.4 used by the retrieval layer. Rather than fight the
+# resolver, RAGAS/openevals scoring lives in an isolated uv project under
+# `evals/` that reads the run artifacts (JSONL) this package produces. The
+# verifiable checks (only-owned-items, cites-rule_id, weather-appropriate) need
+# no RAGAS and stay in this package (src/whattowear/eval).
+[dependency-groups]
+notebooks = [
+    "ipykernel>=6.29.0",
+    "jupyterlab>=4.2.0",
+]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/whattowear"]
