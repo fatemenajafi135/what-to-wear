@@ -32,6 +32,26 @@ Features run through the Spec Kit workflow: `/speckit.specify` →
 `/speckit.implement`. Don't skip `/speckit.analyze`, and read it like a critic —
 the planner over-builds; hold it to the constitution's simplicity rule.
 
+## Session workflow (planner / worker split)
+
+This project is run as **one planning conversation + a fresh session per feature
+(or per Feature-002 phase)**. The durable source of truth is the **repo**
+(`docs/SDD-HANDOFF.md`, `specs/`, git, the memory files) — not any single chat.
+So:
+
+- **A worker session** picks up the next item from SDD-HANDOFF, runs it through
+  the spec-kit workflow, and **on completion MUST write state back** — this is
+  the handoff contract, not optional:
+  1. Update `docs/SDD-HANDOFF.md`: the feature table + "current state" (and
+     "Known debt" if you closed or added any).
+  2. Update the **"Current state" section in this file (CLAUDE.md)**.
+  3. Mark the feature's `specs/<feature>/tasks.md` items `[X]`.
+  4. Add a memory if a real decision was made (see the memory index).
+  Skip this and the next session starts from stale state and creates conflicts.
+- **A planner session** (e.g. deciding the next feature) must **re-read
+  SDD-HANDOFF + `git log` first** — don't plan from stale in-context memory, a
+  worker session may have moved things since.
+
 ## Current state (keep this in sync as features land)
 
 - **Feature 001 (closet-persistence): DONE, merged to `main`.** Per-user closet

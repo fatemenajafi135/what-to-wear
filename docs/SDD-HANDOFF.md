@@ -70,6 +70,13 @@ Baseline is committed to `main`. Spec Kit is initialized.
 Each runs: /speckit.specify, /speckit.clarify, /speckit.plan, /speckit.analyze,
 /speckit.tasks, /speckit.implement
 
+**Workflow:** one planning conversation + a fresh session per feature (or per
+Feature-002 phase). On finishing a feature/phase, the worker session **writes
+state back** — update this file's table + "current state," update `CLAUDE.md`'s
+"Current state," mark `specs/<feature>/tasks.md` done. See the "Session workflow
+/ handoff contract" in `CLAUDE.md`. This keeps the planner and worker sessions
+from drifting.
+
 | # | Feature | Notes |
 |---|---|---|
 | 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
