@@ -1,9 +1,13 @@
 # Contract: `POST /suggest`
 
-Supersedes `/recommend` (kept alive during the Phase 1–3 transition; retired once
-`/suggest` ships in Phase 3 — see spec Delivery Phases). Same auth model as
-`/recommend` post-Phase-1 and as `/wardrobe/items`: bearer JWT required, `user_id`
-is always the verified `sub` claim, never a request field (FR-001).
+Supersedes `/recommend` (kept alive through Phase 1–2, retired at the end of
+Phase 3 — tasks.md T037a — once this endpoint is verified equivalent). The two
+cannot coexist past Phase 3: `OutfitResult.outfits` becomes `list[ScoredOutfit]`
+in Phase 2 (data-model.md), and `/recommend`'s old linear-pipeline code path
+never runs `score_and_rank`, so it can't populate the required 4 scores. Same
+auth model as `/recommend` post-Phase-1 and as `/wardrobe/items`: bearer JWT
+required, `user_id` is always the verified `sub` claim, never a request field
+(FR-001).
 
 ## Request
 

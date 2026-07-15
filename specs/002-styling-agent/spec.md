@@ -306,7 +306,10 @@ generation re-runs the evaluation no-regression gate before merge.
 - **Phase 3 — graph + real selection**: satisfies US2 and US3's ranking — the
   pipeline becomes an agent graph with deterministic pruning/combination/scoring
   replacing any model-driven item picking; the suggestion surface is delivered.
-  Unfillable slots omit the outfit (FR-011). (SC-002, SC-003, SC-004.)
+  Unfillable slots omit the outfit (FR-011). Phase 1's suggestion surface is
+  retired within this phase once the new one is verified equivalent — the two
+  cannot coexist past this point, since only outfits from the new surface carry
+  the four dimension scores. (SC-002, SC-003, SC-004.)
 - **Phase 4 — refinement + optional judge**: satisfies US4, plus the reported-only
   language-model judge signal. (SC-007, FR-010.)
 

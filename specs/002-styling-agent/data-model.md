@@ -33,9 +33,14 @@ Extends the existing `Outfit` (items + rationale) with scoring.
 | `scores` | `list[DimensionScore]`, exactly 4 | one per dimension, always all four (FR-008) |
 | `rank_score` | `float` | the single value produced by the active combination strategy (FR-009a); used to order the returned list, not a fifth independent dimension |
 
-`OutfitResult.outfits` becomes `list[ScoredOutfit]` starting Phase 2 (additive
-field change — existing `Outfit` consumers reading `items`/`rationale` are
-unaffected).
+`OutfitResult.outfits` becomes `list[ScoredOutfit]` in Phase 3, when the graph's
+`explain` node (wrapping `cite.build_result`) starts producing it — not Phase 2,
+which only builds the standalone `scoring/` package with nothing wired into
+`OutfitResult` yet. This is **not** a backward-compatible additive change:
+`/recommend`'s old linear-pipeline path never runs `score_and_rank`, so it can't
+populate the required 4 scores against the new type. Rather than support two
+result shapes indefinitely, `/recommend` is retired within Phase 3 once
+`/suggest` is verified equivalent (tasks.md T037a) — see contracts/suggest.md.
 
 ### `ScoreCombinationStrategy` (plain type, `scoring/combine.py`, not a Pydantic
 model — internal only, never serialized over the API)

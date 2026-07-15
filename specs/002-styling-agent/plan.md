@@ -24,8 +24,11 @@ independently-mergeable phases (per spec Delivery Phases):
 - **Phase 3 — graph + `/suggest`.** The pipeline becomes a LangGraph
   `StateGraph` (node order below) reusing existing stage functions unchanged;
   deterministic pruning/combination/scoring replaces any model-driven item
-  picking; `/suggest` (SSE) is delivered, `/recommend` stays live during the
-  transition.
+  picking; `/suggest` (SSE) is delivered, `/recommend` retired within this same
+  phase once `/suggest` is verified equivalent (T037a) — `OutfitResult.outfits`
+  becomes `list[ScoredOutfit]` in this phase, and `/recommend`'s old code path
+  never populates scores, so the two endpoints cannot coexist past Phase 3
+  without a second result type nobody wants to maintain long-term.
 - **Phase 4 — refinement.** Conversational refinement via the LangGraph
   checkpointer (already present in `memory/store.py`), swapped from
   `InMemorySaver` to a Postgres-backed saver keyed by `thread_id`; optional
@@ -113,7 +116,7 @@ specs/002-styling-agent/
 ```text
 backend/
 ├── src/whattowear/
-│   ├── api.py                       # + POST /suggest (Phase 3); /recommend already auth-gated (Phase 1, done)
+│   ├── api.py                       # + POST /suggest (Phase 3); POST /recommend removed at end of Phase 3 (T037a)
 │   ├── auth.py                      # unchanged, reused as-is
 │   ├── schema.py                    # + DimensionScore, ScoredOutfit, SuggestRequest (additive)
 │   ├── colors.py                    # unchanged (Phase 1: unit tests added)
@@ -124,7 +127,7 @@ backend/
 │   │   ├── query_builder.py         # unchanged (Phase 1: unit tests added), wrapped by graph nodes
 │   │   ├── generator.py             # unchanged, wrapped by graph node
 │   │   ├── cite.py                  # unchanged (Phase 1: unit tests added), wrapped by graph node
-│   │   ├── run.py                   # existing linear entrypoint, kept for /recommend during transition
+│   │   ├── run.py                   # existing linear entrypoint; DELETED at end of Phase 3 (T037a) once graph.py + eval/harness.py fully replace it
 │   │   └── graph.py                 # NEW (Phase 3): StateGraph, node wiring, GraphState
 │   ├── scoring/                     # NEW (Phase 2)
 │   │   ├── __init__.py
@@ -148,7 +151,7 @@ backend/
     │   ├── scoring/                 # NEW (Phase 2): one test file per dimension + combine.py
     │   └── pipeline/test_graph.py   # NEW (Phase 3): node-level unit tests
     └── integration/
-        ├── test_recommend_auth.py   # Phase 1, done
+        ├── test_recommend_auth.py   # Phase 1, done; DELETED at end of Phase 3 (T037a) — coverage subsumed by test_suggest.py
         ├── test_suggest.py          # NEW (Phase 3)
         └── test_suggest_refinement.py  # NEW (Phase 4)
 ```

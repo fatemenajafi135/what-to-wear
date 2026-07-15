@@ -98,7 +98,12 @@ Phase 3.
 **Goal**: The pipeline becomes a LangGraph `StateGraph`; deterministic
 pruning/combination/scoring (Phase 2's package) replaces any model-driven item
 picking; `POST /suggest` (SSE) delivers grounded, scored outfit suggestions.
-`/recommend` stays live during the transition (spec Delivery Phases).
+`/recommend` stays live only until `/suggest` is verified equivalent, then is
+retired within this same phase (T037a) — see the type-sharing rationale there:
+`OutfitResult.outfits` becomes `list[ScoredOutfit]` in this phase, and
+`/recommend`'s old code path never populates scores, so the two endpoints
+cannot coexist past this phase without a second result type nobody wants to
+maintain.
 
 **Independent Test**: As a user with a closet that can dress the occasion,
 `POST /suggest` returns an SSE stream ending in a `done` event with 3–5
@@ -115,15 +120,16 @@ picking; `POST /suggest` (SSE) delivers grounded, scored outfit suggestions.
 - [ ] T030 [US2] [US3] `score_and_rank` node — calls each `scoring/*.score()` per candidate outfit, assembles `ScoredOutfit.scores` (all 4, FR-008), calls `scoring/combine.rank_outfits` for `rank_score` and final order — in `backend/src/whattowear/pipeline/graph.py` (depends on T029, T015)
 - [ ] T031 [US2] `explain` node wrapping `pipeline/cite.build_result` unchanged, extended to carry `ScoredOutfit` instead of `Outfit` — in `backend/src/whattowear/pipeline/graph.py` (depends on T030)
 - [ ] T032 [US2] Assemble the `StateGraph`: wire T024→T025→T026→T027→T028→T029→T030→T031 as linear edges, compile with `memory.checkpointer` (Phase 4 will swap its backend, not this wiring) — in `backend/src/whattowear/pipeline/graph.py` (depends on T024-T031)
-- [ ] T032a Extend `eval/harness.py` to run golden-set cases through the compiled graph (`pipeline/graph.py`) instead of (or alongside) `pipeline.run.run_pipeline`, and add graph-specific entries to `data/golden_set.yaml` covering multi-outfit, scored, ranked `/suggest` output — closes the constitution Quality Bar gate ("LLM-dependent paths require an entry in `data/golden_set.yaml`") for the new path, and is what actually lets SC-003/SC-004/SC-005/SC-007 be measured rather than just asserted (depends on T032)
+- [ ] T032a Extend `eval/harness.py` to run golden-set cases through the compiled graph (`pipeline/graph.py`) **instead of** `pipeline.run.run_pipeline` (not alongside — `run.py` is retired at T037a, so the harness has exactly one entrypoint after this phase, not two to keep in sync), and add graph-specific entries to `data/golden_set.yaml` covering multi-outfit, scored, ranked `/suggest` output — closes the constitution Quality Bar gate ("LLM-dependent paths require an entry in `data/golden_set.yaml`") for the new path, and is what actually lets SC-003/SC-004/SC-005/SC-007 be measured rather than just asserted (depends on T032)
 - [ ] T033 [US2] Add `SuggestRequest` Pydantic model (no `user_id` field, per contracts/suggest.md) to `backend/src/whattowear/schema.py`
 - [ ] T034 [US2] Implement `POST /suggest` — auth-gated identically to `/recommend` (`get_current_user_id`, FR-001), invokes the compiled graph, streams `event: outfit` chunks then `event: done` via FastAPI `StreamingResponse` (no new SSE dependency, research.md §6) — in `backend/src/whattowear/api.py` (depends on T032, T033)
 - [ ] T035 [P] [US2] Unit tests for the `wardrobe_retrieval` node's pruning/cap behavior (hard-constraint filtering excludes out-of-band items; candidate count never exceeds k=8 per slot regardless of closet size) in `backend/tests/unit/pipeline/test_graph.py` (depends on T028)
 - [ ] T036 [US2] [US3] Integration test for `POST /suggest`: 3–5 outfits for a well-stocked closet, fewer + `note` for an undersized one (FR-002), every item id owned by the requester (FR-003, SC-002), every outfit carries all 4 `DimensionScore`s plus `rank_score`, and outfits are returned in descending `rank_score` order (FR-008, US3 Acceptance Scenario 2) — in `backend/tests/integration/test_suggest.py` (depends on T034)
 - [ ] T037 Re-run the eval no-regression gate — Phase 3 wires retrieval/generation into the graph via unchanged functions (constitution Principle I); `retrieval_recall` must match `backend/artifacts/eval_runs/` (depends on T034, T032a)
+- [ ] T037a [US2] Retire `POST /recommend` and `pipeline/run.py` now that `eval/harness.py` runs golden-set cases through the graph (T032a) and the no-regression gate is confirmed clean (T037): remove the endpoint and `RecommendRequest`/`RecommendResponse` from `backend/src/whattowear/api.py`, delete `backend/src/whattowear/pipeline/run.py`, delete `backend/tests/integration/test_recommend_auth.py` (its 401/JWT-`sub` coverage is subsumed by T036's `/suggest` integration test) — resolves the `OutfitResult.outfits: list[ScoredOutfit]` type-sharing question by removing the only caller that couldn't populate scores (depends on T032a, T036, T037)
 
 **Checkpoint**: US2 and US3 fully satisfied and observable end-to-end through
-`/suggest`.
+`/suggest`; `/recommend` retired, `/suggest` is the sole suggestion entrypoint.
 
 ---
 
@@ -169,8 +175,8 @@ complete per spec.md.
 
 - **Phase 1 (essentials, US1)**: ✅ done — no dependency on later phases
 - **Phase 2 (foundational scoring)**: independent of Phase 1's specific changes; blocks Phase 3's `score_and_rank` node (T030 depends on T015)
-- **Phase 3 (graph + `/suggest`, US2+US3)**: depends on Phase 2 completing (needs `scoring/combine.rank_outfits`)
-- **Phase 4 (refinement, US4)**: depends on Phase 3's compiled graph (T032) existing to extend
+- **Phase 3 (graph + `/suggest`, US2+US3)**: depends on Phase 2 completing (needs `scoring/combine.rank_outfits`); ends with `/recommend` retired (T037a) — Phase 4 has only one endpoint to extend
+- **Phase 4 (refinement, US4)**: depends on Phase 3's compiled graph (T032) existing to extend, and on `/recommend` already being gone (T037a) so there's no second endpoint to also wire refinement into
 - **Phase 5 (polish)**: runs after whichever phase is about to merge
 
 ### Critical wiring note (C1)
