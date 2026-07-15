@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from .ingest.loaders import REPO_ROOT
 from .models import CatalogItemRow, WardrobeItemRow
-from .schema import WardrobeItem
+from .schema import WardrobeItem, WardrobeItemPatch
 
 WARDROBE_FIXTURE = REPO_ROOT / "data" / "fixtures" / "wardrobe.json"
 
@@ -68,6 +68,28 @@ def list_wardrobe_items(session: Session, user_id: str | uuid.UUID) -> list[Ward
         .order_by(WardrobeItemRow.created_at.desc())
     ).all()
     return [_to_wardrobe_item(r) for r in rows]
+
+
+def update_wardrobe_item(
+    session: Session, user_id: str | uuid.UUID, item_id: str | uuid.UUID, patch: WardrobeItemPatch
+) -> WardrobeItem | None:
+    """Applies only the fields present in `patch` (PATCH semantics) to an
+    owned item. Returns None if the item doesn't exist or isn't owned by
+    `user_id` -- treated as not-found either way, not forbidden (spec Edge
+    Cases). `patch`'s own validators already rejected any invalid constrained
+    value before this is ever called (FR-007), so nothing here can fail on
+    the DB CHECK constraint."""
+    try:
+        item_uuid, user_uuid = uuid.UUID(str(item_id)), uuid.UUID(str(user_id))
+    except ValueError:
+        return None
+    row = session.get(WardrobeItemRow, item_uuid)
+    if row is None or row.user_id != user_uuid:
+        return None
+    for field, value in patch.model_dump(exclude_unset=True).items():
+        setattr(row, field, value)
+    session.commit()
+    return _to_wardrobe_item(row)
 
 
 def list_catalog_items(session: Session) -> list[WardrobeItem]:
