@@ -28,12 +28,34 @@ Four knowledge layers, each with one role — **Filter → Combine → Elevate �
 ## Setup
 
 ```bash
-cp .env.example .env      # fill AI_GATEWAY_API_KEY, TAVILY_API_KEY, COHERE_API_KEY
-uv sync
+cp .env.example .env      # fill the gateway keys AND the database vars (below)
+uv sync --group dev       # --group dev adds pytest + ruff
 ```
+
+`.env` needs:
+- **Gateway / retrieval:** `AI_GATEWAY_API_KEY`, `TAVILY_API_KEY`,
+  `COHERE_API_KEY`, `WTW_QDRANT_URL` (+ `WTW_QDRANT_API_KEY`)
+- **Database + auth (Feature 001):** `DATABASE_URL` (Supabase pooler, port 6543)
+  and `SUPABASE_URL` (for JWT/JWKS verification). The app raises on startup
+  without `DATABASE_URL`. Optionally `DATABASE_URL_DIRECT` (port 5432) for
+  running migrations off the pooler.
 
 All model/embedding calls route through the **Vercel AI Gateway** (`config.py`) —
 the single gateway layer, no direct provider SDK calls.
+
+### Database (Feature 001: closet persistence)
+
+The wardrobe is now a **per-user Postgres closet** (Supabase), not a JSON
+fixture. Apply migrations and seed the shared catalog + eval-baseline user once:
+
+```bash
+uv run alembic upgrade head                            # create tables
+uv run python -m whattowear.crud seed-catalog          # 40 catalog items from the fixture
+uv run python -m whattowear.crud seed-eval-baseline    # eval baseline user's closet (no-regression gate)
+```
+
+See `../specs/001-closet-persistence/` for the full spec/plan/quickstart, and
+`../docs/SDD-HANDOFF.md` for where the project is headed next (Feature 002).
 
 ## Run
 
@@ -46,14 +68,25 @@ uv run python -c "from whattowear.pipeline.run import recommend; \
   from whattowear.pipeline.cite import render_text; \
   print(render_text(recommend('wedding', mood='elegant', temp_c=12)))"
 
-# 3. Or run the thin test API (no UI)
+# 3. Or run the API (Swagger UI at /docs)
 uv run uvicorn whattowear.api:app --reload
+#    Closet CRUD (JWT-auth'd, Feature 001):
+#      GET/POST /wardrobe/items · POST /wardrobe/items/bulk · PATCH/DELETE /wardrobe/items/{id}
+#      GET /catalog/items
 #    POST /recommend {"occasion":"office","temp_c":8,"strategy":"advanced"}
+#      ⚠️ /recommend is currently UNAUTHENTICATED (known gap, fixed in Feature 002 Phase 1)
 
-# 4. Eval harness — run the pipeline over the golden set, write artifacts
+# 4. Run the tests (unit + integration; hit the real Supabase DB via a
+#    rolled-back-transaction fixture — need DB creds + network)
+uv run pytest tests/ -q
+
+# 5. Eval harness — run the pipeline over the golden set, write artifacts.
+#    Makes many external calls; flaky under transient network drops. Compare
+#    retrieval_recall across runs (deterministic); generation checks drift from
+#    LLM sampling, not a regression.
 uv run python -m whattowear.eval.harness            # baseline vs hybrid vs advanced
 
-# 5. Score the artifacts (isolated venv — avoids the RAGAS dependency conflict)
+# 6. Score the artifacts (isolated venv — avoids the RAGAS dependency conflict)
 cd evals && uv sync && uv run python score_ragas.py && uv run python judge.py
 ```
 
@@ -77,7 +110,11 @@ cd evals && uv sync && uv run python score_ragas.py && uv run python judge.py
 ## Layout
 
 ```
-src/whattowear/   ingest/ retrieval/ pipeline/ memory/ external/ eval/  + config, schema, kb, api
+src/whattowear/   ingest/ retrieval/ pipeline/ memory/ external/ eval/
+                  config, schema, kb, api                        (RAG engine)
+                  db, models, crud, auth                         (persistence + auth, Feature 001)
+alembic/          migrations (0001_initial_wardrobe_schema)
+tests/            unit/ + integration/ (pytest; run against the live DB)
 data/             kb/ (manifest + distilled cards + cache)  fixtures/  golden_set.yaml
 evals/            isolated uv project: RAGAS + openevals scoring of run artifacts
 notebooks/        01 chunking · 02 retrieval comparison · 03 evals + conclusions
