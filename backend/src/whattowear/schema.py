@@ -67,6 +67,8 @@ class WardrobeItem(BaseModel):
     formality: Formality
     warmth: int = Field(ge=0, le=5)  # 0 = airy, 5 = heaviest
     season: list[Season] = Field(default_factory=list)
+    fabric: Optional[str] = None
+    source: Optional[Literal["catalog", "upload"]] = None
 
     @field_validator("colors")
     @classmethod
