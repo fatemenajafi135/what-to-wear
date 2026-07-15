@@ -30,6 +30,13 @@ def test_list_wardrobe_items_empty_closet_returns_empty_list(db_session):
     assert crud.list_wardrobe_items(db_session, uuid.uuid4()) == []
 
 
+def test_list_wardrobe_items_malformed_user_id_returns_empty_list_not_error(db_session):
+    """A non-UUID user_id (e.g. /recommend's free-form field) can't own any
+    wardrobe rows -- degrades to [] instead of raising."""
+    assert crud.list_wardrobe_items(db_session, "string") == []
+    assert crud.list_wardrobe_items(db_session, "") == []
+
+
 def test_list_wardrobe_items_returns_all_items_with_full_attributes(db_session):
     user_id = uuid.uuid4()
     _add_item(db_session, user_id, category="jeans", colors=["#1b2a4a"], formality="smart_casual", warmth=2)

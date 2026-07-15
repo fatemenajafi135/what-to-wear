@@ -41,10 +41,20 @@ def _to_wardrobe_item(row: WardrobeItemRow | CatalogItemRow) -> WardrobeItem:
 
 
 def list_wardrobe_items(session: Session, user_id: str | uuid.UUID) -> list[WardrobeItem]:
-    """Every item in `user_id`'s closet, newest first. Empty closet -> []."""
+    """Every item in `user_id`'s closet, newest first. Empty closet -> [].
+
+    `user_id` isn't always guaranteed to be a well-formed UUID at this call
+    site: /wardrobe/items always passes one (verified JWT `sub` claim), but
+    the older /recommend test endpoint accepts an arbitrary free-form string.
+    A malformed id can't own any wardrobe rows, so it degrades to [] rather
+    than raising -- a persistence-layer detail shouldn't crash the caller."""
+    try:
+        user_uuid = uuid.UUID(str(user_id))
+    except ValueError:
+        return []
     rows = session.scalars(
         select(WardrobeItemRow)
-        .where(WardrobeItemRow.user_id == uuid.UUID(str(user_id)))
+        .where(WardrobeItemRow.user_id == user_uuid)
         .order_by(WardrobeItemRow.created_at.desc())
     ).all()
     return [_to_wardrobe_item(r) for r in rows]
