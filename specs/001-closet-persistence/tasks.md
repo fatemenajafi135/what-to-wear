@@ -100,10 +100,10 @@ verified independently.
 
 **Independent Test**: Correct an owned item's formality and confirm it persists; attempt an invalid formality, season, warmth (out of 0-5), or malformed hex color and confirm each is rejected with a clean validation error and the prior value retained; correct category to an unrecognized value and confirm it's accepted (buckets to `accessory`).
 
-- [ ] T024 [P] [US3] `update_wardrobe_item(user_id, item_id, patch)` in `backend/src/whattowear/crud.py` — 404 if not found or not owned by `user_id`; validates **all** constrained fields at the Pydantic boundary before persisting so an invalid value never reaches (and 500s against) the DB `CHECK`: out-of-vocabulary `formality`/`season`, `warmth` outside 0-5, and malformed hex `colors` are all rejected; `category` accepts any value (FR-007, data-model.md validation rules) (depends on T004)
-- [ ] T025 [US3] `PATCH /wardrobe/items/{id}` endpoint in `backend/src/whattowear/api.py`, returns `422` on any invalid `formality`/`season`/`warmth`/`colors` value (depends on T007, T024)
-- [ ] T026 [P] [US3] Unit tests for `update_wardrobe_item` (valid correction; invalid formality, invalid season, out-of-range warmth, and malformed hex color each rejected with prior value retained; unrecognized category accepted and buckets to accessory; correcting an accessory-category item works — FR-005; cross-user correction is 404) in `backend/tests/unit/test_crud.py`
-- [ ] T027 [US3] Integration test for `PATCH /wardrobe/items/{id}` — valid correction plus a 422 for each invalid field class — in `backend/tests/integration/test_wardrobe_correct.py` (depends on T025)
+- [X] T024 [P] [US3] `update_wardrobe_item(user_id, item_id, patch)` in `backend/src/whattowear/crud.py` — 404 if not found or not owned by `user_id`; validates **all** constrained fields at the Pydantic boundary before persisting so an invalid value never reaches (and 500s against) the DB `CHECK`: out-of-vocabulary `formality`/`season`, `warmth` outside 0-5, and malformed hex `colors` are all rejected; `category` accepts any value (FR-007, data-model.md validation rules) (depends on T004)
+- [X] T025 [US3] `PATCH /wardrobe/items/{id}` endpoint in `backend/src/whattowear/api.py`, returns `422` on any invalid `formality`/`season`/`warmth`/`colors` value (depends on T007, T024)
+- [X] T026 [P] [US3] Unit tests for `update_wardrobe_item` (valid correction; invalid formality, invalid season, out-of-range warmth, and malformed hex color each rejected with prior value retained; unrecognized category accepted and buckets to accessory; correcting an accessory-category item works — FR-005; cross-user correction is 404) in `backend/tests/unit/test_crud.py`
+- [X] T027 [US3] Integration test for `PATCH /wardrobe/items/{id}` — valid correction plus a 422 for each invalid field class — in `backend/tests/integration/test_wardrobe_correct.py` (depends on T025)
 
 **Checkpoint**: US1-US3 all work independently.
 
