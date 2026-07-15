@@ -12,12 +12,12 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 
 from whattowear.api import app
 from whattowear.auth import get_current_user_id
 from whattowear.db import get_session
-from whattowear.models import CatalogItemRow
+from whattowear.models import CatalogItemRow, WardrobeItemRow
 
 
 @pytest.fixture
@@ -43,6 +43,10 @@ def _catalog_item(session, **overrides) -> CatalogItemRow:
 
 def test_empty_catalog_returns_empty_list_not_error(client):
     c, session = client
+    # Null out real wardrobe_items -> catalog_items FK references first, or
+    # the delete below hits ForeignKeyViolation against real committed rows
+    # (created via manual testing) -- see test_seed.py::_clear_catalog.
+    session.execute(update(WardrobeItemRow).where(WardrobeItemRow.catalog_item_id.isnot(None)).values(catalog_item_id=None))
     session.execute(delete(CatalogItemRow))
     session.commit()
     _as_user(uuid.uuid4())

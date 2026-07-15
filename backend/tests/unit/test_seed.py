@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
 from whattowear import crud
 from whattowear.memory import store as memory
@@ -31,8 +31,14 @@ def _row_attr_tuple(row) -> tuple:
 
 def _clear_catalog(db_session) -> None:
     # Production catalog/eval-baseline rows already exist (seeded for real via
-    # the CLI); clear within this test's rolled-back transaction so each test
-    # starts from an empty table without touching the real committed data.
+    # the CLI, plus real wardrobe_items added through manual testing that
+    # reference them via catalog_item_id); clear within this test's
+    # rolled-back transaction so each test starts from an empty table without
+    # touching the real committed data. Null out referencing FKs first so the
+    # delete doesn't hit ForeignKeyViolation against those real rows.
+    db_session.execute(
+        update(WardrobeItemRow).where(WardrobeItemRow.catalog_item_id.isnot(None)).values(catalog_item_id=None)
+    )
     db_session.execute(delete(CatalogItemRow))
 
 

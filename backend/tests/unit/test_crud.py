@@ -98,8 +98,14 @@ def test_list_wardrobe_items_accessory_returned_identically_to_garment(db_sessio
 
 
 def test_list_catalog_items_returns_seeded_rows(db_session):
-    from sqlalchemy import delete
+    from sqlalchemy import delete, update
 
+    # Null out real wardrobe_items -> catalog_items FK references first, or
+    # the delete below hits ForeignKeyViolation against real committed rows
+    # (created via manual testing) -- see test_seed.py::_clear_catalog.
+    db_session.execute(
+        update(WardrobeItemRow).where(WardrobeItemRow.catalog_item_id.isnot(None)).values(catalog_item_id=None)
+    )
     db_session.execute(delete(CatalogItemRow))
     _add_catalog_item(db_session, category="top")
     _add_catalog_item(db_session, category="bottom")
