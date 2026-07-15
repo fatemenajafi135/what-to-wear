@@ -8,12 +8,16 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from . import crud
+from .auth import get_current_user_id
+from .db import get_session
 from .pipeline import cite
 from .pipeline.run import run_pipeline
-from .schema import Formality, OutfitResult
+from .schema import Formality, OutfitResult, WardrobeItem
 
 app = FastAPI(title="What to Wear — RAG styling engine (test API)")
 
@@ -50,3 +54,11 @@ def recommend_endpoint(req: RecommendRequest) -> RecommendResponse:
         strategy=req.strategy,
     )
     return RecommendResponse(result=run.result, rendered=cite.render_text(run.result))
+
+
+@app.get("/wardrobe/items", response_model=list[WardrobeItem])
+def list_wardrobe_items(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> list[WardrobeItem]:
+    return crud.list_wardrobe_items(session, user_id)
