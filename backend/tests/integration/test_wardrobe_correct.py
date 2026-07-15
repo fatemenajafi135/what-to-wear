@@ -32,8 +32,13 @@ def _as_user(user_id) -> None:
 
 def _item(session, user_id, **overrides) -> WardrobeItemRow:
     defaults = dict(
-        user_id=user_id, category="top", colors=["#ffffff"],
-        formality="casual", warmth=1, season=["summer"], source="catalog",
+        user_id=user_id,
+        category="top",
+        colors=["#ffffff"],
+        formality="casual",
+        warmth=1,
+        season=["summer"],
+        source="catalog",
     )
     defaults.update(overrides)
     row = WardrobeItemRow(**defaults)

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from pathlib import Path
 
 from ..crud import EVAL_BASELINE_USER_ID
 from ..ingest.loaders import REPO_ROOT
@@ -102,8 +101,15 @@ def run_strategy(cases: list[GoldenCase], strategy: str, rule_text: dict[str, st
 
 
 def summarize(rows_by_strategy: dict[str, list[dict]]) -> None:
-    check_keys = ["retrieval_recall", "owned_only", "cites_grounded", "every_choice_cites",
-                  "weather_appropriate", "occasion_fit", "respects_exclusions"]
+    check_keys = [
+        "retrieval_recall",
+        "owned_only",
+        "cites_grounded",
+        "every_choice_cites",
+        "weather_appropriate",
+        "occasion_fit",
+        "respects_exclusions",
+    ]
     print("\n=== Baseline vs advanced (verifiable metrics, mean over golden set) ===")
     header = f"{'metric':<22}" + "".join(f"{s:>12}" for s in rows_by_strategy)
     print(header)

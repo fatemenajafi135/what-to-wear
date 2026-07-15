@@ -120,7 +120,9 @@ def test_list_catalog_items_returns_seeded_rows(db_session):
 
 
 def test_add_wardrobe_item_from_catalog_copies_attributes(db_session):
-    catalog_row = _add_catalog_item(db_session, category="jeans", colors=["#1b2a4a"], formality="smart_casual", warmth=2)
+    catalog_row = _add_catalog_item(
+        db_session, category="jeans", colors=["#1b2a4a"], formality="smart_casual", warmth=2
+    )
     user_id = uuid.uuid4()
 
     item = crud.add_wardrobe_item_from_catalog(db_session, user_id, catalog_row.id)
@@ -226,7 +228,7 @@ def test_update_wardrobe_item_invalid_constrained_field_rejected_at_construction
     validators raise, exactly as FastAPI's request-body parsing would (422),
     so the item's prior value is never touched."""
     user_id = uuid.uuid4()
-    row = _add_item(db_session, user_id, formality="casual", warmth=2)
+    _add_item(db_session, user_id, formality="casual", warmth=2)
 
     with pytest.raises(pydantic.ValidationError):
         WardrobeItemPatch(**bad_kwargs)
@@ -269,7 +271,9 @@ def test_update_wardrobe_item_cross_user_returns_none(db_session):
 
 
 def test_update_wardrobe_item_unknown_item_returns_none(db_session):
-    assert crud.update_wardrobe_item(db_session, uuid.uuid4(), uuid.uuid4(), WardrobeItemPatch(formality="formal")) is None
+    assert (
+        crud.update_wardrobe_item(db_session, uuid.uuid4(), uuid.uuid4(), WardrobeItemPatch(formality="formal")) is None
+    )
 
 
 # --- delete_wardrobe_item (T030) ---------------------------------------------

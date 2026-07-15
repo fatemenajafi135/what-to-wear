@@ -32,8 +32,13 @@ def _as_user(user_id) -> None:
 
 def _item(session, user_id, **overrides) -> WardrobeItemRow:
     defaults = dict(
-        user_id=user_id, category="top", colors=["#ffffff"],
-        formality="casual", warmth=1, season=["summer"], source="catalog",
+        user_id=user_id,
+        category="top",
+        colors=["#ffffff"],
+        formality="casual",
+        warmth=1,
+        season=["summer"],
+        source="catalog",
     )
     defaults.update(overrides)
     row = WardrobeItemRow(**defaults)
@@ -46,7 +51,7 @@ def test_delete_removes_only_the_target_item(client):
     c, session = client
     user_id = uuid.uuid4()
     target = _item(session, user_id, category="jeans")
-    keep = _item(session, user_id, category="sweater")
+    _item(session, user_id, category="sweater")
     _as_user(user_id)
 
     r = c.delete(f"/wardrobe/items/{target.id}")

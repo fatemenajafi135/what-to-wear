@@ -63,9 +63,7 @@ def list_wardrobe_items(session: Session, user_id: str | uuid.UUID) -> list[Ward
     except ValueError:
         return []
     rows = session.scalars(
-        select(WardrobeItemRow)
-        .where(WardrobeItemRow.user_id == user_uuid)
-        .order_by(WardrobeItemRow.created_at.desc())
+        select(WardrobeItemRow).where(WardrobeItemRow.user_id == user_uuid).order_by(WardrobeItemRow.created_at.desc())
     ).all()
     return [_to_wardrobe_item(r) for r in rows]
 
@@ -195,9 +193,7 @@ def seed_eval_baseline_user(session: Session) -> int:
     preferences — so memory.profile_note() stays None and generation
     behavior matches today's fixture-based runs exactly."""
     already_seeded = (
-        session.scalar(
-            select(WardrobeItemRow.id).where(WardrobeItemRow.user_id == EVAL_BASELINE_USER_ID).limit(1)
-        )
+        session.scalar(select(WardrobeItemRow.id).where(WardrobeItemRow.user_id == EVAL_BASELINE_USER_ID).limit(1))
         is not None
     )
     if already_seeded:

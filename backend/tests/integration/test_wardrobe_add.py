@@ -46,7 +46,9 @@ def test_empty_catalog_returns_empty_list_not_error(client):
     # Null out real wardrobe_items -> catalog_items FK references first, or
     # the delete below hits ForeignKeyViolation against real committed rows
     # (created via manual testing) -- see test_seed.py::_clear_catalog.
-    session.execute(update(WardrobeItemRow).where(WardrobeItemRow.catalog_item_id.isnot(None)).values(catalog_item_id=None))
+    session.execute(
+        update(WardrobeItemRow).where(WardrobeItemRow.catalog_item_id.isnot(None)).values(catalog_item_id=None)
+    )
     session.execute(delete(CatalogItemRow))
     session.commit()
     _as_user(uuid.uuid4())

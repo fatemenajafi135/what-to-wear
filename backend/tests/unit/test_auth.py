@@ -28,7 +28,8 @@ def test_missing_credentials_rejected():
 def test_valid_token_returns_user_id(mocker):
     fake_signing_key = mocker.Mock(key="fake-public-key")
     mocker.patch.object(
-        auth, "_get_jwk_client",
+        auth,
+        "_get_jwk_client",
         return_value=mocker.Mock(get_signing_key_from_jwt=mocker.Mock(return_value=fake_signing_key)),
     )
     mocker.patch.object(jwt, "decode", return_value={"sub": "user-123", "aud": "authenticated"})
@@ -41,7 +42,8 @@ def test_valid_token_returns_user_id(mocker):
 def test_invalid_signature_rejected(mocker):
     fake_signing_key = mocker.Mock(key="fake-public-key")
     mocker.patch.object(
-        auth, "_get_jwk_client",
+        auth,
+        "_get_jwk_client",
         return_value=mocker.Mock(get_signing_key_from_jwt=mocker.Mock(return_value=fake_signing_key)),
     )
     mocker.patch.object(jwt, "decode", side_effect=jwt.InvalidSignatureError("bad signature"))
@@ -54,7 +56,8 @@ def test_invalid_signature_rejected(mocker):
 def test_expired_token_rejected(mocker):
     fake_signing_key = mocker.Mock(key="fake-public-key")
     mocker.patch.object(
-        auth, "_get_jwk_client",
+        auth,
+        "_get_jwk_client",
         return_value=mocker.Mock(get_signing_key_from_jwt=mocker.Mock(return_value=fake_signing_key)),
     )
     mocker.patch.object(jwt, "decode", side_effect=jwt.ExpiredSignatureError("expired"))
