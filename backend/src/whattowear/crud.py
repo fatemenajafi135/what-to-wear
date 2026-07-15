@@ -92,6 +92,23 @@ def update_wardrobe_item(
     return _to_wardrobe_item(row)
 
 
+def delete_wardrobe_item(session: Session, user_id: str | uuid.UUID, item_id: str | uuid.UUID) -> bool:
+    """Hard delete. Returns True if a row was actually deleted, False if it
+    didn't exist, wasn't owned by `user_id`, or was already removed -- the
+    caller maps False to 404. A second delete or a cross-user delete is
+    "already gone," not a crash (spec Edge Cases)."""
+    try:
+        item_uuid, user_uuid = uuid.UUID(str(item_id)), uuid.UUID(str(user_id))
+    except ValueError:
+        return False
+    row = session.get(WardrobeItemRow, item_uuid)
+    if row is None or row.user_id != user_uuid:
+        return False
+    session.delete(row)
+    session.commit()
+    return True
+
+
 def list_catalog_items(session: Session) -> list[WardrobeItem]:
     """The shared, read-only catalog. Empty catalog -> [] (FR-010)."""
     rows = session.scalars(select(CatalogItemRow).order_by(CatalogItemRow.category)).all()
