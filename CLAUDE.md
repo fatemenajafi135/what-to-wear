@@ -28,9 +28,14 @@ historical reference only.
 ## This is a spec-driven project (Spec Kit)
 
 Features run through the Spec Kit workflow: `/speckit.specify` →
-`/speckit.clarify` → `/speckit.plan` → `/speckit.analyze` → `/speckit.tasks` →
-`/speckit.implement`. Don't skip `/speckit.analyze`, and read it like a critic —
-the planner over-builds; hold it to the constitution's simplicity rule.
+`/speckit.clarify` → `/speckit.plan` → `/speckit.tasks` → `/speckit.analyze` →
+`/speckit.implement`. (Tasks before analyze, not after: the `speckit-analyze`
+skill hard-requires `tasks.md` to exist — `check-prerequisites.sh
+--require-tasks` errors out otherwise, since analyze cross-checks spec + plan +
+tasks together. Confirmed directly in the 002 session; if you see the reverse
+order elsewhere, this is the corrected one.) Don't skip `/speckit.analyze`, and
+read it like a critic — the planner over-builds; hold it to the constitution's
+simplicity rule.
 
 ## Session workflow (planner / worker split)
 
@@ -57,10 +62,18 @@ So:
 - **Feature 001 (closet-persistence): DONE, merged to `main`.** Per-user closet
   + shared catalog in Postgres (Supabase), JWT auth (ES256/JWKS), full CRUD.
   `context_assembler.load_wardrobe()` reads Postgres now, not the JSON fixture.
-- **Next: Feature 002 (styling-agent), broadened + phased.** Phase 1 (essentials,
-  no behavior change) = auth-gate `/recommend` (see debt below) + backfill unit
-  tests for the deterministic pipeline. Then deterministic scoring → LangGraph +
-  real selection (`/recommend`→`/suggest`) → refinement. See SDD-HANDOFF Step 3.
+- **Feature 002 (styling-agent), broadened + phased — Phase 1 DONE (branch
+  `002-styling-agent`, not yet merged; the branch spans all of Feature 002's
+  phases, not just Phase 1).** Phase 1 (essentials, no
+  behavior change) auth-gated `/recommend` behind the JWT dependency (closing
+  the cross-user leak — `user_id` now comes from the verified `sub`, not the
+  body) and backfilled unit tests for the deterministic pipeline (`colors.py`,
+  `cite.py`, `categories.py`, `pipeline/query_builder.py`, `eval/properties.py`)
+  + a `/recommend` auth test. **Next: Phase 2** — deterministic scoring
+  (`src/whattowear/scoring/`). Then LangGraph + real selection
+  (`/recommend`→`/suggest`) → refinement. Full spec/plan/tasks in
+  `specs/002-styling-agent/` (tasks.md has the per-phase task breakdown —
+  start at T008 for Phase 2). See SDD-HANDOFF Step 3.
 
 ## The rules that bite hardest (full text in the constitution)
 
@@ -109,9 +122,10 @@ the DB vars). Full run/architecture detail: `backend/README.md`.
   deterministic metric to compare across runs; the generation-dependent checks
   drift run-to-run from LLM sampling — that's not a regression. Don't declare a
   regression from a single failed or partial run.
-- **`/recommend` is currently unauthenticated** (free-form `user_id`, no JWT) —
-  a known live gap that now leaks per-user closet data; fixing it is Feature 002
-  Phase 1. Don't build on it as-is.
+- **`/recommend` is now auth-gated** (Feature 002 Phase 1): it depends on
+  `get_current_user_id` and derives `user_id` from the verified JWT `sub` — the
+  request body no longer carries a `user_id`. A call without a bearer token gets
+  401. (It's still slated to give way to `/suggest` in Phase 3.)
 - **Supabase pooler (port 6543)** doesn't support server-side prepared
   statements — the engine disables them; migrations prefer the direct 5432 URL
   when reachable. See `specs/001-closet-persistence/research.md`.

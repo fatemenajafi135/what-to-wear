@@ -30,19 +30,17 @@ Baseline is committed to `main`. Spec Kit is initialized.
 5. Preference memory from feedback.
 6. Production hardening and deployment.
 
-**Known debt (owned by Feature 002, Phase 1 — see Step 3):**
-- **`/recommend` is unauthenticated.** It takes a free-form `user_id` in the
-  request body with no JWT check. Harmless before 001 (wardrobe was a shared
-  fixture); now that `user_id` reads the real per-user Postgres closet, anyone
-  who knows/guesses a user's UUID can extract that closet's structure via
-  `/recommend` — bypassing the auth built for `/wardrobe/items`. Fix in 002
-  Phase 1 (it's superseded by `/suggest` later, but the gap is live now).
-- **The pre-existing deterministic pipeline has no unit tests.** `colors.py`,
-  `cite.py`, `categories.py`, `pipeline/query_builder.py`, `eval/properties.py`
-  are pure and stable but untested — contra the Quality Bar ("deterministic
-  logic requires unit tests"). The only gate today is the LLM-dependent eval
-  harness. Backfill in 002 Phase 1. (Feature 001 added the first `backend/tests/`
-  tree; this extends that discipline to the older modules.)
+**Known debt — CLEARED by Feature 002, Phase 1 (see Step 3):**
+- ~~**`/recommend` is unauthenticated.**~~ **Fixed.** `/recommend` now depends on
+  `get_current_user_id` (same JWT dependency as `/wardrobe/items`); `user_id` is
+  no longer accepted from the request body — it comes from the verified `sub`
+  claim. The cross-user closet leak is closed. (Still superseded by `/suggest`
+  in Phase 3, but the live gap is gone now.)
+- ~~**The pre-existing deterministic pipeline has no unit tests.**~~ **Fixed.**
+  Unit tests backfilled for `colors.py`, `cite.py`, `categories.py`,
+  `pipeline/query_builder.py`, `eval/properties.py` (`backend/tests/unit/` +
+  one `/recommend` auth integration test), satisfying the Quality Bar's
+  "deterministic logic requires unit tests."
 
 ## Architecture rules, not negotiable
 
@@ -80,7 +78,7 @@ from drifting.
 | # | Feature | Notes |
 |---|---|---|
 | 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
-| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). |
+| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **Phase 1 ✅ done** (auth gate + unit-test backfill); Phases 2–4 pending. |
 | 003 | closet-ingestion | Photo to metadata via VLM. No full-body segmentation. |
 | 004 | preference-memory | Feedback capture, preference derivation. |
 | 005 | production-hardening | Gateway, cache, guardrails, deploy. |
@@ -166,6 +164,27 @@ artifacts/eval_runs/. If they moved, something broke.
 
 ## Step 3: Feature 002, styling-agent
 
+> **Spec-driven cycle run.** Full spec/clarify/plan/tasks/analyze artifacts live in
+> `specs/002-styling-agent/` (spec.md, research.md, data-model.md,
+> `contracts/suggest.md`, quickstart.md, tasks.md). Phase 1 was implemented
+> *before* this cycle was run (as pure hardening, per the original plan below);
+> the cycle was then run retroactively to give it spec/task traceability and
+> prospectively to plan Phases 2–4. `/speckit.analyze` found and the resulting
+> edits fixed one CRITICAL gap (the graph path wasn't wired into the
+> golden-set/eval-harness gate the constitution's Quality Bar requires) plus five
+> lower-severity findings — see `specs/002-styling-agent/tasks.md` T032a and its
+> Notes. The `/speckit.specify` / `/speckit.plan` prompts below are kept
+> **verbatim as the historical record of what was pasted**; clarify then
+> corrected/narrowed the MVP scope (see below) — same pattern as Feature 001.
+> - **Body shape**: deferred entirely out of this feature (no persistent
+>   profile store); silhouette balance uses general proportion principles only.
+> - **Catalog substitution**: deferred entirely — an unfillable required slot
+>   omits the outfit, it is never filled from the shared catalog this feature.
+> - **Score-combination strategy (FR-009a)**: shipped as a swappable unit (one
+>   default, equal-weighted average, plus a documented alternative) rather than
+>   a single locked formula, since which combination is "best" is itself
+>   something to evaluate, not decide up front.
+
 **Scope (broadened).** Beyond the original "pipeline becomes a graph + scoring,"
 Feature 002 also absorbs two things that have no other home: the recommend-flow
 cleanup (auth-gate `/recommend`, eventually replaced by `/suggest`) and the
@@ -177,24 +196,35 @@ strategy note under the plan table). Do the essential phases first; it's fine to
 pause after any phase, go do 003/004, and come back. Every phase touching
 retrieval/generation re-runs the eval no-regression gate before merge.
 
-- **Phase 1 — essentials (no behavior change, mergeable alone).** Gate
-  `/recommend` behind the same JWT dependency as `/wardrobe/items` (closes the
-  live cross-user leak). Backfill unit tests for `colors.py`, `cite.py`,
-  `categories.py`, `pipeline/query_builder.py`, `eval/properties.py`. Pure
-  hardening — no new product surface, so no full speckit cycle required.
+- **Phase 1 — essentials (no behavior change, mergeable alone). ✅ DONE.** Gated
+  `/recommend` behind the same JWT dependency as `/wardrobe/items` (closed the
+  live cross-user leak — `user_id` is now the verified JWT `sub`, never a body
+  field). Backfilled unit tests for `colors.py`, `cite.py`, `categories.py`,
+  `pipeline/query_builder.py`, `eval/properties.py` (78 new tests in
+  `backend/tests/unit/`) plus a 2-test `/recommend` auth integration file. Pure
+  hardening — no new product surface. No retrieval/generation change, so the
+  eval gate was not re-run (nothing it measures changed). Tasks T001–T007 in
+  `specs/002-styling-agent/tasks.md`.
 - **Phase 2 — deterministic scoring.** New `src/whattowear/scoring/` package:
   color harmony, formality coherence, weather fitness, silhouette balance — pure
   functions, each returning a 0–1 score + a reason string, reused unchanged
   inside the eval harness (constitution Principle 5, "scoring functions are eval
-  metrics"). Reuse `colors.py` for hex handling.
+  metrics"), plus the swappable score-combination strategy (FR-009a). Reuse
+  `colors.py` for hex handling. Tasks T008–T022.
 - **Phase 3 — graph + real selection.** Pipeline → LangGraph (node order in the
   plan prompt below). Deterministic pruning/combination/scoring replaces the
   LLM picking items directly (constitution Principle 2, "the LLM never selects
-  items"). `/recommend` gives way to `/suggest`.
+  items"). `/suggest` (SSE) ships; `/recommend` stays live during the
+  transition. An unfillable required slot omits that outfit — **no catalog
+  substitution this feature** (deferred, see clarification above). Tasks
+  T023–T037, including T032a which wires the new graph path into the
+  golden-set/eval-harness gate (a `/speckit.analyze` finding, not in the
+  original plan prompt below).
 - **Phase 4 — refinement + optional LLM edge signal.** Conversational refinement
-  ("warmer", "less formal") via a Postgres checkpointer keyed by thread_id;
-  catalog substitution for unfillable slots; and — if wanted — an LLM *judge*
-  score surfaced **for reporting/eval only**.
+  ("warmer", "less formal") via a Postgres checkpointer keyed by thread_id, and
+  — if wanted — an LLM *judge* score surfaced **for reporting/eval only**.
+  Catalog substitution is explicitly **not** part of this phase or this
+  feature — see Future Work in spec.md. Tasks T038–T047.
 
 **Scoring model (decided): deterministic-drives, LLM-as-edge-signal.** The
 deterministic scorers are the *only* thing that selects and ranks items. An LLM

@@ -29,8 +29,10 @@ class RecommendRequest(BaseModel):
     formality: Optional[Formality] = None
     location: Optional[str] = None  # geocoded via Open-Meteo
     temp_c: Optional[float] = None  # fallback if no location / offline
-    user_id: Optional[str] = None
     strategy: str = "advanced"  # baseline | hybrid | advanced
+    # user_id is NOT accepted from the body — it comes from the verified JWT
+    # `sub` claim (see get_current_user_id). A client-supplied id here would let
+    # any caller read any user's closet through the pipeline (the pre-002 leak).
 
 
 class RecommendResponse(BaseModel):
@@ -44,14 +46,17 @@ def health() -> dict:
 
 
 @app.post("/recommend", response_model=RecommendResponse)
-def recommend_endpoint(req: RecommendRequest) -> RecommendResponse:
+def recommend_endpoint(
+    req: RecommendRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> RecommendResponse:
     run = run_pipeline(
         req.occasion,
         mood=req.mood,
         formality=req.formality,
         location=req.location,
         temp_c=req.temp_c,
-        user_id=req.user_id,
+        user_id=user_id,
         strategy=req.strategy,
     )
     return RecommendResponse(result=run.result, rendered=cite.render_text(run.result))
