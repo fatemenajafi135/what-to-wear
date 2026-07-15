@@ -116,3 +116,14 @@ def update_wardrobe_item(
     if item is None:
         raise HTTPException(404, f"wardrobe item not found: {item_id}")
     return item
+
+
+@app.delete("/wardrobe/items/{item_id}", status_code=204)
+def delete_wardrobe_item(
+    item_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> None:
+    deleted = crud.delete_wardrobe_item(session, user_id, item_id)
+    if not deleted:
+        raise HTTPException(404, f"wardrobe item not found: {item_id}")
