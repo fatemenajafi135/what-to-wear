@@ -30,6 +30,20 @@ Baseline is committed to `main`. Spec Kit is initialized.
 5. Preference memory from feedback.
 6. Production hardening and deployment.
 
+**Known debt (owned by Feature 002, Phase 1 — see Step 3):**
+- **`/recommend` is unauthenticated.** It takes a free-form `user_id` in the
+  request body with no JWT check. Harmless before 001 (wardrobe was a shared
+  fixture); now that `user_id` reads the real per-user Postgres closet, anyone
+  who knows/guesses a user's UUID can extract that closet's structure via
+  `/recommend` — bypassing the auth built for `/wardrobe/items`. Fix in 002
+  Phase 1 (it's superseded by `/suggest` later, but the gap is live now).
+- **The pre-existing deterministic pipeline has no unit tests.** `colors.py`,
+  `cite.py`, `categories.py`, `pipeline/query_builder.py`, `eval/properties.py`
+  are pure and stable but untested — contra the Quality Bar ("deterministic
+  logic requires unit tests"). The only gate today is the LLM-dependent eval
+  harness. Backfill in 002 Phase 1. (Feature 001 added the first `backend/tests/`
+  tree; this extends that discipline to the older modules.)
+
 ## Architecture rules, not negotiable
 
 1. **Style KB gates wardrobe retrieval.** KB is queried first, returns structured
@@ -58,11 +72,19 @@ Each runs: /speckit.specify, /speckit.clarify, /speckit.plan, /speckit.analyze,
 
 | # | Feature | Notes |
 |---|---|---|
-| 001 | closet-persistence | Blocks everything. Fixture becomes a real database. |
-| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. |
+| 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
+| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). |
 | 003 | closet-ingestion | Photo to metadata via VLM. No full-body segmentation. |
 | 004 | preference-memory | Feedback capture, preference derivation. |
 | 005 | production-hardening | Gateway, cache, guardrails, deploy. |
+
+**Branch strategy note (002 only):** Feature 002 is large enough to run as a
+multi-phase effort rather than one merge. Each phase merges to `main` on its
+own PR when its eval no-regression gate is green — the *feature* is the
+umbrella, the *phases* are the mergeable units. This keeps the gate honest and
+avoids a long-lived branch drifting from `main`; work can pause after any phase
+(e.g. to start 003/004) and resume without conflict. The other features keep
+the default one-feature-one-branch flow.
 
 ## Step 0: Constitution
 
@@ -83,6 +105,23 @@ Red flag: if it proposes rewriting the retrievers or the eval harness, principle
 did not land. Fix the constitution before writing any spec.
 
 ## Step 2: Feature 001, closet-persistence
+
+> ✅ **DONE (merged to `main`).** Full spec, plan, tasks, and outcome live in
+> `specs/001-closet-persistence/`. All 4 user stories + polish shipped; 58
+> tests against the live database; eval no-regression gate passed.
+>
+> The `/speckit.specify` / `/speckit.plan` prompts below are kept **verbatim as
+> the historical record of what was pasted** — clarify/research then corrected
+> two things (which is exactly what those steps are for):
+> - **Taxonomy:** the draft's "slot (top, bottom, one-piece, outer, shoes,
+>   accessory)" and "formality 1 to 5" conflicted with the frozen constitution
+>   schema. Shipped with the constitution's taxonomy instead: category groups
+>   `top/bottom/full_body/outerwear/footwear/accessory`, the six-value formality
+>   enum, warmth **0–5**, and slot *derived* from category (not a stored field).
+> - **Auth:** "verifying the Supabase JWT using the service key" was corrected —
+>   the shipped auth verifies the JWT signature locally via the project's JWKS
+>   endpoint (ES256), holding only the public key. The service key is never used
+>   for user-token verification. See `specs/001-closet-persistence/research.md`.
 
 /speckit.specify:
 
@@ -119,6 +158,48 @@ Gate before merging: re-run the eval harness. Scores must match
 artifacts/eval_runs/. If they moved, something broke.
 
 ## Step 3: Feature 002, styling-agent
+
+**Scope (broadened).** Beyond the original "pipeline becomes a graph + scoring,"
+Feature 002 also absorbs two things that have no other home: the recommend-flow
+cleanup (auth-gate `/recommend`, eventually replaced by `/suggest`) and the
+unit-test backfill for the pre-existing deterministic pipeline. See "Known debt"
+above.
+
+**Delivery: phased, each phase merges to `main` on its own PR** (see the branch
+strategy note under the plan table). Do the essential phases first; it's fine to
+pause after any phase, go do 003/004, and come back. Every phase touching
+retrieval/generation re-runs the eval no-regression gate before merge.
+
+- **Phase 1 — essentials (no behavior change, mergeable alone).** Gate
+  `/recommend` behind the same JWT dependency as `/wardrobe/items` (closes the
+  live cross-user leak). Backfill unit tests for `colors.py`, `cite.py`,
+  `categories.py`, `pipeline/query_builder.py`, `eval/properties.py`. Pure
+  hardening — no new product surface, so no full speckit cycle required.
+- **Phase 2 — deterministic scoring.** New `src/whattowear/scoring/` package:
+  color harmony, formality coherence, weather fitness, silhouette balance — pure
+  functions, each returning a 0–1 score + a reason string, reused unchanged
+  inside the eval harness (constitution Principle 5, "scoring functions are eval
+  metrics"). Reuse `colors.py` for hex handling.
+- **Phase 3 — graph + real selection.** Pipeline → LangGraph (node order in the
+  plan prompt below). Deterministic pruning/combination/scoring replaces the
+  LLM picking items directly (constitution Principle 2, "the LLM never selects
+  items"). `/recommend` gives way to `/suggest`.
+- **Phase 4 — refinement + optional LLM edge signal.** Conversational refinement
+  ("warmer", "less formal") via a Postgres checkpointer keyed by thread_id;
+  catalog substitution for unfillable slots; and — if wanted — an LLM *judge*
+  score surfaced **for reporting/eval only**.
+
+**Scoring model (decided): deterministic-drives, LLM-as-edge-signal.** The
+deterministic scorers are the *only* thing that selects and ranks items. An LLM
+score may be computed and reported as an additional signal (and its
+agreement/disagreement with the deterministic scores feeds the cert writeup's
+improvements section) but it **never** influences which items are chosen. This
+is fully consistent with constitution Principle 2 ("the LLM never selects
+items") and Principle 5 ("no metric exists only inside a prompt") — every metric
+still has a deterministic form the harness can check, and the LLM never selects
+items — so **no constitution change is required.** (Note: these are the
+constitution appendix's numbers 2 and 5, not the condensed "Architecture rules"
+list above, which is ordered differently.)
 
 /speckit.specify:
 

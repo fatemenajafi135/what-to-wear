@@ -1,5 +1,23 @@
 # What to Wear: Build Plan
 
+> ⚠️ **SUPERSEDED (2026-07-15). Historical reference only — do not follow the
+> taxonomy, file paths, data model, or auth described below.**
+>
+> This was the initial pre-constitution brainstorm. The authoritative sources
+> are now:
+> - **Plan / feature roadmap:** `docs/SDD-HANDOFF.md`
+> - **Frozen taxonomy + architecture rules:** `.specify/memory/constitution.md`
+> - **Shipped feature specs:** `specs/` (e.g. `specs/001-closet-persistence/`)
+>
+> Known ways this doc is now wrong: it uses the old taxonomy (`one_piece/outer/
+> shoes` slots, formality **1–5**) that the constitution overrode (`full_body/
+> outerwear/footwear`, six-value formality enum, warmth **0–5**); `backend/app/…`
+> paths (real code is `backend/src/whattowear/…`); a local `users` table
+> (Feature 001 deliberately has none — `user_id` comes from the JWT); and
+> service-key auth (corrected to local ES256/JWKS verification). The design
+> *thinking* here — scoring breakdown, golden-set structure, substitution logic —
+> is still useful reference for Feature 002; the specifics are not.
+
 Solo dev, one repo, cert challenge scope.
 
 **Stack decisions (locked):**
