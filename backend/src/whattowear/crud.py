@@ -79,3 +79,17 @@ def seed_eval_baseline_user(session: Session) -> int:
     session.add_all(rows)
     session.commit()
     return len(rows)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    from .db import SessionLocal
+
+    ap = argparse.ArgumentParser(description="One-time seed commands (see quickstart.md)")
+    ap.add_argument("command", choices=["seed-catalog", "seed-eval-baseline"])
+    args = ap.parse_args()
+
+    with SessionLocal() as db_session:
+        n = seed_catalog(db_session) if args.command == "seed-catalog" else seed_eval_baseline_user(db_session)
+        print(f"{args.command}: inserted {n} row(s)")
