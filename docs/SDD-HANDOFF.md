@@ -341,6 +341,52 @@ Branch: `003-mvp-app`, off `main`. Full spec-kit cycle
 → `/speckit.analyze` → `/speckit.implement`) — this is real feature work, not
 small/mechanical. Artifacts land in `specs/003-mvp-app/`.
 
+> **`/speckit.specify` + `/speckit.clarify` done.** `spec.md` has 4 required P1
+> user stories (sign in, add-by-photo, view closet, get suggestion); quality
+> checklist 16/16, zero `[NEEDS CLARIFICATION]` markers (everything was
+> already decided in planning before the spec was written). Full narrative:
+> `docs/003-mvp-app-planning-report.md` (local, untracked).
+
+/speckit.plan, add:
+
+    Frontend: Next.js on Vercel (already the locked stack). Consume the
+    backend's OpenAPI schema for types (constitution Principle VII -- no
+    hand-maintained duplicate types). Use /design's interactive prototype and
+    design-system bundle (_ds/nocturne-.../styles.css) as the visual/component
+    reference, not a pixel-perfect port -- the taxonomy corrections from
+    docs/design-backend-conflict-report.md override the mock's narrower
+    values (full 6-value formality, full 6 category groups, no occasion-
+    picker buttons this phase).
+
+    Auth: Supabase Auth JS client directly in the frontend (email/password
+    sign-up/sign-in), issuing the same Supabase JWT the backend already
+    verifies (ES256/JWKS, unchanged from Feature 001) -- no new backend auth
+    code.
+
+    Add-item-by-photo: one new backend flow -- accept an uploaded photo,
+    upload it to Supabase Storage (already the locked stack), call the
+    existing gateway LLM client (config.py) with a vision-capable model for
+    one structured-output extraction call (category/colors/fabric/warmth/
+    formality/season/pattern/fit), return the extraction as an unsaved draft
+    for the frontend to render editable. A separate new endpoint creates the
+    wardrobe item directly from the (possibly user-corrected) attributes --
+    source='upload', no catalog_item_id -- parallel to, not replacing, the
+    existing catalog-based POST /wardrobe/items. Correcting an already-saved
+    item reuses the existing PATCH /wardrobe/items/{id} unchanged.
+
+    Schema: additive Alembic migration adding nullable pattern and fit
+    (free-text, matching fabric's shape) to WardrobeItemRow/WardrobeItem/
+    WardrobeItemPatch, mirroring exactly how fabric/source were added in
+    Feature 001.
+
+    Suggestions: frontend calls the existing /recommend (already JWT-gated
+    post-002-Phase-1) as-is -- no backend change. Free-text request field, no
+    occasion picker.
+
+    Deploy: backend to Railway, frontend to Vercel (both already the locked
+    stack) -- bare public reachability only, not the full 005 hardening
+    (LiteLLM gateway, semantic cache, guardrails stay deferred).
+
 ## Step 5: Features 004 to 005
 
 Same loop each time. Run /speckit.converge before 004, since memory/store.py may
