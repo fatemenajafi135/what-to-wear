@@ -82,9 +82,13 @@ verified independently.
 - [ ] T018 [P] [US2] `list_catalog_items()` in `backend/src/whattowear/crud.py`
 - [ ] T019 [US2] `GET /catalog/items` endpoint in `backend/src/whattowear/api.py` (depends on T007, T018)
 - [ ] T020 [P] [US2] `add_wardrobe_item_from_catalog(user_id, catalog_item_id)` in `backend/src/whattowear/crud.py` — copies the catalog row's attributes into a new `wardrobe_items` row, `source='catalog'`, `catalog_item_id` set for provenance only (FR-011) (depends on T004)
+- [ ] T020a [P] [US2] `add_wardrobe_items_from_catalog(user_id, catalog_item_ids)` bulk variant in `backend/src/whattowear/crud.py` — added post-implementation (user feedback: bulk-populate a test closet in one call, plus a real "add several at once" product need); all-or-nothing (validates every id exists before inserting any), duplicates in the list allowed (depends on T004)
 - [ ] T021 [US2] `POST /wardrobe/items` endpoint in `backend/src/whattowear/api.py`, 404 on unknown `catalog_item_id` (depends on T007, T020)
+- [ ] T021a [US2] `POST /wardrobe/items/bulk` endpoint in `backend/src/whattowear/api.py` — see contracts/wardrobe-api.md; 404 naming the offending id(s) if any is unknown (depends on T007, T020a)
 - [ ] T022 [P] [US2] Unit tests for `add_wardrobe_item_from_catalog` (copy semantics, unknown id, adding the same catalog item twice creates two independent rows, **adding an accessory-category catalog item works identically** — FR-005) in `backend/tests/unit/test_crud.py`
+- [ ] T022a [P] [US2] Unit tests for `add_wardrobe_items_from_catalog` (bulk insert, duplicate ids in one batch, any-unknown-id rejects the whole batch and inserts nothing) in `backend/tests/unit/test_crud.py`
 - [ ] T023 [US2] Integration test for `POST /wardrobe/items` + `GET /catalog/items` (empty catalog, add flow, cross-user isolation) in `backend/tests/integration/test_wardrobe_add.py` (depends on T019, T021)
+- [ ] T023a [US2] Integration test for `POST /wardrobe/items/bulk` (all-succeed, any-unknown-id rejects the batch atomically) in `backend/tests/integration/test_wardrobe_add.py` (depends on T021a)
 
 **Checkpoint**: US1 + US2 both work independently — a closet can now be viewed and meaningfully populated. This is the MVP.
 

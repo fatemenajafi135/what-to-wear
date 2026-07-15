@@ -31,6 +31,28 @@ always `"catalog"` in this feature (photo upload is out of scope, FR-003).
 
 **Errors**: `404` if `catalog_item_id` doesn't exist in the catalog.
 
+## `POST /wardrobe/items/bulk`
+
+*Added post-implementation, during US2 (not in the original plan.md/tasks.md
+draft) — a small, additive extension of US2's scope (still "catalog
+selection is the only way to add items," FR-002/FR-003), not a new user
+story. Same underlying `add_wardrobe_item_from_catalog` semantics per id,
+just batched into one request/response round-trip.*
+
+Adds multiple items to the requesting user's wardrobe in one call — one
+independent copy per listed catalog item (duplicates in the list are
+allowed and each creates its own row, consistent with FR-011 / spec
+Assumptions).
+
+**Request**: `{ "catalog_item_ids": ["<uuid>", ...] }`
+
+**Response**: `201` with the list of newly created `WardrobeItem`s, in the
+same order as the request.
+
+**Errors**: `404` if any `catalog_item_id` doesn't exist in the catalog —
+all-or-nothing: no items are added if any id in the batch is invalid (the
+error response names the offending id(s)).
+
 ## `PATCH /wardrobe/items/{id}`
 
 Corrects one or more attributes of an item already in the requesting user's
