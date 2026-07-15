@@ -7,3 +7,5 @@ backend/artifacts/
 backend/data/
 .DS_Store
 docs/**-report.md
+design/screenshots/
+design/uploads/
