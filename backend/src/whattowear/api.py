@@ -6,9 +6,10 @@ HTTP. No UI/frontend (that's a parallel track). Run:
 
 from __future__ import annotations
 
+import uuid
 from typing import Optional
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -62,3 +63,43 @@ def list_wardrobe_items(
     user_id: str = Depends(get_current_user_id),
 ) -> list[WardrobeItem]:
     return crud.list_wardrobe_items(session, user_id)
+
+
+@app.get("/catalog/items", response_model=list[WardrobeItem])
+def list_catalog_items(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),  # any authenticated user; catalog isn't user-scoped
+) -> list[WardrobeItem]:
+    return crud.list_catalog_items(session)
+
+
+class AddWardrobeItemRequest(BaseModel):
+    catalog_item_id: uuid.UUID
+
+
+class AddWardrobeItemsBulkRequest(BaseModel):
+    catalog_item_ids: list[uuid.UUID]
+
+
+@app.post("/wardrobe/items", response_model=WardrobeItem, status_code=201)
+def add_wardrobe_item(
+    req: AddWardrobeItemRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> WardrobeItem:
+    item = crud.add_wardrobe_item_from_catalog(session, user_id, req.catalog_item_id)
+    if item is None:
+        raise HTTPException(404, f"unknown catalog_item_id: {req.catalog_item_id}")
+    return item
+
+
+@app.post("/wardrobe/items/bulk", response_model=list[WardrobeItem], status_code=201)
+def add_wardrobe_items_bulk(
+    req: AddWardrobeItemsBulkRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> list[WardrobeItem]:
+    try:
+        return crud.add_wardrobe_items_from_catalog(session, user_id, req.catalog_item_ids)
+    except crud.UnknownCatalogItemIds as e:
+        raise HTTPException(404, f"unknown catalog_item_id(s): {[str(i) for i in e.missing_ids]}") from e
