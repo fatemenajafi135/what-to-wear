@@ -17,6 +17,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+from ..crud import EVAL_BASELINE_USER_ID
 from ..ingest.loaders import REPO_ROOT
 from ..kb import get_kb
 from ..pipeline import cite
@@ -45,6 +46,7 @@ def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str]) -> dict
         formality=case.formality,
         temp_c=case.temp_c,
         strategy=strategy,
+        user_id=str(EVAL_BASELINE_USER_ID),
     )
     wardrobe = {it.id: it for it in run.ctx.wardrobe}
     retrieved_ids = run.retrieval.rule_ids()
