@@ -18,7 +18,7 @@ from .auth import get_current_user_id
 from .db import get_session
 from .pipeline import cite
 from .pipeline.run import run_pipeline
-from .schema import Formality, OutfitResult, WardrobeItem
+from .schema import Formality, OutfitResult, WardrobeItem, WardrobeItemPatch
 
 app = FastAPI(title="What to Wear — RAG styling engine (test API)")
 
@@ -103,3 +103,16 @@ def add_wardrobe_items_bulk(
         return crud.add_wardrobe_items_from_catalog(session, user_id, req.catalog_item_ids)
     except crud.UnknownCatalogItemIds as e:
         raise HTTPException(404, f"unknown catalog_item_id(s): {[str(i) for i in e.missing_ids]}") from e
+
+
+@app.patch("/wardrobe/items/{item_id}", response_model=WardrobeItem)
+def update_wardrobe_item(
+    item_id: uuid.UUID,
+    patch: WardrobeItemPatch,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> WardrobeItem:
+    item = crud.update_wardrobe_item(session, user_id, item_id, patch)
+    if item is None:
+        raise HTTPException(404, f"wardrobe item not found: {item_id}")
+    return item
