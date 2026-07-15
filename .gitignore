@@ -1,7 +1,9 @@
 __pycache__/
 *.pyc
+.claude/settings.json
 .venv/
 .env
 backend/artifacts/
 backend/data/
 .DS_Store
+docs/**-report.md
