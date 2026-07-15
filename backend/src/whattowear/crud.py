@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from .ingest.loaders import REPO_ROOT
 from .models import CatalogItemRow, WardrobeItemRow
+from .schema import WardrobeItem
 
 WARDROBE_FIXTURE = REPO_ROOT / "data" / "fixtures" / "wardrobe.json"
 
@@ -24,6 +25,29 @@ EVAL_BASELINE_USER_ID = uuid.uuid5(uuid.NAMESPACE_URL, "whattowear:eval-baseline
 def _load_fixture_items() -> list[dict]:
     with open(WARDROBE_FIXTURE, encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _to_wardrobe_item(row: WardrobeItemRow | CatalogItemRow) -> WardrobeItem:
+    return WardrobeItem(
+        id=str(row.id),
+        category=row.category,
+        colors=row.colors,
+        formality=row.formality,
+        warmth=row.warmth,
+        season=row.season,
+        fabric=row.fabric,
+        source=getattr(row, "source", None),
+    )
+
+
+def list_wardrobe_items(session: Session, user_id: str | uuid.UUID) -> list[WardrobeItem]:
+    """Every item in `user_id`'s closet, newest first. Empty closet -> []."""
+    rows = session.scalars(
+        select(WardrobeItemRow)
+        .where(WardrobeItemRow.user_id == uuid.UUID(str(user_id)))
+        .order_by(WardrobeItemRow.created_at.desc())
+    ).all()
+    return [_to_wardrobe_item(r) for r in rows]
 
 
 def seed_catalog(session: Session) -> int:
