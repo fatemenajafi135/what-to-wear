@@ -27,6 +27,16 @@ def _load_fixture_items() -> list[dict]:
         return json.load(fh)
 
 
+class UnknownCatalogItemIds(Exception):
+    """Raised by add_wardrobe_items_from_catalog when one or more requested
+    catalog_item_ids don't exist. Carries the offending ids for the caller
+    (the API layer) to report back in a 404."""
+
+    def __init__(self, missing_ids: list[uuid.UUID]) -> None:
+        self.missing_ids = missing_ids
+        super().__init__(f"unknown catalog_item_id(s): {[str(i) for i in missing_ids]}")
+
+
 def _to_wardrobe_item(row: WardrobeItemRow | CatalogItemRow) -> WardrobeItem:
     return WardrobeItem(
         id=str(row.id),
@@ -57,6 +67,62 @@ def list_wardrobe_items(session: Session, user_id: str | uuid.UUID) -> list[Ward
         .where(WardrobeItemRow.user_id == user_uuid)
         .order_by(WardrobeItemRow.created_at.desc())
     ).all()
+    return [_to_wardrobe_item(r) for r in rows]
+
+
+def list_catalog_items(session: Session) -> list[WardrobeItem]:
+    """The shared, read-only catalog. Empty catalog -> [] (FR-010)."""
+    rows = session.scalars(select(CatalogItemRow).order_by(CatalogItemRow.category)).all()
+    return [_to_wardrobe_item(r) for r in rows]
+
+
+def _wardrobe_row_from_catalog_row(user_id: uuid.UUID, catalog_row: CatalogItemRow) -> WardrobeItemRow:
+    """A new, independent wardrobe_items row copying a catalog row's
+    attributes (FR-011: a copy, not a live reference)."""
+    return WardrobeItemRow(
+        user_id=user_id,
+        category=catalog_row.category,
+        colors=catalog_row.colors,
+        fabric=catalog_row.fabric,
+        warmth=catalog_row.warmth,
+        formality=catalog_row.formality,
+        season=catalog_row.season,
+        source="catalog",
+        catalog_item_id=catalog_row.id,
+    )
+
+
+def add_wardrobe_item_from_catalog(
+    session: Session, user_id: str | uuid.UUID, catalog_item_id: str | uuid.UUID
+) -> WardrobeItem | None:
+    """Copies a catalog item's attributes into a new wardrobe_items row.
+    Returns None if catalog_item_id doesn't exist (caller -> 404)."""
+    catalog_row = session.get(CatalogItemRow, uuid.UUID(str(catalog_item_id)))
+    if catalog_row is None:
+        return None
+    row = _wardrobe_row_from_catalog_row(uuid.UUID(str(user_id)), catalog_row)
+    session.add(row)
+    session.commit()
+    return _to_wardrobe_item(row)
+
+
+def add_wardrobe_items_from_catalog(
+    session: Session, user_id: str | uuid.UUID, catalog_item_ids: list[str | uuid.UUID]
+) -> list[WardrobeItem]:
+    """Bulk variant of add_wardrobe_item_from_catalog — one independent copy
+    per listed id, duplicates allowed. All-or-nothing: raises
+    UnknownCatalogItemIds (no rows inserted) if any id doesn't exist,
+    rather than partially populating the closet."""
+    ids = [uuid.UUID(str(i)) for i in catalog_item_ids]
+    catalog_rows = {row.id: row for row in session.scalars(select(CatalogItemRow).where(CatalogItemRow.id.in_(ids)))}
+    missing = [i for i in ids if i not in catalog_rows]
+    if missing:
+        raise UnknownCatalogItemIds(missing)
+
+    user_uuid = uuid.UUID(str(user_id))
+    rows = [_wardrobe_row_from_catalog_row(user_uuid, catalog_rows[i]) for i in ids]
+    session.add_all(rows)
+    session.commit()
     return [_to_wardrobe_item(r) for r in rows]
 
 
