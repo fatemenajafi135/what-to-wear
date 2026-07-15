@@ -270,3 +270,52 @@ def test_update_wardrobe_item_cross_user_returns_none(db_session):
 
 def test_update_wardrobe_item_unknown_item_returns_none(db_session):
     assert crud.update_wardrobe_item(db_session, uuid.uuid4(), uuid.uuid4(), WardrobeItemPatch(formality="formal")) is None
+
+
+# --- delete_wardrobe_item (T030) ---------------------------------------------
+
+
+def test_delete_wardrobe_item_normal_delete(db_session):
+    user_id = uuid.uuid4()
+    row = _add_item(db_session, user_id)
+
+    result = crud.delete_wardrobe_item(db_session, user_id, row.id)
+
+    assert result is True
+    assert crud.list_wardrobe_items(db_session, user_id) == []
+
+
+def test_delete_wardrobe_item_repeated_delete_is_safe(db_session):
+    user_id = uuid.uuid4()
+    row = _add_item(db_session, user_id)
+
+    first = crud.delete_wardrobe_item(db_session, user_id, row.id)
+    second = crud.delete_wardrobe_item(db_session, user_id, row.id)
+
+    assert first is True
+    assert second is False  # already gone, not a crash
+
+
+def test_delete_wardrobe_item_cross_user_delete_leaves_item_untouched(db_session):
+    owner, other = uuid.uuid4(), uuid.uuid4()
+    row = _add_item(db_session, owner)
+
+    result = crud.delete_wardrobe_item(db_session, other, row.id)
+
+    assert result is False
+    assert len(crud.list_wardrobe_items(db_session, owner)) == 1
+
+
+def test_delete_wardrobe_item_unknown_item_returns_false(db_session):
+    assert crud.delete_wardrobe_item(db_session, uuid.uuid4(), uuid.uuid4()) is False
+
+
+def test_delete_wardrobe_item_accessory_category_item_works(db_session):
+    """FR-005: deleting an accessory-category item works identically."""
+    user_id = uuid.uuid4()
+    row = _add_item(db_session, user_id, category="jewelry")
+
+    result = crud.delete_wardrobe_item(db_session, user_id, row.id)
+
+    assert result is True
+    assert crud.list_wardrobe_items(db_session, user_id) == []
