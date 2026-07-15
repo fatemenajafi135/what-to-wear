@@ -62,18 +62,24 @@ So:
 - **Feature 001 (closet-persistence): DONE, merged to `main`.** Per-user closet
   + shared catalog in Postgres (Supabase), JWT auth (ES256/JWKS), full CRUD.
   `context_assembler.load_wardrobe()` reads Postgres now, not the JSON fixture.
-- **Feature 002 (styling-agent), broadened + phased — Phase 1 DONE (branch
-  `002-styling-agent`, not yet merged; the branch spans all of Feature 002's
-  phases, not just Phase 1).** Phase 1 (essentials, no
-  behavior change) auth-gated `/recommend` behind the JWT dependency (closing
-  the cross-user leak — `user_id` now comes from the verified `sub`, not the
+- **Feature 002 (styling-agent), broadened + phased — Phase 1 DONE and merged
+  to `main`.** Auth-gated `/recommend` behind the JWT dependency (closing the
+  cross-user leak — `user_id` now comes from the verified `sub`, not the
   body) and backfilled unit tests for the deterministic pipeline (`colors.py`,
   `cite.py`, `categories.py`, `pipeline/query_builder.py`, `eval/properties.py`)
-  + a `/recommend` auth test. **Next: Phase 2** — deterministic scoring
-  (`src/whattowear/scoring/`). Then LangGraph + real selection
-  (`/recommend`→`/suggest`) → refinement. Full spec/plan/tasks in
-  `specs/002-styling-agent/` (tasks.md has the per-phase task breakdown —
-  start at T008 for Phase 2). See SDD-HANDOFF Step 3.
+  + a `/recommend` auth test. **Phases 2–4 (deterministic scoring → LangGraph
+  + `/suggest` → refinement) are paused**, deliberately reordered behind
+  Feature 003 — see below. Full spec/plan/tasks in `specs/002-styling-agent/`.
+  See SDD-HANDOFF Step 3.
+- **Next: Feature 003 (mvp-app), redefined from "closet-ingestion."** A
+  milestone-driven, minimal, vertical (backend+frontend together) slice:
+  sign-in → add-item-by-photo (VLM, one item per photo) → view closet → get
+  suggestions (via the existing `/recommend`, not `/suggest`) → deployed
+  publicly (Railway + Vercel). Absorbs the original Feature 003's core plus a
+  thin slice of Feature 005 (bare deploy only). `/design` (committed) is the
+  design source; `docs/design-backend-conflict-report.md` (local, untracked)
+  has the full conflict audit that drove this scope. Branch `003-mvp-app`.
+  See SDD-HANDOFF Step 4 for the full required/deferred breakdown.
 
 ## The rules that bite hardest (full text in the constitution)
 

@@ -2,8 +2,9 @@
 
 ## Where the project stands
 
-Monorepo. `backend/` holds all Python. `frontend/` is empty until design lands.
-Baseline is committed to `main`. Spec Kit is initialized.
+Monorepo. `backend/` holds all Python. `frontend/` is empty — design has
+landed (`/design`, committed) and frontend build starts with Feature 003 (see
+Step 4). Baseline is committed to `main`. Spec Kit is initialized.
 
 **Already built and working. Do not rewrite:**
 - `backend/src/whattowear/retrieval/` : baseline, hybrid, advanced retrievers
@@ -26,9 +27,10 @@ Baseline is committed to `main`. Spec Kit is initialized.
 1. LangGraph agent graph. Pipeline is currently a linear run.
 2. Deterministic scoring (color harmony, formality coherence, weather fitness, silhouette balance).
 3. Combinatorial outfit generation engine.
-4. Vision ingestion (photo to item metadata).
+4. Vision ingestion (photo to item metadata) — **in progress, minimal slice, see Feature 003 below.**
 5. Preference memory from feedback.
-6. Production hardening and deployment.
+6. Production hardening and deployment — **the "deploy publicly" slice pulled forward into Feature 003; full hardening (LiteLLM gateway, semantic cache, guardrails) still deferred to 005.**
+7. Frontend — **in progress, see Feature 003 below.** `/design` (committed) has an interactive HTML prototype; `docs/design-backend-conflict-report.md` (local, untracked) has the full design↔backend conflict audit that drove Feature 003's scope.
 
 **Known debt — CLEARED by Feature 002, Phase 1 (see Step 3):**
 - ~~**`/recommend` is unauthenticated.**~~ **Fixed.** `/recommend` now depends on
@@ -78,10 +80,10 @@ from drifting.
 | # | Feature | Notes |
 |---|---|---|
 | 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
-| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **Phase 1 ✅ done** (auth gate + unit-test backfill); Phases 2–4 pending. |
-| 003 | closet-ingestion | Photo to metadata via VLM. No full-body segmentation. |
-| 004 | preference-memory | Feedback capture, preference derivation. |
-| 005 | production-hardening | Gateway, cache, guardrails, deploy. |
+| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **Phase 1 ✅ done and merged**; Phases 2–4 paused — deliberately reordered behind Feature 003 (see below), resume after. |
+| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | **Next up.** A milestone-driven, minimal, end-to-end vertical slice: sign-in → add-item-by-photo (VLM) → view closet → get suggestions (via the existing `/recommend`, not `/suggest`) → deployed publicly. Absorbs the original 003's core (photo→VLM, narrowed to one item per photo) and a thin slice of 005 (deploy only). See Step 4. |
+| 004 | preference-memory | Feedback capture, preference derivation. Unchanged, still after 003. |
+| 005 | production-hardening | Gateway, cache, guardrails, **full** deploy hardening (bare deploy pulled into 003; this is everything beyond that). |
 
 **Branch strategy note (002 only):** Feature 002 is large enough to run as a
 multi-phase effort rather than one merge. Each phase merges to `main` on its
@@ -90,6 +92,23 @@ umbrella, the *phases* are the mergeable units. This keeps the gate honest and
 avoids a long-lived branch drifting from `main`; work can pause after any phase
 (e.g. to start 003/004) and resume without conflict. The other features keep
 the default one-feature-one-branch flow.
+
+**Why 003 jumped ahead of 002's remaining phases:** a design prototype
+(`/design`) landed and the required-scope deadline (referred to throughout
+this doc as "the MVP milestone requirements" — see `docs/mvp-milestone.md`,
+local/untracked) only strictly needs a working, publicly-reachable browser
+app, not the deterministic-scoring/LangGraph rebuild. A design↔backend
+conflict audit (`docs/design-backend-conflict-report.md`, local/untracked)
+found the actual blocking gaps were: no frontend, no auth screen, no
+photo-based add-item path, no deployment — none of which 002's remaining
+phases address. So: 003 is redefined to close exactly those gaps, minimally,
+using the already-working `/recommend` for suggestions rather than waiting on
+`/suggest`. 002 Phases 2–4 resume after 003 ships. **Feature 003 is developed
+vertically** (backend + frontend together, per capability slice — sign-in,
+then add-item, then closet view, then suggest — not backend-then-frontend)
+since that's what actually produces a demoable increment at each step, and it
+surfaces contract mismatches (like the ones the conflict report found)
+immediately instead of at integration time.
 
 ## Step 0: Constitution
 
@@ -229,8 +248,9 @@ retrieval/generation re-runs the eval no-regression gate before merge.
 **Scoring model (decided): deterministic-drives, LLM-as-edge-signal.** The
 deterministic scorers are the *only* thing that selects and ranks items. An LLM
 score may be computed and reported as an additional signal (and its
-agreement/disagreement with the deterministic scores feeds the cert writeup's
-improvements section) but it **never** influences which items are chosen. This
+agreement/disagreement with the deterministic scores feeds the milestone
+writeup's improvements section) but it **never** influences which items are
+chosen. This
 is fully consistent with constitution Principle 2 ("the LLM never selects
 items") and Principle 5 ("no metric exists only inside a prompt") — every metric
 still has a deterministic form the harness can check, and the LLM never selects
@@ -272,20 +292,66 @@ list above, which is ordered differently.)
     closet. Postgres checkpointer keyed by thread_id for conversational refinement.
     The /suggest endpoint streams via SSE from the start.
 
-## Step 4: Features 003 to 005
+## Step 4: Feature 003, mvp-app (redefined)
+
+**Required now** (each tied to a specific MVP-milestone gap or a hard
+dependency of one — see `docs/design-backend-conflict-report.md` §4/§5):
+
+1. **Sign-in/sign-up screen** — every endpoint needs a JWT; blocks everything
+   else. No backend work (Supabase Auth). Frontend: minimal, on-theme, built
+   from scratch (design has none — the report's finding, not an oversight).
+2. **Schema unification** — additive migration adding `pattern` and `fit`
+   (nullable, same pattern as `fabric`/`source` in Feature 001); frontend
+   shows the *full* 6-value formality enum and all 6 category groups
+   (including `full_body`), not the design's narrower mock set. Union of
+   what both sides have, not a lowest-common-denominator cut.
+3. **Add item by photo, minimal** — camera/gallery capture → one VLM call →
+   pre-filled fields → user reviews/edits → save. New backend: Supabase
+   Storage upload, one gateway VLM call, a new "create item directly"
+   endpoint (`source='upload'`, no `catalog_item_id` — the existing
+   catalog-add path is untouched). **Editing reuses the existing `PATCH
+   /wardrobe/items/{id}` as-is — zero new backend work for that part.**
+   Multi-item-per-photo detection (bounding boxes) is explicitly deferred.
+4. **View closet** — frontend only; `GET /wardrobe/items` already works.
+5. **Get outfit suggestions, minimal** — frontend calls the existing
+   `/recommend` (already JWT-gated post-002-Phase-1), not `/suggest`
+   (doesn't exist yet). Free-text "ask me to style you" input, no chat, no
+   clarifying questions (a stateless endpoint can't support that turn-taking
+   — deferred to 002 Phase 3+ / `/suggest`). **Known, accepted trade-off:**
+   the demo's outfit selection is still the LLM picking items directly
+   (Principle 2 debt, unchanged by this feature) — fine for the milestone,
+   flagged for Task 7's reflection, real fix stays Feature 002 Phases 2–3.
+6. **Deploy, publicly reachable** — thin slice only. Backend on Railway
+   (already the locked stack), frontend on Vercel (already the locked
+   stack, "later" becomes "now"). Not full 005 hardening.
+
+**Deferred, kept in the plan, not dropped** (none are MVP-milestone
+requirements): occasion picker (rebuild later using the real
+`OCCASION_FORMALITY` vocabulary — `office, job_interview, wedding, date,
+brunch, funeral, beach, gala, party` — not the design's Formal/Casual/Sport/
+Outdoor, which don't match it); multi-item photo detection; catalog-browse UI
+(backend already 100% supports it, `GET /catalog/items` + bulk-add, purely a
+future frontend task); chat + conversational refinement (waits on `/suggest`);
+streak / saved looks / share / chat history / style-tag persistence (no
+backend concept exists for any of these; likely Feature 004 territory,
+decided then, not now).
+
+Branch: `003-mvp-app`, off `main`. Full spec-kit cycle
+(`/speckit.specify` → `/speckit.clarify` → `/speckit.plan` → `/speckit.tasks`
+→ `/speckit.analyze` → `/speckit.implement`) — this is real feature work, not
+small/mechanical. Artifacts land in `specs/003-mvp-app/`.
+
+## Step 5: Features 004 to 005
 
 Same loop each time. Run /speckit.converge before 004, since memory/store.py may
 already cover part of it.
 
-- 003 closet-ingestion: photo to Supabase Storage, VLM extracts metadata into the
-  existing schema, user can correct any field, idempotency key on upload. Skip
-  full-body segmentation.
 - 004 preference-memory: feedback endpoint, derive a preference profile from
   rejections (rejected colors, avoided categories, formality drift), feed into
   parse_request and as a soft re-ranking weight.
 - 005 production-hardening: LiteLLM gateway, semantic cache on KB retrieval, output
   guardrail asserting every item_id exists, `uv run langgraph dockerfile Dockerfile`,
-  deploy to Railway.
+  deploy to Railway (beyond the bare deploy already done in 003).
 
 ## The rule that matters most
 
@@ -299,21 +365,22 @@ strip the abstraction out.
 This is a solo project. If there is only one concrete implementation today, there is
 no interface.
 
-## Running alongside: the cert writeup
+## Running alongside: the milestone writeup
 
-Keep docs/cert_challenge.md and fill each section as the matching feature lands,
-not at the end.
+Keep the local, untracked writeup doc (mirrors `docs/mvp-milestone.md`'s
+required sections) and fill each section as the matching feature lands, not
+at the end.
 
 | Section | Filled in after |
 |---|---|
 | Problem and audience | now |
 | Proposed solution | now |
 | Deal with data | 001, 003 |
-| Build and deploy agent to API | 002, 005 |
-| E2E prototype | frontend |
+| Build and deploy agent to API, run in a browser | 003 (minimal), 005 (hardened) |
+| E2E prototype, public endpoint | 003 |
 | Golden test data set | exists, document it |
 | Assess performance | exists, document it |
-| Improvements | from judge vs scorer disagreements |
+| Improvements | from judge vs scorer disagreements; also from this feature's `/recommend`-not-`/suggest` trade-off (§Step 4) |
 
 ## Appendix: constitution text
 

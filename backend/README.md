@@ -2,9 +2,8 @@
 
 Grounded-assembly RAG: given a user's **wardrobe** + a **context** (occasion,
 mood, weather), it assembles an outfit **from items they already own**, obeying
-rules retrieved from a fashion knowledge base, and **cites the rules**. Built as
-the cert-challenge deliverable *and* the product's recommendation engine (see
-`../plan` / the handoff docs).
+rules retrieved from a fashion knowledge base, and **cites the rules**. This is
+the product's recommendation engine (see `../docs/SDD-HANDOFF.md`).
 
 > This is a **grounded-assembly** task, not Q&A: we don't retrieve "the answer",
 > we retrieve the *rules the answer must obey*, then construct the outfit from
