@@ -115,10 +115,10 @@ verified independently.
 
 **Independent Test**: Remove one of several items and confirm only it disappears; delete it again and confirm idempotent handling; attempt to delete another user's item and confirm 404.
 
-- [ ] T028 [P] [US4] `delete_wardrobe_item(user_id, item_id)` in `backend/src/whattowear/crud.py` — hard delete, safe on an already-deleted or not-owned id (depends on T004)
-- [ ] T029 [US4] `DELETE /wardrobe/items/{id}` endpoint in `backend/src/whattowear/api.py` (depends on T007, T028)
-- [ ] T030 [P] [US4] Unit tests for `delete_wardrobe_item` (normal delete, repeated delete, cross-user delete, deleting an accessory-category item — FR-005) in `backend/tests/unit/test_crud.py`
-- [ ] T031 [US4] Integration test for `DELETE /wardrobe/items/{id}` in `backend/tests/integration/test_wardrobe_remove.py` (depends on T029)
+- [X] T028 [P] [US4] `delete_wardrobe_item(user_id, item_id)` in `backend/src/whattowear/crud.py` — hard delete, safe on an already-deleted or not-owned id (depends on T004)
+- [X] T029 [US4] `DELETE /wardrobe/items/{id}` endpoint in `backend/src/whattowear/api.py` (depends on T007, T028)
+- [X] T030 [P] [US4] Unit tests for `delete_wardrobe_item` (normal delete, repeated delete, cross-user delete, deleting an accessory-category item — FR-005) in `backend/tests/unit/test_crud.py`
+- [X] T031 [US4] Integration test for `DELETE /wardrobe/items/{id}` in `backend/tests/integration/test_wardrobe_remove.py` (depends on T029)
 
 **Checkpoint**: All four user stories independently functional.
 
