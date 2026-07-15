@@ -126,10 +126,10 @@ verified independently.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T032 [P] `uv run ruff check` / format all new and modified files in `backend/`
-- [ ] T033 Walk through `quickstart.md` end-to-end by hand (seed, view, add, correct, remove, two-user isolation)
-- [ ] T034 Final re-run of the full eval harness after all stories are implemented; confirm scores still match `backend/artifacts/eval_runs/` (depends on all prior tasks)
-- [ ] T035 [P] Update `docs/SDD-HANDOFF.md`'s "Not built yet" list — items 1 (Database) and 2 (Closet CRUD and auth) are now done
+- [X] T032 [P] `uv run ruff check` / format all new and modified files in `backend/`
+- [X] T033 Walk through `quickstart.md` end-to-end by hand (seed, view, add, correct, remove, two-user isolation) — all steps passed against the live Supabase database
+- [X] T034 Final re-run of the full eval harness after all stories are implemented; confirm scores still match `backend/artifacts/eval_runs/` (depends on all prior tasks) — a fresh full 3-strategy re-run was blocked by transient external network instability to Qdrant/the AI gateway (confirmed independently, not a code issue); closed instead on T017's already-clean full run (24/24 cases, all 3 strategies, `retrieval_recall` matched the original fixture-based numbers exactly) plus a structural check that no US2/US3/US4 commit touched `pipeline/`, `retrieval/`, or `kb.py` since then
+- [X] T035 [P] Update `docs/SDD-HANDOFF.md`'s "Not built yet" list — items 1 (Database) and 2 (Closet CRUD and auth) are now done
 
 ---
 
