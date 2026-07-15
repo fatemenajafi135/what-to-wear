@@ -5,8 +5,12 @@ from __future__ import annotations
 
 import uuid
 
+import pydantic
+import pytest
+
 from whattowear import crud
 from whattowear.models import CatalogItemRow, WardrobeItemRow
+from whattowear.schema import WardrobeItemPatch
 
 
 def _add_item(db_session, user_id: uuid.UUID, **overrides) -> WardrobeItemRow:
@@ -184,3 +188,79 @@ def test_add_wardrobe_items_from_catalog_any_unknown_id_rejects_whole_batch(db_s
         assert e.missing_ids == [unknown_id]
 
     assert crud.list_wardrobe_items(db_session, user_id) == []
+
+
+# --- update_wardrobe_item (T026) ---------------------------------------------
+
+
+def test_update_wardrobe_item_valid_correction_leaves_other_fields_unchanged(db_session):
+    user_id = uuid.uuid4()
+    row = _add_item(db_session, user_id, formality="casual", warmth=2, category="jeans")
+
+    updated = crud.update_wardrobe_item(db_session, user_id, row.id, WardrobeItemPatch(formality="formal"))
+
+    assert updated.formality == "formal"
+    assert updated.warmth == 2
+    assert updated.category == "jeans"
+
+
+@pytest.mark.parametrize(
+    "bad_kwargs",
+    [
+        {"formality": "extremely_fancy"},
+        {"season": ["rainy"]},
+        {"warmth": 9},
+        {"warmth": -1},
+        {"colors": ["notahex"]},
+    ],
+)
+def test_update_wardrobe_item_invalid_constrained_field_rejected_at_construction(db_session, bad_kwargs):
+    """FR-007: an invalid formality/season/warmth/colors value is rejected
+    before it can ever reach update_wardrobe_item -- WardrobeItemPatch's own
+    validators raise, exactly as FastAPI's request-body parsing would (422),
+    so the item's prior value is never touched."""
+    user_id = uuid.uuid4()
+    row = _add_item(db_session, user_id, formality="casual", warmth=2)
+
+    with pytest.raises(pydantic.ValidationError):
+        WardrobeItemPatch(**bad_kwargs)
+
+    closet = crud.list_wardrobe_items(db_session, user_id)
+    assert closet[0].formality == "casual"
+    assert closet[0].warmth == 2
+
+
+def test_update_wardrobe_item_unrecognized_category_accepted(db_session):
+    """Category is open-ended -- FR-007. Its slot/bucket falls back to
+    'accessory' on read via categories.group_of(), not validated here."""
+    user_id = uuid.uuid4()
+    row = _add_item(db_session, user_id, category="top")
+
+    updated = crud.update_wardrobe_item(db_session, user_id, row.id, WardrobeItemPatch(category="glorbtastic"))
+
+    assert updated.category == "glorbtastic"
+
+
+def test_update_wardrobe_item_accessory_category_item_works(db_session):
+    """FR-005: correcting an accessory-category item works identically."""
+    user_id = uuid.uuid4()
+    row = _add_item(db_session, user_id, category="jewelry", formality="casual")
+
+    updated = crud.update_wardrobe_item(db_session, user_id, row.id, WardrobeItemPatch(formality="formal"))
+
+    assert updated.category == "jewelry"
+    assert updated.formality == "formal"
+
+
+def test_update_wardrobe_item_cross_user_returns_none(db_session):
+    owner, other = uuid.uuid4(), uuid.uuid4()
+    row = _add_item(db_session, owner, formality="casual")
+
+    result = crud.update_wardrobe_item(db_session, other, row.id, WardrobeItemPatch(formality="formal"))
+
+    assert result is None
+    assert crud.list_wardrobe_items(db_session, owner)[0].formality == "casual"
+
+
+def test_update_wardrobe_item_unknown_item_returns_none(db_session):
+    assert crud.update_wardrobe_item(db_session, uuid.uuid4(), uuid.uuid4(), WardrobeItemPatch(formality="formal")) is None
