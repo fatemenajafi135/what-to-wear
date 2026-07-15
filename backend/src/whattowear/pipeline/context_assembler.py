@@ -7,17 +7,12 @@ location), fall back to a caller-supplied `temp_c`, else leave weather unset.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Optional
 
 from langsmith import traceable
 
 from ..external.weather import month_to_season, temp_to_band
-from ..ingest.loaders import REPO_ROOT
 from ..schema import Context, Formality, WardrobeItem
-
-WARDROBE_FIXTURE = REPO_ROOT / "data" / "fixtures" / "wardrobe.json"
 
 # Fallback occasion -> default formality (mirrors the L4 occ entries). Used only
 # when the caller doesn't state a formality.
@@ -34,10 +29,15 @@ OCCASION_FORMALITY: dict[str, Formality] = {
 }
 
 
-def load_wardrobe(path: Path = WARDROBE_FIXTURE) -> list[WardrobeItem]:
-    with open(path, encoding="utf-8") as fh:
-        return [WardrobeItem(**{k: v for k, v in it.items() if k in WardrobeItem.model_fields})
-                for it in json.load(fh)]
+def load_wardrobe(user_id: str) -> list[WardrobeItem]:
+    """The requesting user's persisted closet (Feature 001: closet
+    persistence) — replaces the old JSON-fixture read. The fixture now only
+    serves as the one-time catalog seed source (crud.seed_catalog)."""
+    from .. import crud
+    from ..db import SessionLocal
+
+    with SessionLocal() as session:
+        return crud.list_wardrobe_items(session, user_id)
 
 
 @traceable(name="stage.context_assembler", run_type="chain")
@@ -52,7 +52,7 @@ def assemble_context(
     user_id: Optional[str] = None,
 ) -> Context:
     formality = formality or OCCASION_FORMALITY.get(occasion, "smart_casual")
-    wardrobe = wardrobe if wardrobe is not None else load_wardrobe()
+    wardrobe = wardrobe if wardrobe is not None else (load_wardrobe(user_id) if user_id else [])
 
     condition = None
     temp_band = None

@@ -67,11 +67,34 @@ class WardrobeItem(BaseModel):
     formality: Formality
     warmth: int = Field(ge=0, le=5)  # 0 = airy, 5 = heaviest
     season: list[Season] = Field(default_factory=list)
+    fabric: Optional[str] = None
+    source: Optional[Literal["catalog", "upload"]] = None
 
     @field_validator("colors")
     @classmethod
     def _colors_must_be_hex(cls, v: list[str]) -> list[str]:
         return [normalize_hex(c) for c in v]
+
+
+class WardrobeItemPatch(BaseModel):
+    """A partial correction to an owned WardrobeItem (US3). Every field is
+    optional -- only fields present in the request are applied, matching
+    PATCH semantics. Reuses the same field-level validation as WardrobeItem
+    so an invalid value is rejected with a 422 before it ever reaches the DB
+    (FR-007), while `category` stays open-ended (its slot/bucket is derived
+    on read via categories.group_of(), never itself validated here)."""
+
+    category: Optional[str] = None
+    colors: Optional[list[str]] = None
+    formality: Optional[Formality] = None
+    warmth: Optional[int] = Field(default=None, ge=0, le=5)
+    season: Optional[list[Season]] = None
+    fabric: Optional[str] = None
+
+    @field_validator("colors")
+    @classmethod
+    def _colors_must_be_hex(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        return v if v is None else [normalize_hex(c) for c in v]
 
 
 class Context(BaseModel):

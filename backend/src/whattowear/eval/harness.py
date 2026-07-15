@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from pathlib import Path
 
+from ..crud import EVAL_BASELINE_USER_ID
 from ..ingest.loaders import REPO_ROOT
 from ..kb import get_kb
 from ..pipeline import cite
@@ -45,6 +45,7 @@ def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str]) -> dict
         formality=case.formality,
         temp_c=case.temp_c,
         strategy=strategy,
+        user_id=str(EVAL_BASELINE_USER_ID),
     )
     wardrobe = {it.id: it for it in run.ctx.wardrobe}
     retrieved_ids = run.retrieval.rule_ids()
@@ -100,8 +101,15 @@ def run_strategy(cases: list[GoldenCase], strategy: str, rule_text: dict[str, st
 
 
 def summarize(rows_by_strategy: dict[str, list[dict]]) -> None:
-    check_keys = ["retrieval_recall", "owned_only", "cites_grounded", "every_choice_cites",
-                  "weather_appropriate", "occasion_fit", "respects_exclusions"]
+    check_keys = [
+        "retrieval_recall",
+        "owned_only",
+        "cites_grounded",
+        "every_choice_cites",
+        "weather_appropriate",
+        "occasion_fit",
+        "respects_exclusions",
+    ]
     print("\n=== Baseline vs advanced (verifiable metrics, mean over golden set) ===")
     header = f"{'metric':<22}" + "".join(f"{s:>12}" for s in rows_by_strategy)
     print(header)

@@ -6,14 +6,19 @@ HTTP. No UI/frontend (that's a parallel track). Run:
 
 from __future__ import annotations
 
+import uuid
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from . import crud
+from .auth import get_current_user_id
+from .db import get_session
 from .pipeline import cite
 from .pipeline.run import run_pipeline
-from .schema import Formality, OutfitResult
+from .schema import Formality, OutfitResult, WardrobeItem, WardrobeItemPatch
 
 app = FastAPI(title="What to Wear — RAG styling engine (test API)")
 
@@ -50,3 +55,75 @@ def recommend_endpoint(req: RecommendRequest) -> RecommendResponse:
         strategy=req.strategy,
     )
     return RecommendResponse(result=run.result, rendered=cite.render_text(run.result))
+
+
+@app.get("/wardrobe/items", response_model=list[WardrobeItem])
+def list_wardrobe_items(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> list[WardrobeItem]:
+    return crud.list_wardrobe_items(session, user_id)
+
+
+@app.get("/catalog/items", response_model=list[WardrobeItem])
+def list_catalog_items(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),  # any authenticated user; catalog isn't user-scoped
+) -> list[WardrobeItem]:
+    return crud.list_catalog_items(session)
+
+
+class AddWardrobeItemRequest(BaseModel):
+    catalog_item_id: uuid.UUID
+
+
+class AddWardrobeItemsBulkRequest(BaseModel):
+    catalog_item_ids: list[uuid.UUID]
+
+
+@app.post("/wardrobe/items", response_model=WardrobeItem, status_code=201)
+def add_wardrobe_item(
+    req: AddWardrobeItemRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> WardrobeItem:
+    item = crud.add_wardrobe_item_from_catalog(session, user_id, req.catalog_item_id)
+    if item is None:
+        raise HTTPException(404, f"unknown catalog_item_id: {req.catalog_item_id}")
+    return item
+
+
+@app.post("/wardrobe/items/bulk", response_model=list[WardrobeItem], status_code=201)
+def add_wardrobe_items_bulk(
+    req: AddWardrobeItemsBulkRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> list[WardrobeItem]:
+    try:
+        return crud.add_wardrobe_items_from_catalog(session, user_id, req.catalog_item_ids)
+    except crud.UnknownCatalogItemIds as e:
+        raise HTTPException(404, f"unknown catalog_item_id(s): {[str(i) for i in e.missing_ids]}") from e
+
+
+@app.patch("/wardrobe/items/{item_id}", response_model=WardrobeItem)
+def update_wardrobe_item(
+    item_id: uuid.UUID,
+    patch: WardrobeItemPatch,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> WardrobeItem:
+    item = crud.update_wardrobe_item(session, user_id, item_id, patch)
+    if item is None:
+        raise HTTPException(404, f"wardrobe item not found: {item_id}")
+    return item
+
+
+@app.delete("/wardrobe/items/{item_id}", status_code=204)
+def delete_wardrobe_item(
+    item_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> None:
+    deleted = crud.delete_wardrobe_item(session, user_id, item_id)
+    if not deleted:
+        raise HTTPException(404, f"wardrobe item not found: {item_id}")

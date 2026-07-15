@@ -14,16 +14,21 @@ Baseline is committed to `main`. Spec Kit is initialized.
 - `backend/src/whattowear/memory/store.py` : partial
 - `backend/src/whattowear/eval/` and `backend/evals/` : Ragas plus LLM judge
 - `backend/data/golden_set.yaml`, `backend/artifacts/eval_runs/*.jsonl` : evaluated results
+- **Feature 001 (closet-persistence), done**: `backend/src/whattowear/db.py`,
+  `models.py`, `crud.py`, `auth.py`, `backend/alembic/` — persistent per-user
+  closet + shared catalog in Postgres (Supabase), JWT auth (ES256/JWKS), full
+  CRUD (`GET`/`POST`/`POST .../bulk`/`PATCH`/`DELETE` on `/wardrobe/items`,
+  `GET /catalog/items`). `context_assembler.load_wardrobe()` reads Postgres
+  instead of the JSON fixture, which is now catalog-seed-only. No change to
+  retrieval behavior — verified via the eval no-regression gate.
 
 **Not built yet:**
-1. Database. Wardrobe is a JSON fixture (`data/fixtures/wardrobe.json`).
-2. Closet CRUD and auth.
-3. LangGraph agent graph. Pipeline is currently a linear run.
-4. Deterministic scoring (color harmony, formality coherence, weather fitness, silhouette balance).
-5. Combinatorial outfit generation engine.
-6. Vision ingestion (photo to item metadata).
-7. Preference memory from feedback.
-8. Production hardening and deployment.
+1. LangGraph agent graph. Pipeline is currently a linear run.
+2. Deterministic scoring (color harmony, formality coherence, weather fitness, silhouette balance).
+3. Combinatorial outfit generation engine.
+4. Vision ingestion (photo to item metadata).
+5. Preference memory from feedback.
+6. Production hardening and deployment.
 
 ## Architecture rules, not negotiable
 
