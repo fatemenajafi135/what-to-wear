@@ -10,7 +10,6 @@ graph ran, without relying on timing.
 from __future__ import annotations
 
 import json
-import os
 
 import pytest
 import redis as redis_lib
@@ -21,17 +20,10 @@ from whattowear.auth import get_current_user_id
 from whattowear.crud import EVAL_BASELINE_USER_ID
 from whattowear.pipeline import graph as graph_module
 
-
-@pytest.fixture(autouse=True)
-def _clean_cache():
-    """Every test in this file uses the same `occasion="office"` against the
-    same `EVAL_BASELINE_USER_ID`, so a cache entry written by one test would
-    otherwise leak into the next (Redis isn't rolled back the way the DB
-    fixture is) — flush before each test for isolation."""
-    client = redis_lib.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
-    client.flushdb()
-    yield
-    client.flushdb()
+# Per-test Redis isolation is global (conftest.py's `_flush_suggest_cache`,
+# autouse) -- every test in this file uses the same occasion against the
+# same EVAL_BASELINE_USER_ID and would otherwise leak a cache entry across
+# tests (or across files), not just within this one.
 
 
 @pytest.fixture
