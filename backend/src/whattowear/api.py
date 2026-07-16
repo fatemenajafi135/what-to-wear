@@ -10,17 +10,23 @@ import json
 import os
 import uuid
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from . import crud, storage, vision
 from .auth import get_bearer_token, get_current_user_id
 from .colors import nearest_name
-from .db import get_session
+from .db import engine, get_session
+from .ingest.build_kb import COLLECTION, QDRANT_API_KEY, QDRANT_URL
 from .memory.preferences import DerivedSignal, derive_signals
+from .pipeline import cache as suggest_cache
+from .pipeline import context_assembler
+from .pipeline.context_assembler import load_wardrobe
 from .pipeline.graph import get_compiled_graph
 from .schema import (
     CreateWardrobeItemFromUploadRequest,
@@ -48,8 +54,44 @@ app.add_middleware(
 )
 
 
+def _db_reachable() -> bool:
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except SQLAlchemyError:
+        return False
+
+
+def _vector_store_reachable() -> bool:
+    """Only meaningful when a real Qdrant server is configured — the
+    in-memory fallback (`WTW_QDRANT_URL=""`, dev/CI only) has no external
+    dependency to fail. A short-timeout `collection_exists` call, not
+    `kb.get_kb()` (a memoized singleton that would trigger a full,
+    potentially expensive KB (re)build on the first health check rather
+    than a live reachability probe)."""
+    if not QDRANT_URL:
+        return True
+    try:
+        from qdrant_client import QdrantClient
+
+        QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=5).collection_exists(COLLECTION)
+        return True
+    except Exception:
+        return False
+
+
 @app.get("/health")
-def health() -> dict:
+def health(response: Response) -> dict:
+    """FR-012 (Feature 005, a `/speckit.analyze` finding against the spec's
+    own Edge Case): reports failure when the database or vector store is
+    unreachable, not merely when the process itself is running."""
+    failed = [
+        name for name, ok in [("database", _db_reachable()), ("vector_store", _vector_store_reachable())] if not ok
+    ]
+    if failed:
+        response.status_code = 503
+        return {"status": "unhealthy", "failed_dependencies": failed}
     return {"status": "ok"}
 
 
@@ -66,9 +108,70 @@ def suggest_endpoint(
     only — returning a Response subclass directly makes FastAPI skip
     response_model serialization, but it's still what generates the
     SuggestResult/ScoredOutfit/DimensionScore schemas the frontend needs
-    (T036b) since a raw StreamingResponse alone wouldn't."""
-    graph = get_compiled_graph()
+    (T036b) since a raw StreamingResponse alone wouldn't.
+
+    Feature 005 US3/FR-006/007: a fresh (non-continuing) request — no
+    incoming `thread_id` — is eligible for the per-user Redis cache
+    (`pipeline/cache.py`). A refinement turn (`thread_id` supplied,
+    continuing a conversation the checkpointer already has state for)
+    always runs the graph — refinements are inherently stateful and aren't
+    idempotent the way a first turn is (research.md §2). The wardrobe is
+    loaded once here and passed through to the graph either way (`wardrobe=`
+    override on `GraphState`), so caching doesn't cost a second DB fetch.
+
+    A cache hit still seeds the checkpointer (`graph.update_state`) with the
+    turn's `ctx`/`original_context`/`last_result` before returning — found
+    necessary during implementation: a hit's `thread_id` is otherwise never
+    passed to `graph.invoke`, so the checkpointer would have no state for it,
+    and a later refinement turn continuing that `thread_id` would wrongly be
+    treated as a brand-new conversation (`parse_request` only detects a
+    continuation via `original_context` already being checkpointed)."""
+    is_fresh_request = req.thread_id is None
     thread_id = req.thread_id or str(uuid.uuid4())
+    wardrobe = load_wardrobe(user_id)
+
+    cache_key = None
+    if is_fresh_request:
+        cache_key = suggest_cache.compute_cache_key(
+            user_id,
+            occasion=req.occasion,
+            mood=req.mood,
+            formality=req.formality,
+            location=req.location,
+            temp_c=req.temp_c,
+            wardrobe=wardrobe,
+        )
+        cached = suggest_cache.get_cached_result(cache_key)
+        if cached is not None:
+            cached_result, cached_note = cached
+            graph = get_compiled_graph()
+            config = {"configurable": {"thread_id": thread_id}}
+            ctx = context_assembler.assemble_context(
+                req.occasion,
+                mood=req.mood,
+                formality=req.formality,
+                location=req.location,
+                temp_c=req.temp_c,
+                wardrobe=wardrobe,
+                user_id=user_id,
+            )
+            graph.update_state(
+                config,
+                {
+                    "thread_id": thread_id,
+                    "user_id": user_id,
+                    "wardrobe": wardrobe,
+                    "ctx": ctx,
+                    "original_context": ctx,
+                    "last_result": cached_result,
+                    "refinement_deltas": [],
+                },
+            )
+            return StreamingResponse(
+                _event_stream(thread_id, cached_result, cached_note), media_type="text/event-stream"
+            )
+
+    graph = get_compiled_graph()
     config = {"configurable": {"thread_id": thread_id}}
     final_state = graph.invoke(
         {
@@ -80,23 +183,31 @@ def suggest_endpoint(
             "strategy": req.strategy,
             "thread_id": thread_id,
             "user_id": user_id,
+            "wardrobe": wardrobe,
         },
         config=config,
     )
 
-    def event_stream():
-        for i, outfit in enumerate(final_state["scored_outfits"]):
-            payload = {"index": i, "outfit": outfit.model_dump(mode="json")}
-            yield f"event: outfit\ndata: {json.dumps(payload)}\n\n"
+    if cache_key is not None:
+        suggest_cache.set_cached_result(cache_key, final_state["result"], final_state.get("note"))
 
-        done_payload = {
-            "thread_id": final_state["thread_id"],
-            "result": final_state["result"].model_dump(mode="json"),
-            "note": final_state.get("note"),
-        }
-        yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
+    return StreamingResponse(
+        _event_stream(final_state["thread_id"], final_state["result"], final_state.get("note")),
+        media_type="text/event-stream",
+    )
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+def _event_stream(thread_id: str, result: SuggestResult, note: str | None):
+    for i, outfit in enumerate(result.outfits):
+        payload = {"index": i, "outfit": outfit.model_dump(mode="json")}
+        yield f"event: outfit\ndata: {json.dumps(payload)}\n\n"
+
+    done_payload = {
+        "thread_id": thread_id,
+        "result": result.model_dump(mode="json"),
+        "note": note,
+    }
+    yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
 
 
 @app.get("/wardrobe/items", response_model=list[WardrobeItem])

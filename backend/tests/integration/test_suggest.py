@@ -19,7 +19,14 @@ from whattowear.schema import Context, DimensionScore, Rationale, ScoredOutfit, 
 
 
 @pytest.fixture
-def client():
+def client(mocker):
+    # Feature 005 US3: suggest_endpoint now unconditionally loads the
+    # wardrobe and checks the cache before invoking the (mocked) graph —
+    # keep this file's original "mocked graph, no DB/Redis dependency"
+    # character by mocking those too.
+    mocker.patch.object(api, "load_wardrobe", return_value=[])
+    mocker.patch.object(api.suggest_cache, "get_cached_result", return_value=None)
+    mocker.patch.object(api.suggest_cache, "set_cached_result")
     yield TestClient(api.app)
     api.app.dependency_overrides.pop(get_current_user_id, None)
 

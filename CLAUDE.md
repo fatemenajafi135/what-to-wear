@@ -108,11 +108,15 @@ So:
   user stories (sign-in/up, add-by-photo, view closet, get a suggestion),
   consuming the backend's OpenAPI schema for types (constitution Principle
   VII — generated and verified, not hand-maintained). typecheck/lint/build
-  clean; smoke-tested against a locally running backend. **Remaining: 3
-  manual, owner-only steps** — create the Supabase Storage `wardrobe-photos`
-  bucket + RLS policy, deploy backend to Railway, deploy frontend to Vercel
-  (`specs/003-mvp-app/tasks.md` T010/T037/T038/T039) — no coding session has
-  the dashboard access these need. **Also remaining, deliberately paused:
+  clean; smoke-tested against a locally running backend. **The 3 manual,
+  owner-only steps this feature left outstanding** — create the Supabase
+  Storage `wardrobe-photos` bucket + RLS policy, deploy backend to Railway,
+  deploy frontend to Vercel (`specs/003-mvp-app/tasks.md`
+  T010/T037/T038/T039) — **are now done**, confirmed by the project owner
+  during Feature 005 (which absorbed completing them into its own scope,
+  per that feature's plan). The live backend is currently running
+  pre-Feature-005 code; see Feature 005's entry below for what needs a
+  redeploy. **Also remaining, deliberately paused:
   visual polish** — three styling passes (ad hoc CSS, then the Nocturne
   design system's own component classes, then tracing exact colors out of
   `design/What to Wear.dc.html`'s render logic) still didn't match
@@ -161,9 +165,67 @@ So:
   surfaced). `.specify/feature.json`, `frontend/lib/api-types.ts`, and
   `frontend/openapi.json` were regenerated/repointed rather than
   hand-merged.
-- **Next**: the 3 manual deploy steps for Feature 003 (Supabase Storage
-  bucket, Railway, Vercel — still not done, see Feature 003 above), then
-  Feature 005.
+- **Feature 005 (production-hardening) — code complete, merge-ready; one
+  manual step remains.** Full spec-kit cycle on branch
+  `005-production-hardening` (own worktree,
+  `/home/fateme/Projects/w2w/what-to-wear-005`). `/speckit.clarify` resolved
+  4 ambiguities (per-user-only cache scope; LangSmith tracing satisfies
+  FR-010's operator-visibility requirement — no new dashboard built;
+  same-provider-only retry, no cross-provider fallback; a concrete
+  sub-second cache-hit target for SC-003). `/speckit.analyze` found and
+  fixed 2 gaps before implementing: the spec's own Edge Case about
+  DB/vector-store health checks had no FR or task (added FR-012 + a task),
+  and the grounding guardrail's original closet-only design was a
+  literal-compliance gap against constitution Principle IV — widened to
+  check both the closet and the shared catalog at negligible cost.
+  - **Output grounding guardrail (US2)**: new `pipeline/grounding.py` +
+    a `verify_grounding` graph node between `score_and_rank` and `explain`,
+    dropping any outfit whose items aren't in the requester's wardrobe or
+    the shared catalog — a safety net on top of, not instead of, the
+    existing deterministic-selection guarantee. Eval harness confirms
+    `retrieval_recall` byte-identical to the archived baseline and
+    `owned_only` unaffected — no legitimately-grounded outfit is ever
+    dropped.
+  - **Per-user `/suggest` cache (US3)**: new `pipeline/cache.py` — an
+    explicit, exact-key Redis cache around the whole graph invocation, not
+    LiteLLM's own per-call semantic cache (which can't reach retrieval and
+    risks fuzzy false-positive matches across different users' closets — a
+    real correctness risk, not just a staleness one). Keyed by the
+    verified user id + normalized context + a full-content wardrobe
+    fingerprint, so any closet edit naturally busts a stale entry. Two real
+    bugs found via testing: an occasion-normalization bug in the cache-key
+    derivation, and a cache hit's `thread_id` never reaching the
+    checkpointer (breaking a refinement that continued a cached first
+    turn) — fixed by seeding the checkpointer on every hit via
+    `graph.update_state(...)`.
+  - **LiteLLM routing (US4)**: `config.py`'s `get_chat_model`/
+    `get_judge_model` now build `langchain-litellm`'s `ChatLiteLLM` instead
+    of `langchain_openai`'s `ChatOpenAI` (same gateway) — automatic retry +
+    LangSmith-visible cost/usage for free. Three of four call sites needed
+    zero changes; `vision.py`'s all-`Optional`-fields extraction schema hit
+    a real gateway incompatibility with `ChatLiteLLM`'s structured-output
+    handling (two guessed fallbacks were tried and rejected by the gateway
+    before finding the real fix — a hand-written nullable-required JSON
+    schema). See Gotchas below.
+  - **Deploy (US1)**: Feature 003's three manual steps (Supabase Storage
+    bucket, Railway, Vercel) are now all confirmed working by the project
+    owner. Railway had a real "builds fine, container stops a few seconds
+    later, no traceback" issue, resolved on the dashboard side
+    (health-check/service-type config) — not a code issue; `psycopg[binary]`
+    and the deploy port were both explicitly ruled out during
+    troubleshooting. **The live backend is still running pre-005 code** —
+    a redeploy of this branch is the one remaining step before this
+    feature's actual changes (cache, guardrail, LiteLLM, the new
+    `/health`) can be validated live.
+  - Also shipped, beyond the original task list: `GET /health` now checks
+    Postgres + Qdrant reachability (`503` naming the failed dependency)
+    instead of always returning a static `200 ok` (FR-012, a
+    `/speckit.analyze` finding against the spec's own Edge Case).
+  - One known, unresolved intermittent test failure — documented directly
+    in `tests/integration/test_suggest_cache.py`, see Gotchas below.
+  - Full narrative: `docs/SDD-HANDOFF.md` Step 6.
+- **Next**: redeploy Feature 005 to Railway/Vercel after merge (the one
+  remaining task, T008), then decide the next feature.
 - **Environment gotcha found while finishing Feature 004**: a fresh `git
   worktree add` only copies tracked files — `backend/data/` (gitignored:
   golden set, KB corpus, wardrobe fixture) was entirely absent from this
@@ -263,6 +325,41 @@ the DB vars). Full run/architecture detail: `backend/README.md`.
   is a manual, one-time dashboard step** (Feature 003), not something any
   migration or seed script creates — see `specs/003-mvp-app/quickstart.md`
   Prerequisites. `storage.py` will fail every upload until this exists.
+- **`ChatLiteLLM`'s default structured-output handling rejects an
+  all-`Optional`-fields Pydantic schema against this project's gateway**
+  (Feature 005) — `"'required' is required to be supplied and to be an
+  array including every key in properties"`. Pydantic omits fields with
+  defaults from the generated JSON schema's `required` array;
+  `langchain_openai.ChatOpenAI` used to paper over this, `ChatLiteLLM`
+  doesn't. Two plausible-looking fallbacks do **not** work against this
+  gateway either — confirmed by reproducing the real `BadRequestError` for
+  each: `method="json_mode"` (gateway rejects `response_format={"type":
+  "json_object"}` outright, even text-only) and `method="json_schema",
+  strict=False` (the `strict` flag doesn't suppress the requirement
+  server-side). The actual fix: pass a hand-written JSON schema dict with
+  every property typed nullable (`["string", "null"]`) and *all* listed in
+  `required` directly to `with_structured_output(schema_dict,
+  method="json_schema")` — see `vision.py`'s `_EXTRACTION_SCHEMA` for the
+  working example. Any future all-optional-fields extraction schema will
+  hit this same wall.
+- **Any integration test hitting `/suggest` for a seeded user is now
+  implicitly subject to the per-user Redis cache** (Feature 005) — a
+  cross-test-file cache hit caused a real, reproducible failure
+  (`test_suggest_refinement.py` reading a stale result cached by an
+  unrelated earlier test). Fixed with a global autouse fixture in
+  `tests/conftest.py` (`_flush_suggest_cache`, mirrors `db_session`'s
+  rollback isolation but for Redis) — any new integration test file hitting
+  `/suggest` gets this for free, no per-file fixture needed.
+- **One known, unresolved intermittent test failure**:
+  `tests/integration/test_suggest_cache.py::test_closet_edit_invalidates_the_cache`
+  failed twice across ~275-test full-suite runs in the Feature 005 session,
+  but passed in 6 separate narrower reproductions (3x isolation, paired
+  with its preceding test, an 18-test combined-file rerun, a manual script)
+  — the underlying cache/fingerprint mechanism is verified correct.
+  Documented in the test itself; leading hypothesis is Supabase pooler
+  contention under heavy concurrent session activity, not a logic bug. If
+  it recurs in a clean, non-concurrent run, that hypothesis needs
+  revisiting.
 
 ## Git
 

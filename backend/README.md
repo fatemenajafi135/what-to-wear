@@ -38,9 +38,20 @@ uv sync --group dev       # --group dev adds pytest + ruff
   and `SUPABASE_URL` (for JWT/JWKS verification). The app raises on startup
   without `DATABASE_URL`. Optionally `DATABASE_URL_DIRECT` (port 5432) for
   running migrations off the pooler.
+- **Cache (Feature 005):** `REDIS_URL` — falls back to
+  `redis://localhost:6379/0` for local dev if unset; an unreachable Redis
+  degrades the `/suggest` cache to always-miss, never a failed request.
 
 All model/embedding calls route through the **Vercel AI Gateway** (`config.py`) —
-the single gateway layer, no direct provider SDK calls.
+the single gateway layer, no direct provider SDK calls. Chat-completion calls
+(`get_chat_model`/`get_judge_model`) go through `langchain-litellm`'s
+`ChatLiteLLM` (Feature 005), giving automatic retry on transient provider
+failures and LangSmith-visible cost/usage for free; embeddings stay on
+`langchain_openai.OpenAIEmbeddings`. `POST /suggest` is backed by a per-user
+Redis cache (`REDIS_URL`, `pipeline/cache.py`) keyed by the requester, their
+normalized request, and a fingerprint of their current closet — a repeated
+equivalent request skips retrieval/generation entirely; an unreachable Redis
+degrades to processing fresh, never a failed request.
 
 ### Database (Feature 001: closet persistence)
 
