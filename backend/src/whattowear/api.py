@@ -10,16 +10,19 @@ import json
 import os
 import uuid
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from . import crud, storage, vision
 from .auth import get_bearer_token, get_current_user_id
 from .colors import nearest_name
-from .db import get_session
+from .db import engine, get_session
+from .ingest.build_kb import COLLECTION, QDRANT_API_KEY, QDRANT_URL
 from .memory.preferences import DerivedSignal, derive_signals
 from .pipeline import cache as suggest_cache
 from .pipeline import context_assembler
@@ -51,8 +54,46 @@ app.add_middleware(
 )
 
 
+def _db_reachable() -> bool:
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except SQLAlchemyError:
+        return False
+
+
+def _vector_store_reachable() -> bool:
+    """Only meaningful when a real Qdrant server is configured — the
+    in-memory fallback (`WTW_QDRANT_URL=""`, dev/CI only) has no external
+    dependency to fail. A short-timeout `collection_exists` call, not
+    `kb.get_kb()` (a memoized singleton that would trigger a full,
+    potentially expensive KB (re)build on the first health check rather
+    than a live reachability probe)."""
+    if not QDRANT_URL:
+        return True
+    try:
+        from qdrant_client import QdrantClient
+
+        QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=5).collection_exists(COLLECTION)
+        return True
+    except Exception:
+        return False
+
+
 @app.get("/health")
-def health() -> dict:
+def health(response: Response) -> dict:
+    """FR-012 (Feature 005, a `/speckit.analyze` finding against the spec's
+    own Edge Case): reports failure when the database or vector store is
+    unreachable, not merely when the process itself is running."""
+    failed = [
+        name
+        for name, ok in [("database", _db_reachable()), ("vector_store", _vector_store_reachable())]
+        if not ok
+    ]
+    if failed:
+        response.status_code = 503
+        return {"status": "unhealthy", "failed_dependencies": failed}
     return {"status": "ok"}
 
 

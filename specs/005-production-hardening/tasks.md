@@ -72,31 +72,48 @@ item by photo, and receive a suggestion — no terminal, no local backend.
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] **Manual, owner-only**: confirm with the project owner
+- [X] T005 [US1] **Manual, owner-only**: confirm with the project owner
   whether the Supabase Storage `wardrobe-photos` bucket + per-user RLS
   policy already exists (Feature 003, never confirmed done); if not, create
   it per `specs/003-mvp-app/quickstart.md`'s Prerequisites — no repo file,
-  tracked here so it isn't silently skipped.
-- [ ] T006 [P] [US1] **Manual, owner-only**: confirm with the project owner
+  tracked here so it isn't silently skipped. **Done** — owner confirmed no
+  issue on Supabase.
+- [X] T006 [P] [US1] **Manual, owner-only**: confirm with the project owner
   whether a Railway project for the backend already exists; if not,
   configure one — start command `uv run uvicorn whattowear.api:app --host
   0.0.0.0 --port $PORT`, env vars from `backend/.env` including the new
   `REDIS_URL` (from Railway's own Redis addon — add the addon if it doesn't
   exist yet) and `WTW_CORS_ORIGINS` set to the Vercel origin from T007.
-- [ ] T007 [P] [US1] **Manual, owner-only**: confirm with the project owner
+  **Done** — Railway was shutting the container down right after a
+  successful boot (no traceback, clean startup every time); resolved on the
+  owner's side (health-check/service-type config, not a code issue — ruled
+  out `psycopg[binary]` and the deploy port explicitly during
+  troubleshooting). Currently serving the **pre-005** code — a redeploy
+  after this branch merges is needed before T008 can validate this
+  feature's actual changes live. Also: the owner's env var list had
+  `REDIS_URLS` (extra trailing `S`) instead of `REDIS_URL` — flagged, not
+  yet confirmed corrected.
+- [X] T007 [P] [US1] **Manual, owner-only**: confirm with the project owner
   whether a Vercel project for the frontend already exists; if not,
   configure one — env vars `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_API_BASE_URL` (pointed at the
-  Railway URL from T006).
+  Railway URL from T006). **Done** — owner confirmed working.
 - [ ] T008 [US1] Run `quickstart.md`'s "Validation: US1" end-to-end from a
   browser that has never touched local dev, against the live URLs (depends
-  on T005, T006, T007).
-- [ ] T008a [P] [US1] Enhance `GET /health` in
+  on T005, T006, T007). **Blocked**, not on infra anymore but on a redeploy:
+  the live backend is still running pre-005 code (no cache, no grounding
+  guardrail, no LiteLLM routing, no enhanced `/health`) — this validates
+  once this branch is merged and redeployed, not before.
+- [X] T008a [P] [US1] Enhance `GET /health` in
   `backend/src/whattowear/api.py` (FR-012, research.md §3a) to check
-  Postgres reachability (reuse `memory.store._reachable`'s short-timeout
-  connect pattern) and Qdrant reachability (`kb.get_kb()`'s client), 
-  returning `503` naming which dependency failed if either is unreachable,
-  `200 {"status": "ok"}` otherwise.
+  Postgres reachability (`SELECT 1` via the existing SQLAlchemy `engine`)
+  and Qdrant reachability (a direct short-timeout `QdrantClient.
+  collection_exists` call, not `kb.get_kb()` — that's a memoized singleton
+  that would trigger a full, potentially expensive KB build on the first
+  health check rather than a live probe), returning `503` naming which
+  dependency failed if either is unreachable, `200 {"status": "ok"}`
+  otherwise. 4 new tests in `tests/integration/test_health.py` (3 mocked
+  contract cases + 1 unmocked check against this session's real DB/Qdrant).
 
 **Checkpoint**: App is publicly reachable and passes its own quickstart
 validation end-to-end.
