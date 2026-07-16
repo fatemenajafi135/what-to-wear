@@ -4,7 +4,25 @@ __pycache__/
 .venv/
 .env
 backend/artifacts/
-backend/data/
+# backend/data/ is gitignored by default (mostly scratch/large source
+# material), but the KB actually needs a few specific files present at
+# runtime (get_kb() -> ingest_all() -> load_epub()/load_wiki_md() run on
+# every cold start, not just a manual rebuild) -- a fresh clone/sandbox
+# missing them silently 500s /suggest. golden_set.yaml and kb/ are already
+# tracked (force-added separately); these three are the remaining gap.
+# The staircase (un-ignore dir, re-ignore its contents, carve out the
+# pattern actually needed) is required because git won't apply a negation
+# to a file whose parent directory is itself excluded.
+backend/data/*
+!backend/data/books/
+backend/data/books/*
+!backend/data/books/*.epub
+!backend/data/wikipedia/
+backend/data/wikipedia/*
+!backend/data/wikipedia/*.md
+!backend/data/fixtures/
+backend/data/fixtures/*
+!backend/data/fixtures/wardrobe.json
 .DS_Store
 docs/**-report.md
 design/screenshots/

@@ -128,6 +128,9 @@ def load_epub(source: dict) -> list[Document]:
     from ebooklib import epub
 
     path = REPO_ROOT / source["path"]
+    if not path.exists():
+        log.warning("epub source not found: %s", path)
+        return []
     book = epub.read_epub(str(path))
     parts: list[str] = []
     for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
