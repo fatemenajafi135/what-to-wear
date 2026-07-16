@@ -40,6 +40,10 @@ dependencies = [
     "pyjwt[crypto]>=2.9.0,<3.0.0",
     "python-multipart>=0.0.32",
     "langgraph-checkpoint-postgres>=3.1.0",
+    # --- production hardening (Feature 005) ---
+    "litellm>=1.60.0,<2.0.0",
+    "langchain-litellm>=0.2.0,<1.0.0",
+    "redis>=5.2.0,<6.0.0",
 ]
 
 # NOTE on evals: the vibrantlabs Ragas fork forces langchain-community==0.3.31
