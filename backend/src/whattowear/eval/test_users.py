@@ -7,8 +7,9 @@ appropriate for this request"). Not part of the golden-set eval harness
 checking of a specific persona + occasion.
 
 Nothing in this module is executed at import time. Get a persona, optionally
-seed their preferences into memory, and call `pipeline.run.recommend()`
-yourself — or run this file directly (see the __main__ block at the bottom).
+seed their preferences into memory, and invoke the compiled graph
+(`pipeline.graph.get_compiled_graph()`) yourself — or run this file
+directly (see the __main__ block at the bottom).
 """
 
 from __future__ import annotations
@@ -140,9 +141,9 @@ if __name__ == "__main__":
     # Manual check — NOT run automatically. Example:
     #   uv run python -m whattowear.eval.test_users test-amara office --temp-c 2
     import argparse
+    import uuid
 
-    from ..pipeline.cite import render_text
-    from ..pipeline.run import run_pipeline
+    from ..pipeline.graph import get_compiled_graph
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("user_id", choices=sorted(TEST_USERS))
@@ -158,13 +159,23 @@ if __name__ == "__main__":
     # -> memory.store.get_profile()) -- this persona's `preferences` dict is
     # descriptive only. To exercise profile_note()'s effect manually, record
     # real feedback for this user_id through the API first.
-    run = run_pipeline(
-        args.occasion,
-        mood=args.mood,
-        temp_c=args.temp_c,
-        wardrobe=user.wardrobe,
-        user_id=user.user_id,
-        strategy=args.strategy,
+    thread_id = str(uuid.uuid4())
+    final_state = get_compiled_graph().invoke(
+        {
+            "occasion": args.occasion,
+            "mood": args.mood,
+            "temp_c": args.temp_c,
+            "wardrobe": user.wardrobe,
+            "user_id": user.user_id,
+            "strategy": args.strategy,
+            "thread_id": thread_id,
+        },
+        config={"configurable": {"thread_id": thread_id}},
     )
     print(f"=== {user.name} — {args.occasion} ===")
-    print(render_text(run.result))
+    for i, outfit in enumerate(final_state["scored_outfits"], 1):
+        print(f"Outfit {i}: {', '.join(outfit.items)} (rank_score={outfit.rank_score:.2f})")
+        for r in outfit.rationale:
+            print(f"  - {r.text}  [cites: {', '.join(r.cites)}]")
+    if final_state.get("note"):
+        print(f"\nNote: {final_state['note']}")

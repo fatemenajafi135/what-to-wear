@@ -25,10 +25,12 @@ independently-mergeable phases (per spec Delivery Phases):
   `StateGraph` (node order below) reusing existing stage functions unchanged;
   deterministic pruning/combination/scoring replaces any model-driven item
   picking; `/suggest` (SSE) is delivered, `/recommend` retired within this same
-  phase once `/suggest` is verified equivalent (T037a) — `OutfitResult.outfits`
-  becomes `list[ScoredOutfit]` in this phase, and `/recommend`'s old code path
-  never populates scores, so the two endpoints cannot coexist past Phase 3
-  without a second result type nobody wants to maintain long-term.
+  phase once `/suggest` is verified equivalent **and Feature 003's frontend is
+  cut over to it (T036a-d — added by `/speckit.analyze`; the frontend didn't
+  exist when this plan was first written)** — `OutfitResult.outfits` becomes
+  `list[ScoredOutfit]` in this phase, and `/recommend`'s old code path never
+  populates scores, so the two endpoints cannot coexist past Phase 3 without a
+  second result type nobody wants to maintain long-term.
 - **Phase 4 — refinement.** Conversational refinement via the LangGraph
   checkpointer (already present in `memory/store.py`), swapped from
   `InMemorySaver` to a Postgres-backed saver keyed by `thread_id`; optional
@@ -62,8 +64,16 @@ requires a gate re-run per constitution Principle I's trigger condition).
 
 **Target Platform**: Linux server (Railway deployment target, unchanged).
 
-**Project Type**: Web service (FastAPI backend; no frontend work this
-feature — `frontend/` stays empty per root CLAUDE.md).
+**Project Type**: Web service, primarily backend (FastAPI). **Corrected by
+`/speckit.analyze` (2026-07-16)**: this line originally said "no frontend
+work this feature — `frontend/` stays empty," true when first written and
+false now — Feature 003 shipped a real Next.js frontend in the interim, and
+its suggest page calls `/recommend` directly. This feature now includes a
+small, scoped frontend cutover (tasks T036a-d: an SSE-consumption helper,
+regenerated OpenAPI types, pointing the suggest page + result component at
+`/suggest`, and a manual smoke test) so retiring `/recommend` (T037a) doesn't
+break the live product. Not a full frontend feature — just enough to keep
+the existing UI working through the endpoint swap.
 
 **Performance Goals**: No new targets stated in the spec beyond existing
 behavior; candidate generation is bounded (research.md §4: k=8 per slot cap)
@@ -91,7 +101,7 @@ never brute-force the raw closet).
 | IV. Grounded output only | FR-003/FR-011: every outfit item is a closet item; unfillable slots omit the outfit rather than inventing or substituting (spec Future Work) — strictly narrower than the constitution's floor (which permits catalog items), so trivially compliant. | **PASS** |
 | V. Scoring functions are eval metrics | `scoring/*.py` functions are the literal functions imported into `eval/harness.py`, not reimplemented there (research.md §3, data-model.md). | **PASS** |
 | VI. Schema stability | No new fields on `WardrobeItem`/category groups/formality enum/warmth/seasons/colors; new types (`DimensionScore`, `ScoredOutfit`) are additive wrappers, not taxonomy changes (data-model.md). | **PASS** |
-| VII. Single source of truth for contracts | `DimensionScore`, `ScoredOutfit`, `SuggestRequest` are Pydantic models in `schema.py`/`api.py`, the same pattern as existing contracts. No frontend work this feature to desync from them. | **PASS** |
+| VII. Single source of truth for contracts | `DimensionScore`, `ScoredOutfit`, `SuggestRequest` are Pydantic models in `schema.py`/`api.py`, the same pattern as existing contracts. **Corrected by `/speckit.analyze`**: frontend now exists (Feature 003) and consumes these via a regenerated `frontend/lib/api-types.ts` (T036b), the same OpenAPI-generation mechanism Feature 003 established — still no hand-maintained duplicate types. | **PASS** |
 | Quality Bar — simplicity over abstraction | `scoring/` uses plain functions, not an ABC/class hierarchy (research.md §3) — the one seam (combination strategy) is justified by two concrete strategies existing today, matching the constitution's explicit bar. | **PASS** |
 
 No violations. Complexity Tracking table below is empty.
@@ -154,6 +164,15 @@ backend/
         ├── test_recommend_auth.py   # Phase 1, done; DELETED at end of Phase 3 (T037a) — coverage subsumed by test_suggest.py
         ├── test_suggest.py          # NEW (Phase 3)
         └── test_suggest_refinement.py  # NEW (Phase 4)
+
+frontend/                            # Added by /speckit.analyze (2026-07-16) — did not
+                                      # exist when this plan was first written; Feature 003
+                                      # shipped it in the interim. Phase 3 touches only:
+├── lib/
+│   ├── api-client.ts                # + SSE-consumption helper (T036a), apiFetch itself untouched
+│   └── api-types.ts                 # regenerated from OpenAPI (T036b), not hand-edited
+├── app/suggest/page.tsx             # calls /suggest instead of /recommend (T036c)
+└── components/SuggestionResult.tsx  # renders the 4 DimensionScores + rank_score (T036c)
 ```
 
 **Structure Decision**: Single backend project (existing layout, `backend/` only —
@@ -162,7 +181,8 @@ inside `backend/src/whattowear/`, following the existing package boundaries
 (`scoring/` is a new top-level package analogous to `retrieval/`/`pipeline/`;
 `pipeline/graph.py` joins the existing `pipeline/` package rather than a new
 top-level `graph/` package, since it orchestrates the same stage functions
-`pipeline/` already owns).
+`pipeline/` already owns). The frontend cutover (T036a-d) touches only the
+four files listed above — existing files, no new frontend structure.
 
 ## Complexity Tracking
 

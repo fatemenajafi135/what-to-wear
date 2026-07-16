@@ -10,11 +10,18 @@ Step 4). Baseline is committed to `main`. Spec Kit is initialized.
 - `backend/src/whattowear/retrieval/` : baseline, hybrid, advanced retrievers
 - `backend/src/whattowear/ingest/` : loaders, chunkers, KB build, wiki refine
 - `backend/src/whattowear/kb.py` : style knowledge base
-- `backend/src/whattowear/pipeline/` : query_builder, context_assembler, generator, cite, run
+- `backend/src/whattowear/pipeline/` : query_builder, context_assembler, generator, cite,
+  **graph** (Feature 002 Phases 2-4 — `pipeline/run.py` retired, `graph.py` is now the
+  sole pipeline entrypoint via `POST /suggest`)
+- `backend/src/whattowear/scoring/` : deterministic dimension scorers + combination strategy
+  (Feature 002 Phase 2) — reused unchanged by both the graph and the eval harness
 - `backend/src/whattowear/external/` : weather, trends
-- `backend/src/whattowear/memory/store.py` : partial
-- `backend/src/whattowear/eval/` and `backend/evals/` : Ragas plus LLM judge
+- `backend/src/whattowear/memory/store.py` : Postgres-backed checkpointer (Feature 002 Phase 4)
+  + in-memory profile/history store
+- `backend/src/whattowear/eval/` (incl. `judge.py`, optional/opt-in) and `backend/evals/` : Ragas plus LLM judge
 - `backend/data/golden_set.yaml`, `backend/artifacts/eval_runs/*.jsonl` : evaluated results
+  (gitignored — not carried into a fresh `git worktree add`; copy from an existing
+  checkout if a new worktree needs them, as this session did)
 - **Feature 001 (closet-persistence), done**: `backend/src/whattowear/db.py`,
   `models.py`, `crud.py`, `auth.py`, `backend/alembic/` — persistent per-user
   closet + shared catalog in Postgres (Supabase), JWT auth (ES256/JWKS), full
@@ -22,15 +29,19 @@ Step 4). Baseline is committed to `main`. Spec Kit is initialized.
   `GET /catalog/items`). `context_assembler.load_wardrobe()` reads Postgres
   instead of the JSON fixture, which is now catalog-seed-only. No change to
   retrieval behavior — verified via the eval no-regression gate.
+- **Feature 002 (styling-agent), all phases done** (2026-07-16, not yet
+  merged): `POST /suggest` (SSE) is the sole suggestion entrypoint —
+  `/recommend` deleted. Deterministic scoring, LangGraph pipeline,
+  conversational refinement. See Step 3 below for the full narrative.
 
 **Not built yet:**
-1. LangGraph agent graph. Pipeline is currently a linear run.
-2. Deterministic scoring (color harmony, formality coherence, weather fitness, silhouette balance).
-3. Combinatorial outfit generation engine.
+1. ~~LangGraph agent graph.~~ **Done, Feature 002 Phase 3.**
+2. ~~Deterministic scoring (color harmony, formality coherence, weather fitness, silhouette balance).~~ **Done, Feature 002 Phase 2.**
+3. Combinatorial outfit generation engine. **Not built as originally imagined and not needed as scoped**: `generate_outfits` still uses the LLM to assemble candidates from a deterministically-pruned inventory (constitution Principle II is satisfied by pruning-before-generation + deterministic ranking-after, not by replacing the LLM's assembly step with brute-force combinatorics — that was never required).
 4. Vision ingestion (photo to item metadata) — **DONE, see Feature 003 below.** `vision.py` + `storage.py` + the two new endpoints.
 5. Preference memory from feedback — **DONE, see Feature 004 (Step 5).**
 6. Production hardening and deployment — **code side of the "deploy publicly" slice done (Feature 003); the actual Railway/Vercel/Supabase-Storage-bucket account setup is a manual step not yet performed (needs dashboard access this session didn't have) — see Feature 003's status below. Full hardening (LiteLLM gateway, semantic cache, guardrails) still deferred to 005.**
-7. Frontend — **DONE (code), see Feature 003 below.** `frontend/` now has a working Next.js app covering all 4 required user stories. `/design` (committed) was the visual/component reference, not a pixel port; `docs/design-backend-conflict-report.md` (local, untracked) has the full design↔backend conflict audit that drove Feature 003's scope.
+7. Frontend — **DONE (code), see Feature 003 below; cut over to `/suggest` in Feature 002 Phase 3.** `frontend/` now has a working Next.js app covering all 4 required user stories. `/design` (committed) was the visual/component reference, not a pixel port; `docs/design-backend-conflict-report.md` (local, untracked) has the full design↔backend conflict audit that drove Feature 003's scope.
 
 **Known debt — CLEARED by Feature 002, Phase 1 (see Step 3):**
 - ~~**`/recommend` is unauthenticated.**~~ **Fixed.** `/recommend` now depends on
@@ -80,32 +91,43 @@ from drifting.
 | # | Feature | Notes |
 |---|---|---|
 | 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
-| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **Phase 1 ✅ done and merged.** Phases 2–4 were paused behind Feature 003; **now resuming in parallel with Feature 004** (see "Working in parallel" note below) — this is the real agent work (deterministic scoring, LangGraph, replacing the LLM directly picking items) and nothing since Phase 1 has done it; 003/004 both deliberately routed around it rather than fixing it. |
+| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **✅ ALL PHASES DONE, merged to `main` (2026-07-16).** Phase 1 merged earlier. Phases 2–4 (scoring package, LangGraph `/suggest`, conversational refinement) built in a parallel worktree alongside Feature 004, then merged back — see the merge callout below the table for how the two features' conflicting changes were reconciled. `/speckit.analyze` re-run before resuming Phases 2-4 found and fixed one CRITICAL gap: retiring `/recommend` (T037a) had no dependency on the frontend that actually calls it. Fixed via tasks T036a-d (frontend cutover to `/suggest`) gating T037a — both landed. `/recommend` and `pipeline/run.py` are now deleted; `/suggest` is the sole suggestion entrypoint. Full eval no-regression gate green after every phase touching retrieval/generation, and again after the merge. |
 | 003 | **mvp-app** *(redefined — was "closet-ingestion")* | ✅ **Code complete and merged to `main`, deploy pending.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access no coding session has): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). **Known, explicitly deferred gap: visual polish** didn't fully match `design/What to Wear.dc.html` — see `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
-| 004 | preference-memory | ✅ **DONE.** Full spec-kit cycle (spec/clarify/plan/tasks/analyze/implement). `set_preference()` was defined but never called and everything was in-memory (lost on restart) — now Postgres-backed: reactions persist, a derived preference profile (rejected colors, avoided categories, formality drift) softly shapes future `/recommend` suggestions via the unchanged `profile_note()` seam, and a user can view/remove/clear what's been learned. See Step 5. |
+| 004 | preference-memory | ✅ **DONE and merged to `main`** (finished 2026-07-16, in its own worktree, concurrently with Feature 002's Phases 2-4 above — see the merge callout below the table). Feedback endpoint + derived preference profile + frontend reaction affordance. 29/29 tasks. |
 | 005 | production-hardening | Gateway, cache, guardrails, **full** deploy hardening (bare deploy pulled into 003; this is everything beyond that). |
 
-**Working in parallel (002 + 004, from 2026-07-16):** both are being developed
-at once, each in its own **git worktree** (`git worktree add`, attached to the
-existing `002-styling-agent`/`004-preference-memory` branches) so two sessions
-can work simultaneously without one checking out a branch out from under the
-other — this project got burned once already by two sessions sharing one
-working directory mid-command. Conflict risk between them was checked before
-starting: 002 touches `pipeline/run.py`, `pipeline/generator.py`, and a new
-`scoring/` package; 004 hooks into the existing `profile_note()` contract and
-is expected to leave those files alone, touching mostly `api.py` (new
-endpoints, low-conflict pattern) and its own new persistence. The
-`002-styling-agent` branch was merged with `main` before resuming work on it
-(it predated Feature 003 entirely — had no `frontend/`, stale docs).
+**How 002 and 004's parallel work was reconciled (2026-07-16).** Both
+features were built in separate git worktrees at the same time (see the
+branch-strategy note below); 004 finished and merged to `main` first, so by
+the time 002's Phases 2–4 were ready, `main` had moved. A pre-merge
+`git merge-tree --write-tree` dry-run flagged 9 likely-conflicting files;
+the actual merge produced 10 (`schema.py` and `eval/test_users.py` also
+conflicted, not predicted ahead of time). Of those, 8 were mechanical
+(docs, `.specify/feature.json`, generated frontend types — regenerated or
+rewritten, not hand-merged) or purely additive (`schema.py`: both features
+only appended new Pydantic models, no overlap). Two needed real
+reconciliation:
+- **`memory/store.py`**: 002 replaced the module-level `InMemorySaver`
+  checkpointer with a lazy `get_checkpointer()` (Postgres-backed when
+  reachable, Phase 4's refinement-thread durability). 004 replaced
+  `get_profile()`'s in-memory backing with a Postgres-derived aggregation
+  and deleted `set_preference()` entirely. These touch disjoint functions
+  in the same file — both kept in full, no actual behavior tradeoff.
+- **`api.py`**: 002 replaced `/recommend` with `/suggest` (SSE); 004 only
+  *added* four new `/preferences/*` endpoints after the existing ones. The
+  endpoint bodies didn't overlap at all (git auto-merged them); only the
+  shared import block needed a manual union.
 
-**Update: Feature 004 finished (2026-07-16).** The conflict-risk assessment
-held — 004 never touched `pipeline/run.py`, `pipeline/generator.py`, or any
-`scoring/` package; it only touched `api.py`, `crud.py`, `models.py`,
-`schema.py`, `memory/store.py` (a new backing, same public signatures), the
-new `memory/preferences.py`, a new migration, and its own tests. **Merge
-004 to `main` whenever convenient** (no coordination needed with 002's
-remaining phases) — check whether the 002 worktree session is still
-active/has uncommitted work before touching its branch.
+One conflict wasn't just mechanical merging — it was a real latent bug the
+merge surfaced: 002's `eval/test_users.py` `__main__` block still called
+`seed_test_user_memory()` → `memory.set_preference()`, a function 004 had
+deleted outright on `main` (the whole point of 004's redesign — preferences
+are derived from real feedback only, never injected directly). Resolved by
+keeping 002's graph-based invocation (`pipeline.run` no longer exists to
+fall back to) and dropping the now-dead seeding call, matching 004's
+already-established approach for that file. Full test suite + ruff +
+frontend typecheck/lint/build + eval no-regression gate re-run after
+resolving, before the merge commit.
 
 **Branch strategy note (002 only):** Feature 002 is large enough to run as a
 multi-phase effort rather than one merge. Each phase merges to `main` on its
@@ -214,7 +236,23 @@ artifacts/eval_runs/. If they moved, something broke.
 > edits fixed one CRITICAL gap (the graph path wasn't wired into the
 > golden-set/eval-harness gate the constitution's Quality Bar requires) plus five
 > lower-severity findings — see `specs/002-styling-agent/tasks.md` T032a and its
-> Notes. The `/speckit.specify` / `/speckit.plan` prompts below are kept
+> Notes.
+>
+> **`/speckit.analyze` re-run 2026-07-16, before resuming Phases 2–4** (paused
+> behind Feature 003, now resuming in parallel with Feature 004, each in its
+> own git worktree). Found one more CRITICAL gap, this time from environment
+> drift rather than an internal inconsistency: `plan.md` said "no frontend
+> work this feature — `frontend/` stays empty," true when Feature 002 was
+> planned and false since Feature 003 shipped a real frontend that calls
+> `/recommend`. Task T037a (retire `/recommend`) had zero dependency on that
+> frontend. Fixed: `tasks.md` T036a-d (SSE-consumption helper, regenerated
+> OpenAPI types, cut the frontend's suggest page + result component over to
+> `/suggest`, manual verification) now gate T037a — `/recommend` can't be
+> retired until the live product is confirmed still working against
+> `/suggest`. `plan.md`'s Constitution Check (Principle VII row), Project
+> Type line, and Project Structure section corrected to match.
+>
+> The `/speckit.specify` / `/speckit.plan` prompts below are kept
 > **verbatim as the historical record of what was pasted**; clarify then
 > corrected/narrowed the MVP scope (see below) — same pattern as Feature 001.
 > - **Body shape**: deferred entirely out of this feature (no persistent
@@ -225,6 +263,65 @@ artifacts/eval_runs/. If they moved, something broke.
 >   default, equal-weighted average, plus a documented alternative) rather than
 >   a single locked formula, since which combination is "best" is itself
 >   something to evaluate, not decide up front.
+>
+> **Phases 2–4 implemented and all green (2026-07-16); merged to `main`
+> 2026-07-16** (see the merge callout under the feature table above for how
+> this reconciled with Feature 004's concurrent changes).
+> - **Phase 2 (scoring)**: `scoring/` package — four pure dimension scorers +
+>   `combine.rank_outfits` (default equal-weighted average, one documented
+>   alternative), imported unchanged into both the graph and `eval/harness.py`
+>   (Principle V — one shared `score_outfits()` call site, no fork). Eval
+>   gate: per-case `retrieval_recall` byte-identical to the archived baseline.
+> - **Phase 3 (graph + `/suggest`)**: `pipeline/graph.py` — the eight-node
+>   `StateGraph` (research.md order), `wardrobe_retrieval` prunes on hard
+>   constraints before generation ever sees the closet (k=8/slot cap),
+>   `score_and_rank` is the only ranking step (LLM never ranks).
+>   `eval/harness.py` now runs the golden set through the compiled graph, not
+>   the old linear `run_pipeline` (one entrypoint, not two). A real gap
+>   `/speckit.analyze` caught mid-build: `generator.py`'s prompt said "Return
+>   1-2 outfits" — pre-dated FR-002/SC-003's 3-5 requirement and nothing
+>   downstream could satisfy it without this one-line prompt fix. Frontend
+>   cutover (T036a-d) shipped in the same phase: a hand-rolled SSE parser in
+>   `api-client.ts` (`EventSource` doesn't support POST),
+>   `SuggestionResult.tsx` now renders all four `DimensionScore`s +
+>   `rank_score` per outfit. `/recommend` and `pipeline/run.py` deleted only
+>   after the frontend cutover was verified against the real compiled graph
+>   (no browser-automation tool available in-session, so this substituted for
+>   literal click-through — flagged as still worth a human spot-check).
+> - **Phase 4 (refinement)**: `memory/store.py`'s checkpointer is now
+>   Postgres-backed (`DATABASE_URL_DIRECT` preferred over the pooler — even
+>   `PostgresSaver.from_conn_string`'s default reproduced db.py's own
+>   documented "prepared statement does not exist" failure, so the connection
+>   is built manually with `prepare_threshold=None`, same mitigation).
+>   `RefinementTurn` isn't a stored object — it's checkpointer-persisted
+>   `GraphState` fields (`original_context`/`last_result`/
+>   `refinement_deltas`) LangGraph already carries across same-`thread_id`
+>   invokes. "Warmer"/"less formal" shift `wardrobe_retrieval`'s pruning
+>   bounds (never `ctx` itself); "alternatives" excludes `last_result`'s
+>   item-sets; an unsatisfiable refinement falls back to `last_result` with a
+>   `note` (FR-015). Real end-to-end testing against the live closet fixture
+>   found and fixed a real bug: the warmth floor applied to *every* category
+>   including footwear/accessories, which this closet's footwear can't
+>   satisfy — starved those slots and forced the FR-015 fallback far more
+>   than intended; now exempt. Optional reported-only LLM judge score
+>   (`eval/judge.py`, FR-010) is opt-in via `harness.py --judge` (off by
+>   default — extra LLM call per case); an architectural unit test walks
+>   `scoring/*.py`'s AST to assert none of them import it, so "never
+>   influences ranking" isn't just a docstring promise.
+> - **Known forward-compat note, not yet acted on**: LangGraph's checkpoint
+>   serializer warns `Deserializing unregistered type ... This will be
+>   blocked in a future version` for the project's own Pydantic/dataclass
+>   types (`Context`, `SuggestResult`, `GenOutput`, `RetrievalResult`,
+>   `WardrobeItem`, `ScoredOutfit`) on every checkpoint read. Still works
+>   today; a future langgraph-checkpoint-postgres upgrade may require
+>   registering these types explicitly (`allowed_msgpack_modules` per the
+>   warning text) — not done here, out of this feature's scope.
+> - **Merged**: Phases 2-4 landed on `main` as one merge commit rather than
+>   separate per-phase PRs (the original branch-strategy note) — by the time
+>   they were ready, Feature 004 had already merged concurrently and
+>   produced real conflicts (`memory/store.py`, `api.py`), so reconciling
+>   all three phases against `main` in one dedicated merge session was
+>   simpler than three separate conflict resolutions.
 
 **Scope (broadened).** Beyond the original "pipeline becomes a graph + scoring,"
 Feature 002 also absorbs two things that have no other home: the recommend-flow

@@ -1,10 +1,10 @@
 """Memory component — per-user state, separate from the shared knowledge base.
 
 Two layers, matching the course (AIE10 session 3):
-- **short-term**: a LangGraph `InMemorySaver` checkpointer (thread state). Exposed
-  for any graph-based caller; also used here to keep per-thread interaction turns.
-  Still in-memory — out of scope for Feature 004 (preference-memory); lost on
-  restart, unchanged from before.
+- **short-term**: a LangGraph checkpointer (thread state) — `PostgresSaver`
+  when a reachable Postgres URL is configured (Feature 002 Phase 4: refinement
+  threads must survive process restarts), else `InMemorySaver`. Exposed for
+  any graph-based caller; also used here to keep per-thread interaction turns.
 - **long-term**: a per-user **style profile** (preferences learned from
   feedback over time). As of Feature 004, this is Postgres-backed, not an
   in-memory store: `get_profile()` derives the profile on read by
@@ -13,29 +13,82 @@ Two layers, matching the course (AIE10 session 3):
   previously-`put()` values — there is no longer a way to inject an
   arbitrary preference string directly; a preference is only ever learned
   from real recorded feedback (see `api.py`'s `/preferences/feedback`).
-  `profile_note(user_id)`'s signature and behavior are unchanged so
-  `pipeline/run.py`/`pipeline/generator.py` needed zero changes
-  (specs/004-preference-memory/research.md #4).
+  `profile_note(user_id)`'s signature and behavior are unchanged so the
+  graph's generation node needed zero changes (specs/004-preference-memory/
+  research.md #4).
 
 This is deliberately NOT the knowledge base: the KB is shared fashion rules; this
-is private user state. Both are instantiated and visibly used by `recommend()`.
+is private user state.
 """
 
 from __future__ import annotations
 
+import os
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from typing import Optional
 
+import psycopg
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.store.memory import InMemoryStore
+from psycopg.rows import dict_row
 
 from .. import crud
 from ..db import SessionLocal
 from . import preferences as preference_derivation
 
-# short-term (thread) memory singleton — untouched by Feature 004.
-checkpointer = InMemorySaver()
 _store = InMemoryStore()
+
+_checkpointer_stack = ExitStack()
+_checkpointer: InMemorySaver | PostgresSaver | None = None
+
+
+def _reachable(url: Optional[str], timeout: float = 5.0) -> bool:
+    """Same reachability probe alembic/env.py uses for DATABASE_URL_DIRECT
+    (some dev sandboxes can't route to it — IPv6-only) — don't fork the
+    fallback logic, just the target (here: the checkpointer connection, not
+    a one-shot migration connection)."""
+    if not url:
+        return False
+    try:
+        with psycopg.connect(url, connect_timeout=timeout):
+            return True
+    except psycopg.OperationalError:
+        return False
+
+
+def get_checkpointer() -> InMemorySaver | PostgresSaver:
+    """Lazy singleton (mirrors kb.get_kb()/graph.get_compiled_graph()).
+    Prefers DATABASE_URL_DIRECT (session-mode, port 5432) over DATABASE_URL
+    (the Supavisor transaction pooler, port 6543), then falls back to
+    InMemorySaver if neither is configured/reachable (e.g. a dev environment
+    without Postgres set up at all).
+
+    Connects manually with `prepare_threshold=None` rather than using
+    PostgresSaver.from_conn_string (which hardcodes `prepare_threshold=0` —
+    prepare on first use): that reproduced db.py's own documented
+    "prepared statement does not exist" failure even against
+    DATABASE_URL_DIRECT, not only the pooler — so the same mitigation
+    db.py's SQLAlchemy engine uses applies here too."""
+    global _checkpointer
+    if _checkpointer is not None:
+        return _checkpointer
+
+    direct_url = os.environ.get("DATABASE_URL_DIRECT")
+    pooler_url = os.environ.get("DATABASE_URL")
+    url = direct_url if _reachable(direct_url) else pooler_url
+
+    if url:
+        conn = _checkpointer_stack.enter_context(
+            psycopg.connect(url, autocommit=True, prepare_threshold=None, row_factory=dict_row)
+        )
+        saver = PostgresSaver(conn)
+        saver.setup()
+        _checkpointer = saver
+    else:
+        _checkpointer = InMemorySaver()
+    return _checkpointer
 
 
 def _history_ns(user_id: str) -> tuple[str, str]:
@@ -48,9 +101,9 @@ def _history_ns(user_id: str) -> tuple[str, str]:
 def get_profile(user_id: str) -> dict[str, str]:
     """The derived preference profile, projected to the short `key: value`
     shape `profile_note()` joins into a prompt sentence. Opens its own
-    short-lived session (no session parameter -- `profile_note()`'s call
-    site in `pipeline/run.py` passes none) via `db.SessionLocal()`, same as
-    any other non-request-scoped caller (research.md #4)."""
+    short-lived session (no session parameter -- callers outside a request
+    scope pass none) via `db.SessionLocal()`, same as any other
+    non-request-scoped caller (research.md #4)."""
     with SessionLocal() as session:
         feedback, dismissals = crud.get_derivation_inputs(session, user_id)
     signals = preference_derivation.derive_signals(feedback, dismissals)

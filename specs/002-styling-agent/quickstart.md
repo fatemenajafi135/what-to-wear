@@ -17,18 +17,22 @@ uv run python -m whattowear.crud seed-eval-baseline   # seeds a user with a clos
 ```bash
 uv run pytest tests/unit/test_colors.py tests/unit/test_categories.py \
   tests/unit/test_cite.py tests/unit/test_query_builder.py \
-  tests/unit/test_eval_properties.py tests/integration/test_recommend_auth.py -q
+  tests/unit/test_eval_properties.py tests/unit/test_context_assembler.py -q
 ```
 
 Expected: all pass, no network/LLM calls needed (colors/categories/cite/
-query_builder/eval-properties are pure; the `/recommend` auth test mocks the
-pipeline).
+query_builder/eval-properties/context_assembler are pure or fully mocked).
 
-Manual check of the closed leak:
+**Note**: `/recommend` (Phase 1's original auth-gate target) and its
+`test_recommend_auth.py` coverage were retired at Phase 3 (tasks.md T037a)
+once `/suggest` was verified equivalent and the frontend cut over — see
+below for the current auth-gate check, now against `/suggest`.
+
+Manual check of the auth gate (now on `/suggest`, `/recommend` no longer exists):
 
 ```bash
 uv run uvicorn whattowear.api:app --reload &
-curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/recommend \
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/suggest \
   -H 'Content-Type: application/json' -d '{"occasion": "dinner"}'
 # expect: 401 (no bearer token)
 ```
@@ -54,6 +58,10 @@ Expected: `retrieval_recall` unchanged from the recorded baseline in
 generation change (constitution Principle I gate).
 
 ## Phase 3 — graph + `/suggest`
+
+`/recommend` is retired as of this phase (tasks.md T037a) — `/suggest` is the
+sole suggestion entrypoint from here on; the frontend was cut over to it
+first (T036a-d) so this didn't break the live product.
 
 ```bash
 uv run uvicorn whattowear.api:app --reload &

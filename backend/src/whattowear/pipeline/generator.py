@@ -49,7 +49,10 @@ SYSTEM_PROMPT = (
     "4. A complete outfit covers the body sensibly (e.g. top + bottom + shoes, or a "
     "dress + shoes) and adds outerwear when the weather rule calls for it.\n"
     "5. Prefer items whose formality and season match the context.\n"
-    "Return 1-2 outfits."
+    "Return 3-5 distinct complete outfits when the wardrobe supports it "
+    "(FR-002); return fewer only if you genuinely cannot assemble more "
+    "complete, valid outfits from the inventory — never pad with an "
+    "incomplete or repeated outfit just to hit the count."
 )
 
 

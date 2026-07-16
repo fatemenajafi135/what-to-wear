@@ -39,6 +39,7 @@ dependencies = [
     "psycopg[binary]>=3.2.0,<4.0.0",
     "pyjwt[crypto]>=2.9.0,<3.0.0",
     "python-multipart>=0.0.32",
+    "langgraph-checkpoint-postgres>=3.1.0",
 ]
 
 # NOTE on evals: the vibrantlabs Ragas fork forces langchain-community==0.3.31

@@ -1,13 +1,18 @@
-import type { OutfitResult, WardrobeItem } from "@/lib/types";
+import type { SuggestResult, WardrobeItem } from "@/lib/types";
 import { OutfitReaction } from "@/components/OutfitReaction";
+
+const DIMENSION_LABELS: Record<string, string> = {
+  color_harmony: "Color harmony",
+  formality_coherence: "Formality",
+  weather_fitness: "Weather fit",
+  silhouette_balance: "Silhouette",
+};
 
 export function SuggestionResult({
   result,
-  rendered,
   closetById,
 }: {
-  result: OutfitResult;
-  rendered: string;
+  result: SuggestResult;
   closetById: Map<string, WardrobeItem>;
 }) {
   if (result.outfits.length === 0) {
@@ -24,7 +29,9 @@ export function SuggestionResult({
     <div className="suggestion-results">
       {result.outfits.map((outfit, i) => (
         <div className="outfit-card card" key={i}>
-          <div className="card-kicker">Outfit {i + 1}</div>
+          <div className="card-kicker">
+            Outfit {i + 1} <span className="text-muted">— score {outfit.rank_score.toFixed(2)}</span>
+          </div>
           <ul className="outfit-items">
             {outfit.items.map((itemId) => {
               const item = closetById.get(itemId);
@@ -47,13 +54,17 @@ export function SuggestionResult({
               <p key={j}>{r.text}</p>
             ))}
           </div>
+          <ul className="outfit-scores">
+            {outfit.scores.map((s) => (
+              <li key={s.dimension} title={s.reason}>
+                <span className="text-muted">{DIMENSION_LABELS[s.dimension] ?? s.dimension}</span>{" "}
+                <span className="tag">{s.value.toFixed(2)}</span>
+              </li>
+            ))}
+          </ul>
           <OutfitReaction itemIds={outfit.items} />
         </div>
       ))}
-      <details className="suggestion-raw">
-        <summary className="text-muted">Full details</summary>
-        <pre>{rendered}</pre>
-      </details>
     </div>
   );
 }

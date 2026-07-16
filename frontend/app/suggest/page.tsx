@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { apiFetch, ApiError } from "@/lib/api-client";
-import type { RecommendResponse, WardrobeItem } from "@/lib/types";
+import { apiFetch, ApiError, postSSE } from "@/lib/api-client";
+import type { SuggestDonePayload, WardrobeItem } from "@/lib/types";
 import { SuggestionResult } from "@/components/SuggestionResult";
 
 export default function SuggestPage() {
   const [occasion, setOccasion] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [response, setResponse] = useState<RecommendResponse | null>(null);
+  const [response, setResponse] = useState<SuggestDonePayload | null>(null);
   const [closetById, setClosetById] = useState<Map<string, WardrobeItem>>(new Map());
 
   async function handleSubmit(e: React.FormEvent) {
@@ -21,15 +21,22 @@ export default function SuggestPage() {
     setResponse(null);
 
     try {
-      const [result, closet] = await Promise.all([
-        apiFetch<RecommendResponse>("/recommend", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ occasion }),
-        }),
-        apiFetch<WardrobeItem[]>("/wardrobe/items"),
-      ]);
-      setResponse(result);
+      const closetPromise = apiFetch<WardrobeItem[]>("/wardrobe/items");
+
+      // Consume the `done` event only -- progressive per-outfit streaming UI
+      // is unscoped new product work, not part of this endpoint cutover.
+      let done: SuggestDonePayload | null = null;
+      for await (const evt of postSSE("/suggest", { occasion })) {
+        if (evt.event === "done") {
+          done = JSON.parse(evt.data) as SuggestDonePayload;
+        }
+      }
+      if (!done) {
+        throw new Error("stream ended without a done event");
+      }
+
+      const closet = await closetPromise;
+      setResponse(done);
       setClosetById(new Map(closet.map((item) => [item.id, item])));
     } catch (err) {
       if (err instanceof ApiError) {
@@ -64,10 +71,9 @@ export default function SuggestPage() {
       </form>
 
       {error && <p className="page-error">{error}</p>}
+      {response?.note && <p className="page-note">{response.note}</p>}
 
-      {response && (
-        <SuggestionResult result={response.result} rendered={response.rendered} closetById={closetById} />
-      )}
+      {response && <SuggestionResult result={response.result} closetById={closetById} />}
     </div>
   );
 }

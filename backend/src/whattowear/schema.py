@@ -2,8 +2,10 @@
 
 These types are the stable seams between phases: `WardrobeItem` is the contract
 the (future) wardrobe-capture flow must produce; `Context` is what the pipeline
-consumes; `OutfitResult` is what `recommend()` returns to any caller (test API,
-Demo Day UI, MCP tool).
+consumes; `OutfitResult` is `pipeline.cite.build_result`'s internal return
+shape (its only remaining consumer since /recommend's retirement — Feature
+002 Phase 3 T037a); `SuggestResult` is what `POST /suggest` actually returns
+to callers.
 """
 
 from __future__ import annotations
@@ -190,7 +192,11 @@ class Outfit(BaseModel):
 
 
 class OutfitResult(BaseModel):
-    """What `recommend()` returns. 1-3 outfits + resolved sources."""
+    """`pipeline.cite.build_result`'s return shape — its only remaining
+    consumer is `pipeline.graph.explain`, which uses just `.sources` from
+    it (the graph's own `ScoredOutfit` list is the real outfits, see
+    `SuggestResult`). Kept only because `cite.py` stays unchanged
+    (constitution Principle I); not a public response type."""
 
     outfits: list[Outfit]
     sources: list[CitedSource] = Field(default_factory=list)
@@ -235,3 +241,69 @@ class PreferenceProfile(BaseModel):
 
     has_feedback: bool
     signals: list[PreferenceSignal] = Field(default_factory=list)
+
+
+class SuggestRequest(BaseModel):
+    """Body of POST /suggest (contracts/suggest.md). No `user_id` field —
+    same fix as RecommendRequest post-Phase-1: identity always comes from
+    the verified JWT `sub` (FR-001)."""
+
+    occasion: str
+    mood: Optional[str] = None
+    formality: Optional[Formality] = None
+    location: Optional[str] = None
+    temp_c: Optional[float] = None
+    strategy: str = "advanced"
+    thread_id: Optional[str] = None
+
+
+# --- deterministic scoring (Feature 002 Phase 2+) -----------------------------
+
+ScoreDimension = Literal["color_harmony", "formality_coherence", "weather_fitness", "silhouette_balance"]
+SCORE_DIMENSIONS: tuple[ScoreDimension, ...] = (
+    "color_harmony",
+    "formality_coherence",
+    "weather_fitness",
+    "silhouette_balance",
+)
+
+
+class DimensionScore(BaseModel):
+    """One deterministic scorer's output for one outfit (data-model.md)."""
+
+    dimension: ScoreDimension
+    value: float = Field(ge=0.0, le=1.0)
+    reason: str
+
+
+class ScoredOutfit(BaseModel):
+    """An `Outfit` extended with per-dimension scores and a combined rank
+    score (data-model.md). `scores` always carries exactly one entry per
+    `SCORE_DIMENSIONS` value (FR-008)."""
+
+    items: list[str]
+    rationale: list[Rationale]
+    scores: list[DimensionScore]
+    rank_score: float
+
+    @field_validator("scores")
+    @classmethod
+    def _scores_cover_all_dimensions(cls, v: list[DimensionScore]) -> list[DimensionScore]:
+        dims = [s.dimension for s in v]
+        if sorted(dims) != sorted(SCORE_DIMENSIONS) or len(dims) != len(set(dims)):
+            raise ValueError(
+                f"ScoredOutfit.scores must have exactly one entry per dimension in {SCORE_DIMENSIONS}, got {dims!r}"
+            )
+        return v
+
+
+class SuggestResult(BaseModel):
+    """What POST /suggest's `result` field carries (contracts/suggest.md) —
+    OutfitResult's shape, but with ScoredOutfit entries. A separate type
+    from OutfitResult (not a field-type change on it) since OutfitResult is
+    kept as `pipeline.cite.build_result`'s internal return shape (see its
+    docstring above) rather than merged away."""
+
+    outfits: list[ScoredOutfit]
+    sources: list[CitedSource] = Field(default_factory=list)
+    context: Optional[Context] = None

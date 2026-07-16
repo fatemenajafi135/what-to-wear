@@ -1,17 +1,18 @@
-"""Thin FastAPI test surface over `recommend()` — for exercising the engine over
-HTTP. No UI/frontend (that's a parallel track). Run:
+"""Thin FastAPI test surface over the styling graph — for exercising the
+engine over HTTP. No UI/frontend (that's a parallel track). Run:
 
     uv run uvicorn whattowear.api:app --reload
 """
 
 from __future__ import annotations
 
+import json
 import os
 import uuid
-from typing import Optional
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -20,18 +21,17 @@ from .auth import get_bearer_token, get_current_user_id
 from .colors import nearest_name
 from .db import get_session
 from .memory.preferences import DerivedSignal, derive_signals
-from .pipeline import cite
-from .pipeline.run import run_pipeline
+from .pipeline.graph import get_compiled_graph
 from .schema import (
     CreateWardrobeItemFromUploadRequest,
     ExtractedAttributes,
-    Formality,
-    OutfitResult,
     PhotoExtractionResponse,
     PreferenceProfile,
     PreferenceSignal,
     SubmitFeedbackRequest,
     SuggestionFeedback,
+    SuggestRequest,
+    SuggestResult,
     WardrobeItem,
     WardrobeItemPatch,
 )
@@ -48,43 +48,55 @@ app.add_middleware(
 )
 
 
-class RecommendRequest(BaseModel):
-    occasion: str
-    mood: Optional[str] = None
-    formality: Optional[Formality] = None
-    location: Optional[str] = None  # geocoded via Open-Meteo
-    temp_c: Optional[float] = None  # fallback if no location / offline
-    strategy: str = "advanced"  # baseline | hybrid | advanced
-    # user_id is NOT accepted from the body — it comes from the verified JWT
-    # `sub` claim (see get_current_user_id). A client-supplied id here would let
-    # any caller read any user's closet through the pipeline (the pre-002 leak).
-
-
-class RecommendResponse(BaseModel):
-    result: OutfitResult
-    rendered: str  # human-readable "why + sources"
-
-
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/recommend", response_model=RecommendResponse)
-def recommend_endpoint(
-    req: RecommendRequest,
+@app.post("/suggest", response_model=SuggestResult)
+def suggest_endpoint(
+    req: SuggestRequest,
     user_id: str = Depends(get_current_user_id),
-) -> RecommendResponse:
-    run = run_pipeline(
-        req.occasion,
-        mood=req.mood,
-        formality=req.formality,
-        location=req.location,
-        temp_c=req.temp_c,
-        user_id=user_id,
-        strategy=req.strategy,
+) -> StreamingResponse:
+    """Supersedes /recommend (contracts/suggest.md). Same auth model — the
+    requester's identity always comes from the verified JWT `sub`, never the
+    body. SSE: an `outfit` event per ranked outfit, then a `done` event
+    carrying the full response shape (a client that only reads `done` gets
+    the exact non-streaming payload). `response_model` is for OpenAPI docs
+    only — returning a Response subclass directly makes FastAPI skip
+    response_model serialization, but it's still what generates the
+    SuggestResult/ScoredOutfit/DimensionScore schemas the frontend needs
+    (T036b) since a raw StreamingResponse alone wouldn't."""
+    graph = get_compiled_graph()
+    thread_id = req.thread_id or str(uuid.uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
+    final_state = graph.invoke(
+        {
+            "occasion": req.occasion,
+            "mood": req.mood,
+            "formality": req.formality,
+            "location": req.location,
+            "temp_c": req.temp_c,
+            "strategy": req.strategy,
+            "thread_id": thread_id,
+            "user_id": user_id,
+        },
+        config=config,
     )
-    return RecommendResponse(result=run.result, rendered=cite.render_text(run.result))
+
+    def event_stream():
+        for i, outfit in enumerate(final_state["scored_outfits"]):
+            payload = {"index": i, "outfit": outfit.model_dump(mode="json")}
+            yield f"event: outfit\ndata: {json.dumps(payload)}\n\n"
+
+        done_payload = {
+            "thread_id": final_state["thread_id"],
+            "result": final_state["result"].model_dump(mode="json"),
+            "note": final_state.get("note"),
+        }
+        yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.get("/wardrobe/items", response_model=list[WardrobeItem])

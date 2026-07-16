@@ -84,3 +84,68 @@ export function popRedirectTarget(): string | null {
   if (target !== null) sessionStorage.removeItem(REDIRECT_TARGET_KEY);
   return target;
 }
+
+export interface SSEEvent {
+  event: string;
+  data: string;
+}
+
+/** Streams a POST endpoint's Server-Sent Events (contracts/suggest.md).
+ * A new function alongside apiFetch, not a modification to it -- every
+ * other endpoint depends on apiFetch staying a simple request/response
+ * call. Browsers' native EventSource only supports GET, and /suggest is
+ * POST, so this hand-rolls the `event:`/`data:` framing over fetch()'s
+ * streaming response body instead (T036a). Yields each event as it
+ * arrives; the caller JSON.parses `data` itself since its shape differs
+ * per event name (`outfit` vs `done`). */
+export async function* postSSE(path: string, body: unknown): AsyncGenerator<SSEEvent> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (session?.access_token) {
+    headers.set("Authorization", `Bearer ${session.access_token}`);
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let errorBody: unknown = null;
+    try {
+      errorBody = await res.json();
+    } catch {
+      // non-JSON error body -- leave errorBody null, status is still informative
+    }
+    throw new ApiError(res.status, errorBody);
+  }
+  if (!res.body) {
+    throw new Error("streaming response has no body");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let separatorIndex: number;
+    while ((separatorIndex = buffer.indexOf("\n\n")) !== -1) {
+      const block = buffer.slice(0, separatorIndex);
+      buffer = buffer.slice(separatorIndex + 2);
+
+      const eventLine = block.split("\n").find((line) => line.startsWith("event: "));
+      const dataLine = block.split("\n").find((line) => line.startsWith("data: "));
+      if (dataLine) {
+        yield { event: eventLine?.slice("event: ".length) ?? "message", data: dataLine.slice("data: ".length) };
+      }
+    }
+  }
+}
