@@ -133,6 +133,17 @@ So:
   The 3 manual deploy steps for Feature 003 (Supabase Storage bucket,
   Railway, Vercel) are still outstanding too, but need dashboard access no
   coding session has.
+- **⚠️ Feature 004 finished and merged to `main` while Feature 002 Phase
+  2-4 was still in progress in this worktree.** `002-styling-agent` is now
+  based on a stale `main` and merging it back **will produce 9 real
+  conflicts**, including `memory/store.py` and `api.py` — both features
+  independently rewrote parts of `memory/store.py` (002: Postgres
+  checkpointer; 004: preference-profile derivation). Verified via
+  `git merge-tree --write-tree` (dry-run, nothing changed) — see
+  SDD-HANDOFF's callout under the feature table for the full file list.
+  **Nobody has done this merge yet.** Don't treat it as a formality; budget
+  a dedicated session for it, and re-run the full test suite + eval gate
+  after resolving, before pushing.
 
 ## The rules that bite hardest (full text in the constitution)
 

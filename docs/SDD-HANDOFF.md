@@ -91,10 +91,27 @@ from drifting.
 | # | Feature | Notes |
 |---|---|---|
 | 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
-| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **✅ ALL PHASES DONE (2026-07-16), not yet merged to `main`.** Phase 1 was already merged; Phases 2–4 (scoring package, LangGraph `/suggest`, conversational refinement) built in this worktree, in parallel with Feature 004. `/speckit.analyze` re-run before resuming found and fixed one CRITICAL gap: retiring `/recommend` (T037a) had no dependency on the frontend that actually calls it. Fixed via tasks T036a-d (frontend cutover to `/suggest`) gating T037a — both landed. `/recommend` and `pipeline/run.py` are now deleted; `/suggest` is the sole suggestion entrypoint. Full eval no-regression gate green after every phase touching retrieval/generation. |
+| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **✅ ALL PHASES DONE (2026-07-16), not yet merged to `main`.** Phase 1 was already merged; Phases 2–4 (scoring package, LangGraph `/suggest`, conversational refinement) built in this worktree, in parallel with Feature 004. `/speckit.analyze` re-run before resuming found and fixed one CRITICAL gap: retiring `/recommend` (T037a) had no dependency on the frontend that actually calls it. Fixed via tasks T036a-d (frontend cutover to `/suggest`) gating T037a — both landed. `/recommend` and `pipeline/run.py` are now deleted; `/suggest` is the sole suggestion entrypoint. Full eval no-regression gate green after every phase touching retrieval/generation. **⚠️ Merging to `main` will conflict — see callout below the table, not a formality.** |
 | 003 | **mvp-app** *(redefined — was "closet-ingestion")* | ✅ **Code complete and merged to `main`, deploy pending.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access no coding session has): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). **Known, explicitly deferred gap: visual polish** didn't fully match `design/What to Wear.dc.html` — see `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
-| 004 | preference-memory | `/speckit.specify` + `/speckit.clarify` done, developing now in parallel with 002 (own worktree). Doesn't depend on 002's Phases 2-4 — see Step 5. |
+| 004 | preference-memory | ✅ **DONE and merged to `main`** (finished 2026-07-16, in its own worktree, concurrently with Feature 002's Phases 2-4 above — see the merge-conflict callout below the table). Feedback endpoint + derived preference profile + frontend reaction affordance. 29/29 tasks. |
 | 005 | production-hardening | Gateway, cache, guardrails, **full** deploy hardening (bare deploy pulled into 003; this is everything beyond that). |
+
+> **⚠️ Feature 002 vs. `main` (post-004-merge): real merge conflicts, not a
+> formality.** Verified 2026-07-16 via `git merge-tree --write-tree
+> 002-styling-agent main` (a dry-run, no working-tree/branch changes made):
+> **9 files conflict**, including two core backend files both features
+> independently rewrote — `backend/src/whattowear/memory/store.py` (002
+> swapped the checkpointer for `PostgresSaver`; 004 rewrote the same file's
+> profile-store logic for preference derivation) and
+> `backend/src/whattowear/api.py`. The rest are docs/generated-types
+> (`CLAUDE.md`, this file, `frontend/lib/types.ts`,
+> `frontend/openapi.json`, `.specify/feature.json`) — mechanical to
+> resolve, but `memory/store.py` and `api.py` need an actual human/session
+> decision about how the two features' changes coexist, not just picking a
+> side. **Nobody has attempted this merge yet.** Whoever does needs to
+> budget real time for it, not treat `git merge` as a formality — do it in
+> a session with nothing else in flight, and re-run the full test suite +
+> eval no-regression gate after resolving, before pushing.
 
 **Branch strategy note (002 only):** Feature 002 is large enough to run as a
 multi-phase effort rather than one merge. Each phase merges to `main` on its
