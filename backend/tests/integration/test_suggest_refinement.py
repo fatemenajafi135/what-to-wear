@@ -15,10 +15,9 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from whattowear import api, categories
+from whattowear import api
 from whattowear.auth import get_current_user_id
 from whattowear.crud import EVAL_BASELINE_USER_ID
-from whattowear.pipeline.graph import _WARMTH_FLOOR_EXEMPT_GROUPS
 from whattowear.schema import FORMALITY_ORDER
 
 
@@ -50,16 +49,11 @@ def _wardrobe_by_id(client: TestClient) -> dict:
 
 
 def _mean_warmth(payload: dict, wardrobe: dict) -> float:
-    """Only the groups the "warmer" delta's warmth floor actually gates
-    (graph.py's _WARMTH_FLOOR_EXEMPT_GROUPS excludes footwear/accessories,
-    which rarely carry meaningful warmth values in this closet) — including
-    exempt groups here would dilute the very signal being measured."""
-    warmths = [
-        wardrobe[i]["warmth"]
-        for o in payload["result"]["outfits"]
-        for i in o["items"]
-        if i in wardrobe and categories.group_of(wardrobe[i]["category"]) not in _WARMTH_FLOOR_EXEMPT_GROUPS
-    ]
+    """Feature 007 Task C: the "warmer" floor is now per-category-relative
+    (graph.py's _category_warmth_ceiling), not a blanket footwear/accessory
+    exemption — every group now has a real, if sometimes small, floor, so
+    every group's warmth belongs in this mean instead of being excluded."""
+    warmths = [wardrobe[i]["warmth"] for o in payload["result"]["outfits"] for i in o["items"] if i in wardrobe]
     return sum(warmths) / len(warmths) if warmths else 0.0
 
 

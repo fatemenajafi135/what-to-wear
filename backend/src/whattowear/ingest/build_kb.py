@@ -80,7 +80,10 @@ def ingest_all(manifest_path: Path = MANIFEST_PATH, verbose: bool = False) -> li
             continue
         log.info(
             "source: %-52s layer=%-3s loader=%-9s status=%s",
-            source["name"], source.get("layer"), source.get("loader"), source.get("status"),
+            source["name"],
+            source.get("layer"),
+            source.get("loader"),
+            source.get("status"),
         )
         docs = load_source(source)
         if not docs:
@@ -91,7 +94,9 @@ def ingest_all(manifest_path: Path = MANIFEST_PATH, verbose: bool = False) -> li
         for c in src_chunks:
             log.debug(
                 "     chunk %-28s (%4d chars): %s",
-                c.metadata["rule_id"], len(c.page_content), _preview(c.page_content),
+                c.metadata["rule_id"],
+                len(c.page_content),
+                _preview(c.page_content),
             )
         chunks.extend(src_chunks)
     _validate(chunks)
@@ -111,8 +116,10 @@ def _validate(chunks: list[Document]) -> None:
 
 
 def build_vectorstore(
-    chunks: list[Document], collection: str = COLLECTION,
-    url: str | None = None, api_key: str | None = None,
+    chunks: list[Document],
+    collection: str = COLLECTION,
+    url: str | None = None,
+    api_key: str | None = None,
 ):
     """Embed chunks into a Qdrant collection (needs a gateway key — this is the
     costly step; see `sample_check` to validate cheaply first).
@@ -126,7 +133,9 @@ def build_vectorstore(
 
     log.info(
         "embedding %d chunk(s) into collection '%s' (%s)...",
-        len(chunks), collection, f"persisting to {url}" if url else "in-memory",
+        len(chunks),
+        collection,
+        f"persisting to {url}" if url else "in-memory",
     )
     location_kwargs = {"url": url, "api_key": api_key} if url else {"location": ":memory:"}
     vs = QdrantVectorStore.from_documents(
@@ -141,11 +150,20 @@ def build_vectorstore(
         # this, which is why this was only caught after switching to a real
         # server. hybrid.py's L3 retrieval filters on metadata.layer; without
         # this index that filtered similarity_search raises a 400 Bad Request
-        # ("Index required but not found for metadata.layer").
+        # ("Index required but not found for metadata.layer"). A compound
+        # filter needs an index per field used in it — hybrid.py's new L1
+        # semantic branch (Feature 007 Task A) filters on layer AND
+        # granularity together, so granularity needs its own index too.
         from qdrant_client import models
 
         vs.client.create_payload_index(
-            collection_name=collection, field_name="metadata.layer",
+            collection_name=collection,
+            field_name="metadata.layer",
+            field_schema=models.PayloadSchemaType.KEYWORD,
+        )
+        vs.client.create_payload_index(
+            collection_name=collection,
+            field_name="metadata.granularity",
             field_schema=models.PayloadSchemaType.KEYWORD,
         )
     return vs
@@ -165,7 +183,9 @@ def sample_check(chunks: list[Document], n_per_layer: int = 2, probes: list[str]
 
     log.info(
         "sample-check: embedding %d/%d chunks (%d per layer, deterministic) — NOT the full corpus",
-        len(sample), len(chunks), n_per_layer,
+        len(sample),
+        len(chunks),
+        n_per_layer,
     )
     for c in sample:
         log.info("  sample chunk: %-28s [%s] %s", c.metadata["rule_id"], c.metadata["layer"], _preview(c.page_content))
@@ -223,9 +243,7 @@ def _print_report(chunks: list[Document]) -> None:
     # (loader: reference_only) must contribute zero chunks. Note: distilled L1
     # cards may *cite* a book as provenance (url reference-only://…) — that is our
     # own text and is allowed; we key the guard on the book source names instead.
-    ref_only_names = {
-        s["name"] for s in load_manifest() if s.get("loader") == "reference_only"
-    }
+    ref_only_names = {s["name"] for s in load_manifest() if s.get("loader") == "reference_only"}
     leaked = [c for c in chunks if c.metadata.get("source") in ref_only_names]
     assert not leaked, f"reference-only book text leaked into the store: {leaked[:1]}"
     print("\nOK: metadata complete, rule_ids unique, no reference-only book text stored.")
@@ -235,13 +253,22 @@ if __name__ == "__main__":
     import argparse
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--embed", action="store_true",
-                     help="embed the FULL corpus into Qdrant (needs gateway key, real cost)")
-    ap.add_argument("--sample-check", nargs="?", const=2, type=int, metavar="N", default=None,
-                     help="cheap sanity check: embed only N chunks per layer + run sample "
-                          "similarity searches before committing to --embed (default N=2)")
-    ap.add_argument("-v", "--verbose", action="store_true",
-                     help="log every source's chunks (rule_id + content preview)")
+    ap.add_argument(
+        "--embed", action="store_true", help="embed the FULL corpus into Qdrant (needs gateway key, real cost)"
+    )
+    ap.add_argument(
+        "--sample-check",
+        nargs="?",
+        const=2,
+        type=int,
+        metavar="N",
+        default=None,
+        help="cheap sanity check: embed only N chunks per layer + run sample "
+        "similarity searches before committing to --embed (default N=2)",
+    )
+    ap.add_argument(
+        "-v", "--verbose", action="store_true", help="log every source's chunks (rule_id + content preview)"
+    )
     args = ap.parse_args()
 
     chunks = ingest_all(verbose=args.verbose)

@@ -229,32 +229,61 @@ So:
     root-caused during the merge — it wasn't flaky, see Gotchas below.
   - Full narrative: `docs/SDD-HANDOFF.md` Step 6,
     `docs/005-production-hardening-merge-report.md`.
-- **Feature 006 (wardrobe-item-photos) — implemented, on branch
-  `006-wardrobe-item-photos`, not yet merged to `main`.** Direct user
-  request, not part of the original 5-feature plan: closet cards didn't
-  show the item's actual photo even though one already existed in Storage
-  for every photo-uploaded item. Kept deliberately minimal — one user
-  story, no new API endpoint (the frontend's existing authenticated
-  Supabase client generates signed URLs against the already-secured
-  private bucket directly). Backend: additive migration `0004` adds
-  nullable `photo_path` on `wardrobe_items`; `create_wardrobe_item_from_upload`
-  now sets it (previously received but silently discarded) and
-  `_to_wardrobe_item` returns it on every read path including `GET
-  /wardrobe/items`. Frontend: `ClosetItemCard.tsx` resolves `photo_path`
-  to a signed URL client-side and renders it above the swatch row, with
-  any failure (absent path, expired object, network error) falling back
-  to today's swatch-only card. `api-types.ts` regenerated from the live
-  schema. Full backend suite green, `ruff` clean, frontend
-  typecheck/lint/build clean. **Not done**: live browser verification
-  against a real signed-in session (quickstart.md steps 2-4) — this
-  worktree's Supabase env vars point at the live production project with
-  no service-role key available to create/clean up a throwaway test
-  account, so that manual check is left to the project owner. Own
-  worktree, `/home/fateme/Projects/w2w/what-to-wear-006`. Full detail:
-  `docs/SDD-HANDOFF.md` Step 7, `specs/006-wardrobe-item-photos/`.
-- **Next**: review and merge Feature 006 to `main`, then decide what's
-  after that — all 5 originally-planned features are done and live, plus
-  this one.
+- **Feature 006 (wardrobe-item-photos) — DONE, merged to `main`
+  (2026-07-16).** Direct user request, not part of the original
+  5-feature plan: closet cards didn't show the item's actual photo even
+  though one already existed in Storage for every photo-uploaded item.
+  Kept deliberately minimal — one user story, no new API endpoint (the
+  frontend's existing authenticated Supabase client generates signed URLs
+  against the already-secured private bucket directly). Backend: additive
+  migration `0004` adds nullable `photo_path` on `wardrobe_items`;
+  `create_wardrobe_item_from_upload` now sets it (previously received but
+  silently discarded) and `_to_wardrobe_item` returns it on every read
+  path including `GET /wardrobe/items`. Frontend: `ClosetItemCard.tsx`
+  resolves `photo_path` to a signed URL client-side and renders it above
+  the swatch row, with any failure (absent path, expired object, network
+  error) falling back to today's swatch-only card. Live browser
+  verification (real photo + swatch fallback) confirmed by the owner.
+  Full detail: `docs/SDD-HANDOFF.md` Step 7, `specs/006-wardrobe-item-photos/`.
+- **Feature 007 (ai-improvements) — built in a separate, credential-less
+  sandbox (three build tasks from a cert-challenge handoff, not
+  planner-originated), then independently reviewed, verified, and merged
+  from this session.** Closes two cert-rubric gaps plus a real bug, all
+  independent, backend-only:
+  - **L1 semantic sub-layer**: `retrieval/hybrid.py`'s `retrieve_l1()` now
+    unions the existing hand-written atomic rule cards with a
+    `similarity_search` over long-form section chunks (Wikipedia color
+    theory/harmony/complementary-colors, Chevreul, Munsell) that
+    `build_kb.py` already embedded into the same L1 layer but retrieval never
+    queried — a genuinely new capability over data that was already there.
+  - **Live Tavily L3**: `retrieve_l3()` now calls the project's existing
+    `external/trends.search_trends()` live at request time instead of
+    querying a static pre-ingested trend collection, mapping results into
+    citable `Document`s with a synthetic per-result `rule_id`; degrades to
+    `[]` on failure (weather-fallback pattern). The static
+    `l3_trend_cards.jsonl` stays ingested for `baseline`'s sake (it queries
+    the whole corpus directly and never calls `retrieve_l3`) — only the
+    hybrid/advanced code path is retired, not the underlying data. 3 golden
+    cases' `relevant_rule_ids` trimmed of a now-unreproducible static L3 pin.
+  - **Warmth-floor fix**: the "warmer" refinement's prior fix (a blanket
+    `_WARMTH_FLOOR_EXEMPT_GROUPS` exemption for footwear/accessory, Feature
+    002 Phase 4) is replaced with a per-category-relative floor
+    (`_category_warmth_ceiling()`) scaled to each category's own achievable
+    warmth in the actual closet, capped at that ceiling — a low-ceiling
+    category now gets a real, small push instead of either an impossible
+    flat bar or a full pass-through.
+  - **A real operational gap found during this session's review, not in the
+    original sandbox**: the new L1 semantic filter is a compound Qdrant
+    filter (`layer` + `granularity`), and the live collection only had an
+    index on `layer` — filtering on an unindexed field 400s in server mode.
+    Fixed by adding the missing `metadata.granularity` payload index
+    directly (cheap — the underlying chunk data already carried this field,
+    no re-embed needed).
+  - Verified this session: eval no-regression gate + integration tests
+    against real credentials (this session's sandbox had none). Full
+    narrative and exact outcome: `docs/SDD-HANDOFF.md` Step 8.
+- **Next**: all 5 originally-planned features plus 006 and 007 are done
+  and merged — worth a planning conversation about what's after that.
 - **Environment gotcha found while finishing Feature 004**: a fresh `git
   worktree add` only copies tracked files — `backend/data/` (gitignored:
   golden set, KB corpus, wardrobe fixture) was entirely absent from this
@@ -330,6 +359,20 @@ the DB vars). Full run/architecture detail: `backend/README.md`.
   existing checkout (`rsync -a` from the main worktree's `backend/data/` and
   `backend/artifacts/eval_runs/`) — confirmed necessary setting up this
   worktree for Feature 002 Phases 2-4.
+- **The same gitignored-files gap hits a fresh remote-sandbox clone too, not
+  just `git worktree add`** (confirmed in the Feature 007 session). A plain
+  fresh clone (no prior checkout to copy from, no `.env` either) is missing
+  `data/wikipedia/*.md`, `data/books/*.epub`, and `data/fixtures/wardrobe.json`
+  — only `golden_set.yaml`, `data/kb/manifest.yaml`, and the 3 `data/kb/*.jsonl`
+  card files are actually tracked in git. `get_kb()` fails on the missing
+  `.epub` before ever making a network call, so this bites even a KB read that
+  doesn't need real credentials. Combined with no `.env` (no DB/gateway/Tavily/
+  Qdrant/LangSmith credentials at all in a fresh sandbox), a session in this
+  situation can implement and unit-test any pure-Python change but cannot run
+  the eval harness, any integration test hitting `/suggest`, or anything else
+  touching the real KB/DB/gateway — there is no local workaround, only
+  documenting exactly what couldn't be verified and flagging the eval gate as
+  the mandatory next step for a session that does have real credentials.
 - **LangGraph checkpoint deserialization warns on the project's own Pydantic/
   dataclass types** (`Context`, `ScoredOutfit`, `SuggestResult`, `GenOutput`,
   `RetrievalResult`, `WardrobeItem`) — `Deserializing unregistered type ...

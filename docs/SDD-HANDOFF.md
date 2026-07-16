@@ -95,7 +95,8 @@ from drifting.
 | 003 | **mvp-app** *(redefined — was "closet-ingestion")* | ✅ **DONE — deployed and live.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified. The 3 manual deploy steps once tracked here (Supabase Storage bucket + RLS, Railway backend, Vercel frontend) were absorbed into Feature 005's scope and completed there — see Feature 005's row below and `docs/005-production-hardening-merge-report.md`. **Known, explicitly deferred gap: visual polish** didn't fully match `design/What to Wear.dc.html` — see `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
 | 004 | preference-memory | ✅ **DONE and merged to `main`** (finished 2026-07-16, in its own worktree, concurrently with Feature 002's Phases 2-4 above — see the merge callout below the table). Feedback endpoint + derived preference profile + frontend reaction affordance. 29/29 tasks. |
 | 005 | production-hardening | ✅ **DONE, merged to `main`, and deployed live** (2026-07-16). Full spec-kit cycle (spec/clarify/plan/tasks/analyze/implement). Output grounding guardrail, per-user Redis cache, LiteLLM routing all built and eval-no-regression-gate green. Absorbed Feature 003's previously-incomplete deploy steps — Supabase Storage bucket + RLS, Railway backend, Vercel frontend all confirmed working end-to-end this session (including live debugging: a Railway public-domain/target-port mismatch that made a healthy container unreachable). Merge itself was zero-conflict (serial worktree, not parallel this time). Full narrative: `docs/005-production-hardening-merge-report.md`. See Step 6. |
-| 006 | wardrobe-item-photos | **DONE, implemented on branch `006-wardrobe-item-photos`, not yet merged — see Step 7.** Small, additive: persists the photo path already captured (and previously discarded) at photo-upload time, shows it on the closet card, falls back to the existing color-swatch display when absent. No new API endpoint. |
+| 006 | wardrobe-item-photos | ✅ **DONE, merged to `main`** (2026-07-16). Small, additive: persists the photo path already captured (and previously discarded) at photo-upload time, shows it on the closet card, falls back to the existing color-swatch display when absent. No new API endpoint. See Step 7. |
+| 007 | ai-improvements | ✅ **DONE, merged to `main`** (2026-07-16). Built entirely in a separate, credential-less sandbox, so only unit tests ran there — verified for real in this session: found and fixed a missing Qdrant payload index the new L1 filter needs (cheap, no re-embed), then 226/226 unit tests, the modified `test_suggest_refinement.py` (3/3, real graph calls, directly exercises the warmth-floor fix), and a deliberately reduced eval-gate subset (7 of 24 golden cases × all 3 strategies — g01/g08/g12/g15/g17/g20/g23, chosen to include 2 of the 3 cases whose ground truth changed for the live-L3 design, g12 and g23; g16, the third, wasn't in this subset — same mechanical correction as the other two, not independently re-verified) all green — `retrieval_recall` 0.81/0.93/0.93 (baseline/hybrid/advanced), consistent ordering and magnitude with prior full runs. One isolated LLM citation artifact (a plausible-sounding but nonexistent rule id cited in one hybrid-strategy response) — zero hallucinated *items*, so the actual grounding guarantee held; this is generation-sampling noise, not a 007 regression. See Step 8. |
 
 **How 002 and 004's parallel work was reconciled (2026-07-16).** Both
 features were built in separate git worktrees at the same time (see the
@@ -856,6 +857,108 @@ item added via the photo-upload flow (Feature 003).
 >
 > Not yet merged to `main` — the owner is handling review/merge from the
 > planning session, per this feature's own kickoff instructions.
+
+## Step 8: Feature 007, ai-improvements
+
+A cert-challenge handoff (not planner-originated) — pasted directly into a fresh worker session as
+three build tasks (A/B/C) with acceptance criteria already decided. Full spec-kit cycle run anyway on
+branch `007-AI-improvements` (the handoff was decision-complete enough that `/speckit.clarify` needed no
+questions — `spec.md`'s checklist passed 16/16 on the first pass), since CLAUDE.md requires it for all
+feature work regardless of how the work originated. `/speckit.analyze` found 2 MEDIUM findings (plan.md's
+file tree missing two new test files; a new test directory missing its `__init__.py`), both fixed before
+implementing.
+
+**What Feature 007 does** (closes two cert rubric gaps plus a real bug, all independent, all in
+`backend/`, no frontend/API-contract changes):
+- **US1 (L1 semantic sub-layer, P1)**: `retrieve_l1()` (`retrieval/hybrid.py`) already had access to a
+  fully embedded pool of long-form section chunks (Wikipedia color theory/harmony/complementary-colors,
+  the Chevreul and Munsell PD books — `chunker: section` in `data/kb/manifest.yaml`, embedded by
+  `build_kb.py` all along) that retrieval simply never queried; it only ever loaded the small
+  hand-written atomic card set. Added a `similarity_search` branch (`_l1_semantic_filter()`, filtering
+  `layer==L1 AND granularity==section`) unioned with the existing load-all — genuinely new retrieval
+  behavior over data that was already there, zero new ingestion/chunking/embedding code. One real gap
+  found reading the existing `build_vectorstore()`: the compound filter needs a payload index on
+  `metadata.granularity`, not just the pre-existing `metadata.layer` one (same failure mode
+  `build_kb.py`'s own comment already documents for `layer` alone) — added.
+- **US2 (live Tavily L3, P2)**: `retrieve_l3()` used to run `kb.vectorstore.similarity_search` against a
+  static, pre-ingested `l3_trend_cards.jsonl` collection. It now calls the project's own already-existing
+  `external/trends.search_trends()` (a working Tavily wrapper previously only used by an offline
+  distillation script) live, at request time, mapping each result into a citable `Document` with a
+  synthetic `rule_id` derived from the result's URL. Degrades to `[]` on any exception, mirroring
+  `context_assembler`'s weather-lookup fallback pattern. **Deliberately left the static
+  `l3_trend_cards.jsonl` ingested in the manifest, unchanged** — `baseline.retrieve()` queries the whole
+  Qdrant collection directly and never calls `retrieve_l3`, so removing that source would have silently
+  shrunk baseline's corpus, violating the explicit "don't change what baseline returns" constraint;
+  `retrieve_l3`'s old static-search code path is what's retired, not the underlying data. Golden set
+  fallout: 3 cases (`g12`, `g16`, `g23`) pinned a specific static L3 `rule_id` as "relevant" for
+  `retrieval_recall` — a live search can never reproduce a fixed id by construction, so those 3 cases'
+  `relevant_rule_ids` were trimmed to their L4/L1 expectations only (commented inline in
+  `data/golden_set.yaml`), an intentional, documented test-data update, not a silent regression.
+- **US3 (warmth-floor fix, P1)**: the "warmer" refinement's existing bug (documented back in Feature 002
+  Phase 4 and again in this handoff) — a flat, absolute warmth floor silently excluded nearly all
+  footwear/accessories in this closet — had already been "fixed" with a blanket exemption
+  (`_WARMTH_FLOOR_EXEMPT_GROUPS`, footwear/accessory fully skip any floor at all). This feature replaces
+  that exemption with the more literal fix: `_category_warmth_ceiling()` computes each category's own
+  max achievable warmth from the actual closet, and the floor scales proportionally to that ceiling
+  (against the schema's fixed 0-5 range) instead of either a flat absolute number or a full pass-through
+  — capped at the ceiling itself so a category's own warmest item always still qualifies, no matter how
+  many "warmer" turns accumulate. A zero-ceiling category (e.g. a closet with literally no warmth
+  variation in accessories) still degenerates correctly to "never gates," but now as the natural output
+  of one formula instead of a hardcoded group list.
+
+**What's verified vs. not — read this before merging.** This session ran in a fresh remote sandbox
+clone, not an existing checkout or a `git worktree add` off one. It had **zero `.env` credentials** and
+**none of the gitignored `backend/data/` source files** the KB build needs (`data/wikipedia/*.md`,
+`data/books/*.epub`, `data/fixtures/wardrobe.json` — only `golden_set.yaml`, `manifest.yaml`, and the 3
+`kb/*.jsonl` card files are actually tracked in git). This is the same class of gap the "Gotchas" section
+below already documents for a fresh `git worktree add`; it just showed up in a fresh container clone
+instead this time. Confirmed two independent ways: `get_kb()` fails on a missing `.epub` before ever
+reaching a network call, and the new warmth-floor evidence script fails on `psycopg` connection-string
+parsing against a placeholder `DATABASE_URL` before reaching the graph at all.
+- **Fully verified this session**: all three tasks' actual logic, via 38 new/updated unit tests
+  (`tests/unit/retrieval/test_hybrid.py`, `test_advanced.py` — both new files — plus updates to
+  `tests/unit/pipeline/test_graph.py`) that mock the KB/Tavily/DB boundary and exercise the real pure
+  functions. The full pre-existing `tests/unit/` suite: 193/193 passing (the only errors, 33, are in
+  pre-existing, untouched `test_crud.py`/`test_seed.py`, which need a live DB connection — an
+  environment gap, not a regression). `ruff check`/`format` clean on every file this feature touches.
+> **Verified in the merge-review session (2026-07-16), with real credentials.** Everything the paragraph
+> above flagged as unverified was checked before merging, with one real find and one deliberate scope
+> cut, both recorded here rather than glossed over:
+>
+> - **A real gap, not caught by unit tests**: `retrieve_l1`'s new compound Qdrant filter
+>   (`layer` + `granularity`) 400s in server mode without a payload index on the second field — the live
+>   collection only had `metadata.layer` indexed (from the original `layer`-only fix this feature's own
+>   code comment already documented). Fixed by adding the missing index directly
+>   (`client.create_payload_index(..., field_name="metadata.granularity", ...)`) — cheap, since the
+>   underlying chunk data already carried that field (stamped by `chunkers.py` well before this feature);
+>   no re-embed needed.
+> - **Unit + integration tests, all green**: 226/226 `tests/unit/` (the full suite, not just this
+>   feature's new files). `tests/integration/test_suggest_refinement.py` (3/3, real graph calls) — the
+>   test that most directly exercises the warmth-floor fix end to end.
+> - **Eval gate**: run as a deliberately reduced subset (7 of 24 golden cases × all 3 strategies — not
+>   the full 24×3 — per an explicit cost constraint this session), not the full comparison the paragraph
+>   above called for. `g01`/`g08`/`g12`/`g15`/`g17`/`g20`/`g23` — includes `g12` and `g23` (2 of the 3
+>   golden-set corrections) but not `g16` (the third; same mechanical edit as the other two, not
+>   independently re-verified). `retrieval_recall`: baseline 0.81, hybrid 0.93, advanced 0.93 —
+>   consistent ordering and magnitude with prior full-set runs (baseline < hybrid ≈ advanced). All 21
+>   case-runs completed without error, confirming the live Tavily L3 path actually works end to end (the
+>   thing the original sandbox couldn't test at all) and the Qdrant index fix holds. One isolated
+>   finding: a citation in one `hybrid`-strategy response (`g08`) referenced `L1-three-max`, a rule id
+>   that doesn't exist anywhere in the KB — an LLM inventing a plausible-sounding principle rather than
+>   citing something actually retrieved. `hallucinated_items` was empty for every row across all 21 —
+>   the item-grounding guarantee held throughout — so this reads as ordinary generation-sampling noise on
+>   a generation-dependent check, not a 007 regression, consistent with this project's own established
+>   pattern (CLAUDE.md's Gotchas: don't declare a regression from generation-dependent drift).
+> - **Not done, deliberately out of scope for this merge**: the full 24×3 eval comparison (a reduced
+>   subset was judged sufficient given the above), a LangSmith trace spot-check, and the before/after
+>   warmth-floor fallback-rate evidence capture (`backend/scripts/warmth_floor_evidence.py` — still
+>   unrun; the "before" baseline can no longer be captured cleanly since the fix is already merged, so a
+>   future session would need to temporarily revert US3 for an honest before/after, or accept an
+>   after-only number).
+>
+> Full task-by-task status from the original session: `specs/007-ai-improvements/tasks.md`'s environment
+> note near the top (historical — describes what that session could and couldn't do, not what's still
+> outstanding now).
 
 ## The rule that matters most
 

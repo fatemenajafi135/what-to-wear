@@ -71,11 +71,16 @@ _MAX_WARMTH_BY_BAND: dict[str, int] = {"warm": 2, "hot": 1}
 # hard-constraint bounds in wardrobe_retrieval, not to ctx itself.
 _REFINEMENT_WARMTH_STEP = 2  # warmth floor added per "warmer" utterance
 _REFINEMENT_FORMALITY_STEP = 1  # notches shifted down per "less formal" utterance
-# Footwear/accessories don't carry the same warmth signal a core layering
-# piece does (a fixture-data reality: footwear tops out around warmth=3,
-# most accessories sit at 0) — a uniform floor across every category starves
-# those slots and forces the FR-015 fallback far more than intended.
-_WARMTH_FLOOR_EXEMPT_GROUPS = frozenset({"footwear", "accessory"})
+# schema.py's fixed warmth range (0-5) -- the range _REFINEMENT_WARMTH_STEP was
+# implicitly calibrated against. Categories that can't reach 5 (footwear/
+# accessories, a fixture-data reality: footwear tops out around warmth=3, most
+# accessories sit at 0) get a floor SCALED to their own ceiling instead of
+# either this flat absolute number or a blanket exemption (Feature 007 Task C
+# -- a flat floor of 2+ per "warmer" silently excluded nearly all footwear/
+# accessories, forcing the FR-015 fallback far more than intended; the fix
+# replaces the exemption with a per-category-relative floor, never a full
+# pass-through, capped so a category's own warmest item always still passes).
+_WARMTH_SCALE_REFERENCE = 5
 
 _WARMER_KEYWORDS = ("warmer", "warm")
 _LESS_FORMAL_KEYWORDS = ("less formal", "more casual", "casual")
@@ -230,6 +235,17 @@ def build_query(state: GraphState) -> dict:
     return {"naive_query": query_builder.naive_query(ctx), "l3_query": query_builder.l3_query(ctx)}
 
 
+def _category_warmth_ceiling(wardrobe: list[WardrobeItem]) -> dict[str, int]:
+    """Each category group's own achievable warmth ceiling in this closet —
+    what the "warmer" floor (below) scales against instead of assuming every
+    category ranges 0-5 like outerwear does (Feature 007 Task C)."""
+    ceilings: dict[str, int] = {}
+    for item in wardrobe:
+        group = categories.group_of(item.category)
+        ceilings[group] = max(ceilings.get(group, 0), item.warmth)
+    return ceilings
+
+
 def wardrobe_retrieval(state: GraphState) -> dict:
     """Hard-constraint pruning (formality band, per-band warmth ceiling,
     season) before any combination step, capped at k=8 per slot (FR-014).
@@ -239,9 +255,10 @@ def wardrobe_retrieval(state: GraphState) -> dict:
     itself (FR-013), only what counts as fitting here."""
     ctx = state["ctx"]
     deltas = state.get("refinement_deltas", [])
+    category_ceilings = _category_warmth_ceiling(ctx.wardrobe)
     candidates: dict[str, list[WardrobeItem]] = {}
     for item in ctx.wardrobe:
-        if not _item_fits_hard_constraints(item, ctx, deltas):
+        if not _item_fits_hard_constraints(item, ctx, deltas, category_ceilings):
             continue
         slot = categories.group_of(item.category)
         candidates.setdefault(slot, []).append(item)
@@ -250,7 +267,12 @@ def wardrobe_retrieval(state: GraphState) -> dict:
     return {"candidates": candidates}
 
 
-def _item_fits_hard_constraints(item: WardrobeItem, ctx: Context, deltas: Optional[list[str]] = None) -> bool:
+def _item_fits_hard_constraints(
+    item: WardrobeItem,
+    ctx: Context,
+    deltas: Optional[list[str]] = None,
+    category_ceilings: Optional[dict[str, int]] = None,
+) -> bool:
     deltas = deltas or []
     less_formal_count = deltas.count("less_formal")
     warmer_count = deltas.count("warmer")
@@ -274,8 +296,19 @@ def _item_fits_hard_constraints(item: WardrobeItem, ctx: Context, deltas: Option
         max_warmth = _MAX_WARMTH_BY_BAND[ctx.temp_band]
         if not weather_appropriate([item.id], {item.id: item}, {"max_warmth": max_warmth}):
             return False
-    if warmer_count and categories.group_of(item.category) not in _WARMTH_FLOOR_EXEMPT_GROUPS:
-        if item.warmth < warmer_count * _REFINEMENT_WARMTH_STEP:
+    if warmer_count:
+        # Floor scales to this category's own achievable ceiling (Feature 007
+        # Task C) rather than either a flat absolute number (the original
+        # bug) or a blanket exemption (the prior fix) — capped at the
+        # ceiling itself, so a category is never fully excluded by its own
+        # floor even after many "warmer" requests (a zero-ceiling category,
+        # e.g. accessories with no warmth variation, always computes a
+        # floor of 0 and never gates at all, which is correct).
+        group = categories.group_of(item.category)
+        ceilings = category_ceilings if category_ceilings is not None else _category_warmth_ceiling(ctx.wardrobe)
+        ceiling = ceilings.get(group, _WARMTH_SCALE_REFERENCE)
+        floor = min(ceiling, round(warmer_count * _REFINEMENT_WARMTH_STEP * ceiling / _WARMTH_SCALE_REFERENCE))
+        if item.warmth < floor:
             return False
     return True
 
