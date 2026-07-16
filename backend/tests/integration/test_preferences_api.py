@@ -156,11 +156,14 @@ MIN_SIGNAL_COUNT = 3  # memory.preferences.MIN_SIGNAL_COUNT — kept in sync exp
 # so this test file also acts as a regression guard if the threshold constant ever moves.
 
 
-def _reject_color(c, session, user_id, hex_color, n):
+def _reject_color(c, session, user_id, hex_color, n) -> list[str]:
+    feedback_ids = []
     for _ in range(n):
         item = _wardrobe_item(session, user_id, category=f"filler-{uuid.uuid4()}", colors=[hex_color])
         r = c.post("/preferences/feedback", json={"verdict": "rejected", "item_ids": [str(item.id)]})
         assert r.status_code == 201
+        feedback_ids.append(r.json()["id"])
+    return feedback_ids
 
 
 class TestGetPreferences:
@@ -260,7 +263,27 @@ class TestRemoveAndClearPreferences:
         c.delete("/preferences/signals/color:%231b2a4a")
         assert c.get("/preferences").json()["signals"] == []
 
-        _reject_color(c, session, user_id, "#1b2a4a", MIN_SIGNAL_COUNT)
+        new_feedback_ids = _reject_color(c, session, user_id, "#1b2a4a", MIN_SIGNAL_COUNT)
+        # Postgres's now() is transaction-time, not statement-time: every row
+        # inserted within this test's single rolled-back transaction gets the
+        # identical created_at, so the "new" batch above isn't naturally after
+        # the dismissal's (real, Python-clock) cutoff the way it would be
+        # across separate requests in production. Push just this new batch's
+        # created_at forward explicitly so the re-establishment logic under
+        # test is actually exercised, without touching the earlier
+        # (still-dismissed) batch's rows.
+        from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import update
+
+        from whattowear.models import SuggestionFeedbackRow
+
+        session.execute(
+            update(SuggestionFeedbackRow)
+            .where(SuggestionFeedbackRow.id.in_(uuid.UUID(i) for i in new_feedback_ids))
+            .values(created_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=5))
+        )
+        session.commit()
 
         signals = c.get("/preferences").json()["signals"]
         assert [s["key"] for s in signals] == ["color:#1b2a4a"]
