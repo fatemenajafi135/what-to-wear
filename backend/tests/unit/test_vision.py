@@ -34,18 +34,33 @@ def test_build_human_message_has_text_then_image():
 
 
 def test_extract_attributes_from_image_returns_structured_output(mocker):
-    expected = ExtractedAttributes(category="top", colors=["#1b2a4a"], warmth=2, formality="smart_casual")
+    """Feature 005 US4: `with_structured_output` is called with the
+    hand-written `_EXTRACTION_SCHEMA` dict (method="json_schema"), not the
+    `ExtractedAttributes` class directly — the gateway rejects the
+    class-derived schema for this all-Optional model (research.md §1). The
+    call therefore returns a plain dict, parsed into `ExtractedAttributes`
+    by `extract_attributes_from_image` itself."""
+    raw = {
+        "category": "top",
+        "colors": ["#1b2a4a"],
+        "fabric": None,
+        "warmth": 2,
+        "formality": "smart_casual",
+        "season": None,
+        "pattern": None,
+        "fit": None,
+    }
 
     fake_structured_llm = mocker.Mock()
-    fake_structured_llm.invoke.return_value = expected
+    fake_structured_llm.invoke.return_value = raw
     fake_chat_model = mocker.Mock()
     fake_chat_model.with_structured_output.return_value = fake_structured_llm
     mocker.patch.object(vision, "get_chat_model", return_value=fake_chat_model)
 
     result = vision.extract_attributes_from_image(b"fake-bytes", "image/jpeg")
 
-    assert result == expected
-    fake_chat_model.with_structured_output.assert_called_once_with(ExtractedAttributes)
+    assert result == ExtractedAttributes(**raw)
+    fake_chat_model.with_structured_output.assert_called_once_with(vision._EXTRACTION_SCHEMA, method="json_schema")
     fake_structured_llm.invoke.assert_called_once()
 
 

@@ -3,7 +3,16 @@
 Every model / embedding call in the package is created here, pointed at the
 Vercel AI Gateway. This is the graded "one explicit config layer" requirement:
 no module constructs a provider SDK client directly.
-"""
+
+Feature 005 US4/FR-008-010: chat-completion calls (`get_chat_model`/
+`get_judge_model`) route through `langchain-litellm`'s `ChatLiteLLM` instead
+of `langchain_openai.ChatOpenAI` — same `BaseChatModel` interface (every
+call site's `.with_structured_output(...)`/`.invoke(...)` is unchanged), but
+now gets litellm's built-in retry-on-transient-failure (`max_retries`) and
+LangSmith-visible cost/usage on every call, satisfying FR-008/009/010
+without a standalone routing service (research.md §1). `get_embeddings`
+stays on `langchain_openai.OpenAIEmbeddings` — no reported problem there to
+fix, and `langchain-litellm` doesn't ship an embeddings class."""
 
 from __future__ import annotations
 
@@ -11,7 +20,8 @@ import os
 
 from dotenv import load_dotenv
 from langchain_cohere import CohereRerank
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_litellm import ChatLiteLLM
+from langchain_openai import OpenAIEmbeddings
 
 load_dotenv()
 
@@ -52,18 +62,22 @@ def _gateway_key() -> str:
 # --- factories ---------------------------------------------------------------
 
 
-def get_chat_model(model: str | None = None, temperature: float = 0.2, **kwargs) -> ChatOpenAI:
-    """A chat model routed through the gateway."""
-    return ChatOpenAI(
+def get_chat_model(model: str | None = None, temperature: float = 0.2, **kwargs) -> ChatLiteLLM:
+    """A chat model routed through the gateway, via litellm (retry +
+    LangSmith-visible cost/usage on every call — research.md §1). `max_retries`
+    is litellm's own transient-failure retry (timeouts, rate limits, 5xx);
+    non-transient errors (bad request, auth) are not retried."""
+    return ChatLiteLLM(
         model=model or CHAT_MODEL,
-        base_url=GATEWAY_BASE_URL,
+        api_base=GATEWAY_BASE_URL,
         api_key=_gateway_key(),
         temperature=temperature,
+        max_retries=3,
         **kwargs,
     )
 
 
-def get_judge_model(**kwargs) -> ChatOpenAI:
+def get_judge_model(**kwargs) -> ChatLiteLLM:
     """The LLM-as-judge model (deterministic, temp 0) through the gateway."""
     return get_chat_model(model=JUDGE_MODEL, temperature=0.0, **kwargs)
 
