@@ -124,7 +124,11 @@ def _derive_formality_drift(feedback: list[FeedbackRecord], dismissals: dict[str
         return None
     delta = (sum(rejected_avgs) / len(rejected_avgs)) - (sum(liked_avgs) / len(liked_avgs))
     if delta >= 1:
-        return DerivedSignal(key=signal_key, kind="formality_drift", detail="less_formal", supporting_count=len(rejected_avgs))
+        return DerivedSignal(
+            key=signal_key, kind="formality_drift", detail="less_formal", supporting_count=len(rejected_avgs)
+        )
     if delta <= -1:
-        return DerivedSignal(key=signal_key, kind="formality_drift", detail="more_formal", supporting_count=len(rejected_avgs))
+        return DerivedSignal(
+            key=signal_key, kind="formality_drift", detail="more_formal", supporting_count=len(rejected_avgs)
+        )
     return None

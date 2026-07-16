@@ -110,9 +110,7 @@ class TestSubmitFeedback:
 
         from whattowear.models import SuggestionFeedbackRow
 
-        rows = session.scalars(
-            select(SuggestionFeedbackRow).where(SuggestionFeedbackRow.user_id == user_id)
-        ).all()
+        rows = session.scalars(select(SuggestionFeedbackRow).where(SuggestionFeedbackRow.user_id == user_id)).all()
         assert len(rows) == 1
         assert rows[0].verdict == "rejected"
 

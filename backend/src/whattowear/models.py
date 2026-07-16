@@ -91,9 +91,7 @@ class SuggestionFeedbackRow(Base):
     # dedup key, avoiding JSONB-equality edge cases (data-model.md).
     item_ids_key: Mapped[str] = mapped_column(String, nullable=False)
     item_snapshot: Mapped[list[dict]] = mapped_column(JSONB, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class PreferenceSignalDismissalRow(Base):

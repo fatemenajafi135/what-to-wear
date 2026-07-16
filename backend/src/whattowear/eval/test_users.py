@@ -26,8 +26,12 @@ def _item(
     schema actually requires (colors.py: hex is the source of truth, names are
     never stored)."""
     return WardrobeItem(
-        id=id, category=category, colors=[name_to_hex(c) for c in colors],
-        formality=formality, warmth=warmth, season=season,
+        id=id,
+        category=category,
+        colors=[name_to_hex(c) for c in colors],
+        formality=formality,
+        warmth=warmth,
+        season=season,
     )
 
 
@@ -155,8 +159,12 @@ if __name__ == "__main__":
     # descriptive only. To exercise profile_note()'s effect manually, record
     # real feedback for this user_id through the API first.
     run = run_pipeline(
-        args.occasion, mood=args.mood, temp_c=args.temp_c,
-        wardrobe=user.wardrobe, user_id=user.user_id, strategy=args.strategy,
+        args.occasion,
+        mood=args.mood,
+        temp_c=args.temp_c,
+        wardrobe=user.wardrobe,
+        user_id=user.user_id,
+        strategy=args.strategy,
     )
     print(f"=== {user.name} — {args.occasion} ===")
     print(render_text(run.result))
