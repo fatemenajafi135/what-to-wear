@@ -195,3 +195,71 @@ class OutfitResult(BaseModel):
     outfits: list[Outfit]
     sources: list[CitedSource] = Field(default_factory=list)
     context: Optional[Context] = None
+
+
+class SuggestRequest(BaseModel):
+    """Body of POST /suggest (contracts/suggest.md). No `user_id` field —
+    same fix as RecommendRequest post-Phase-1: identity always comes from
+    the verified JWT `sub` (FR-001)."""
+
+    occasion: str
+    mood: Optional[str] = None
+    formality: Optional[Formality] = None
+    location: Optional[str] = None
+    temp_c: Optional[float] = None
+    strategy: str = "advanced"
+    thread_id: Optional[str] = None
+
+
+# --- deterministic scoring (Feature 002 Phase 2+) -----------------------------
+
+ScoreDimension = Literal[
+    "color_harmony", "formality_coherence", "weather_fitness", "silhouette_balance"
+]
+SCORE_DIMENSIONS: tuple[ScoreDimension, ...] = (
+    "color_harmony", "formality_coherence", "weather_fitness", "silhouette_balance",
+)
+
+
+class DimensionScore(BaseModel):
+    """One deterministic scorer's output for one outfit (data-model.md)."""
+
+    dimension: ScoreDimension
+    value: float = Field(ge=0.0, le=1.0)
+    reason: str
+
+
+class ScoredOutfit(BaseModel):
+    """An `Outfit` extended with per-dimension scores and a combined rank
+    score (data-model.md). `scores` always carries exactly one entry per
+    `SCORE_DIMENSIONS` value (FR-008)."""
+
+    items: list[str]
+    rationale: list[Rationale]
+    scores: list[DimensionScore]
+    rank_score: float
+
+    @field_validator("scores")
+    @classmethod
+    def _scores_cover_all_dimensions(cls, v: list[DimensionScore]) -> list[DimensionScore]:
+        dims = [s.dimension for s in v]
+        if sorted(dims) != sorted(SCORE_DIMENSIONS) or len(dims) != len(set(dims)):
+            raise ValueError(
+                f"ScoredOutfit.scores must have exactly one entry per dimension in "
+                f"{SCORE_DIMENSIONS}, got {dims!r}"
+            )
+        return v
+
+
+class SuggestResult(BaseModel):
+    """What POST /suggest's `result` field carries (contracts/suggest.md) —
+    OutfitResult's shape, but with ScoredOutfit entries. A separate type
+    from OutfitResult (not a field-type change on it) because /recommend is
+    still live and its old code path can't populate scores; data-model.md
+    calls for OutfitResult.outfits to become list[ScoredOutfit] only once
+    /recommend is retired (tasks.md T037a), at which point this type merges
+    into OutfitResult rather than the two coexisting indefinitely."""
+
+    outfits: list[ScoredOutfit]
+    sources: list[CitedSource] = Field(default_factory=list)
+    context: Optional[Context] = None
