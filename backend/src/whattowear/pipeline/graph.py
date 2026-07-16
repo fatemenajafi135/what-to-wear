@@ -244,7 +244,7 @@ def build_graph() -> StateGraph:
 
 
 def compile_graph():
-    return build_graph().compile(checkpointer=memory.checkpointer)
+    return build_graph().compile(checkpointer=memory.get_checkpointer())
 
 
 _compiled = None
