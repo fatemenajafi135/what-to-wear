@@ -11,7 +11,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health */
+        /**
+         * Health
+         * @description FR-012 (Feature 005, a `/speckit.analyze` finding against the spec's
+         *     own Edge Case): reports failure when the database or vector store is
+         *     unreachable, not merely when the process itself is running.
+         */
         get: operations["health_health_get"];
         put?: never;
         post?: never;
@@ -41,6 +46,23 @@ export interface paths {
          *     response_model serialization, but it's still what generates the
          *     SuggestResult/ScoredOutfit/DimensionScore schemas the frontend needs
          *     (T036b) since a raw StreamingResponse alone wouldn't.
+         *
+         *     Feature 005 US3/FR-006/007: a fresh (non-continuing) request — no
+         *     incoming `thread_id` — is eligible for the per-user Redis cache
+         *     (`pipeline/cache.py`). A refinement turn (`thread_id` supplied,
+         *     continuing a conversation the checkpointer already has state for)
+         *     always runs the graph — refinements are inherently stateful and aren't
+         *     idempotent the way a first turn is (research.md §2). The wardrobe is
+         *     loaded once here and passed through to the graph either way (`wardrobe=`
+         *     override on `GraphState`), so caching doesn't cost a second DB fetch.
+         *
+         *     A cache hit still seeds the checkpointer (`graph.update_state`) with the
+         *     turn's `ctx`/`original_context`/`last_result` before returning — found
+         *     necessary during implementation: a hit's `thread_id` is otherwise never
+         *     passed to `graph.invoke`, so the checkpointer would have no state for it,
+         *     and a later refinement turn continuing that `thread_id` would wrongly be
+         *     treated as a brand-new conversation (`parse_request` only detects a
+         *     continuation via `original_context` already being checkpointed).
          */
         post: operations["suggest_endpoint_suggest_post"];
         delete?: never;
@@ -550,6 +572,8 @@ export interface components {
             pattern?: string | null;
             /** Fit */
             fit?: string | null;
+            /** Photo Path */
+            photo_path?: string | null;
         };
         /**
          * WardrobeItemPatch

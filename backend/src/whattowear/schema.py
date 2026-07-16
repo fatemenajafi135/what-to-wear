@@ -73,6 +73,7 @@ class WardrobeItem(BaseModel):
     source: Optional[Literal["catalog", "upload"]] = None
     pattern: Optional[str] = None  # free-text, matches fabric's shape (Feature 003)
     fit: Optional[str] = None  # free-text, matches fabric's shape (Feature 003)
+    photo_path: Optional[str] = None  # Storage object path, set once at creation (Feature 006)
 
     @field_validator("colors")
     @classmethod

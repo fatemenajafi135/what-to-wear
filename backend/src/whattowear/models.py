@@ -60,6 +60,8 @@ class WardrobeItemRow(Base):
     # Additive, nullable (Feature 003) — catalog-sourced rows have neither.
     pattern: Mapped[str | None] = mapped_column(String, nullable=True)
     fit: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Additive, nullable (Feature 006) — catalog-sourced rows never have one.
+    photo_path: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now(), nullable=False)
 

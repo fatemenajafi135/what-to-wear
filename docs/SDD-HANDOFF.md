@@ -92,9 +92,10 @@ from drifting.
 |---|---|---|
 | 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
 | 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **✅ ALL PHASES DONE, merged to `main` (2026-07-16).** Phase 1 merged earlier. Phases 2–4 (scoring package, LangGraph `/suggest`, conversational refinement) built in a parallel worktree alongside Feature 004, then merged back — see the merge callout below the table for how the two features' conflicting changes were reconciled. `/speckit.analyze` re-run before resuming Phases 2-4 found and fixed one CRITICAL gap: retiring `/recommend` (T037a) had no dependency on the frontend that actually calls it. Fixed via tasks T036a-d (frontend cutover to `/suggest`) gating T037a — both landed. `/recommend` and `pipeline/run.py` are now deleted; `/suggest` is the sole suggestion entrypoint. Full eval no-regression gate green after every phase touching retrieval/generation, and again after the merge. |
-| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | ✅ **Code complete and merged to `main`, deploy pending.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access no coding session has): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). **Known, explicitly deferred gap: visual polish** didn't fully match `design/What to Wear.dc.html` — see `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
+| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | ✅ **DONE — deployed and live.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified. The 3 manual deploy steps once tracked here (Supabase Storage bucket + RLS, Railway backend, Vercel frontend) were absorbed into Feature 005's scope and completed there — see Feature 005's row below and `docs/005-production-hardening-merge-report.md`. **Known, explicitly deferred gap: visual polish** didn't fully match `design/What to Wear.dc.html` — see `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
 | 004 | preference-memory | ✅ **DONE and merged to `main`** (finished 2026-07-16, in its own worktree, concurrently with Feature 002's Phases 2-4 above — see the merge callout below the table). Feedback endpoint + derived preference profile + frontend reaction affordance. 29/29 tasks. |
-| 005 | production-hardening | ✅ **Code complete, merge-ready; one manual step remains.** Full spec-kit cycle (spec/clarify/plan/tasks/analyze/implement). Output grounding guardrail, per-user Redis cache, LiteLLM routing all built, tested against the real gateway/DB/Redis, and eval-no-regression-gate green. Railway/Vercel/Supabase Storage all confirmed working by the owner, but the live backend is still on pre-005 code — needs a redeploy after merge to validate live (T008). See Step 6. |
+| 005 | production-hardening | ✅ **DONE, merged to `main`, and deployed live** (2026-07-16). Full spec-kit cycle (spec/clarify/plan/tasks/analyze/implement). Output grounding guardrail, per-user Redis cache, LiteLLM routing all built and eval-no-regression-gate green. Absorbed Feature 003's previously-incomplete deploy steps — Supabase Storage bucket + RLS, Railway backend, Vercel frontend all confirmed working end-to-end this session (including live debugging: a Railway public-domain/target-port mismatch that made a healthy container unreachable). Merge itself was zero-conflict (serial worktree, not parallel this time). Full narrative: `docs/005-production-hardening-merge-report.md`. See Step 6. |
+| 006 | wardrobe-item-photos | **DONE, implemented on branch `006-wardrobe-item-photos`, not yet merged — see Step 7.** Small, additive: persists the photo path already captured (and previously discarded) at photo-upload time, shows it on the closet card, falls back to the existing color-swatch display when absent. No new API endpoint. |
 
 **How 002 and 004's parallel work was reconciled (2026-07-16).** Both
 features were built in separate git worktrees at the same time (see the
@@ -657,7 +658,7 @@ full deploy hardening on Railway (beyond the bare deploy already done in
 result (retrieval+generation), not just KB retrieval — LiteLLM's own
 per-call semantic cache can't reach retrieval at all (see below).
 
-> **Full spec-kit cycle run — code complete, deploy pending a redeploy.**
+> **Full spec-kit cycle run — merged to `main`, redeployed, and verified live end-to-end.**
 > `/speckit.clarify` resolved 4 ambiguities (per-user-only cache scope,
 > LangSmith tracing satisfies FR-010, same-provider-only retry, a concrete
 > sub-second cache-hit target). `/speckit.plan` → research.md/data-model.md/
@@ -705,14 +706,19 @@ per-call semantic cache can't reach retrieval at all (see below).
 >   `with_structured_output`.
 > - **US1 (deploy)**: the three Feature-003 manual steps (Supabase Storage
 >   bucket, Railway, Vercel) are now all confirmed working by the project
->   owner — Railway had a real issue (container booted cleanly every time,
->   then got stopped a few seconds later, no traceback) that turned out to
->   be a dashboard-side health-check/service-type config, not a code issue
->   (`psycopg[binary]` and the deploy port were both ruled out during
->   troubleshooting). **The live backend is still running pre-005 code** —
->   validating this feature's actual changes live (the cache, the
->   guardrail, LiteLLM routing, the new `/health`) needs a redeploy after
->   this branch merges, not before.
+>   owner — Railway had a real issue during this feature's own pre-merge
+>   testing (container booted cleanly every time, then got stopped a few
+>   seconds later, no traceback) that turned out to be a dashboard-side
+>   health-check/service-type config, not a code issue (`psycopg[binary]`
+>   and the deploy port were both ruled out during troubleshooting). **A
+>   second, different Railway issue surfaced during the post-merge
+>   redeploy**: the public domain's Networking target port didn't match
+>   the port the app actually bound to, producing "Application failed to
+>   respond" from a perfectly healthy container — fixed by aligning the
+>   target port and pinning `PORT` explicitly. `/health` and `/docs`
+>   confirmed reachable on the public URL afterward — this feature's
+>   actual changes (cache, guardrail, LiteLLM routing, the new `/health`)
+>   are live.
 > - Also added, beyond the original plan: `GET /health` now actually checks
 >   Postgres + Qdrant reachability (`503` naming the failed dependency)
 >   instead of always returning a static `200 ok` — a `/speckit.analyze`
@@ -724,19 +730,132 @@ per-call semantic cache can't reach retrieval at all (see below).
 >   test's cached result caused a real, reproducible cross-file failure).
 >   Fixed with a global autouse fixture in `tests/conftest.py`, the same
 >   pattern as `db_session`'s rollback isolation but for Redis.
-> - **One known, unresolved intermittent test failure**:
->   `test_closet_edit_invalidates_the_cache` failed twice across this
->   session's ~275-test full-suite runs, but passed in 6 separate narrower
->   reproductions (3x isolation, paired with its preceding test, an
->   18-test combined-file rerun, a manual script) — the underlying
->   fingerprint/cache mechanism is verified correct; documented in the test
->   itself as full-suite-only and not yet root-caused (leading hypothesis:
->   Supabase pooler contention under this session's own concurrent
->   activity, not a logic bug). Worth a clean look if it recurs.
+> - **The "intermittent" test failure above was actually root-caused during
+>   the merge session, and it wasn't flaky at all**: `get_session` isn't
+>   overridden in this test file's `client` fixture (unlike the
+>   `db_session`-isolated tests elsewhere), so its `PATCH` commits for real
+>   against the live `EVAL_BASELINE_USER_ID` wardrobe — and the test
+>   patched a **hardcoded** pattern string, never resetting it. Confirmed
+>   directly by reading the row: it already carried that exact literal
+>   from a prior run. Every run after the first was a no-op edit, making
+>   the resulting "cache hit" *correct* behavior on unchanged data, not a
+>   bug — which also explains why isolated reruns "passed": pure luck of
+>   what the field happened to hold beforehand. Fixed with a
+>   `uuid.uuid4()`-suffixed value per invocation. Full narrative:
+>   `docs/005-production-hardening-merge-report.md`.
 > - Full no-regression gate: `retrieval_recall` byte-identical to the
->   archived baseline (T013); ruff clean on every file this feature
->   touches. `tasks.md`: 24/25 tasks done — only T008 (live-URL validation)
->   remains, blocked on the pending redeploy above.
+>   archived baseline (T013), and re-confirmed again post-merge (0.91,
+>   `advanced` strategy). ruff clean on every file this feature touches.
+>   `tasks.md`: 25/25 tasks done. T008 (live-URL validation) is complete —
+>   the redeploy happened, and a real issue surfaced and got fixed during
+>   it: the Railway public domain's Networking target port didn't match
+>   the port the app actually bound to (`8080`, from `--port $PORT`),
+>   producing "Application failed to respond" despite a perfectly healthy
+>   container — a different issue from the pre-merge session's own
+>   dashboard health-check hiccup noted above. Fixed by aligning the
+>   target port and pinning `PORT=8080` explicitly so the two can't drift
+>   apart again. `/health` and `/docs` both confirmed reachable on the
+>   public URL afterward.
+
+## Step 7: Feature 006, wardrobe-item-photos
+
+Not part of the original 5-feature plan — added after all 5 shipped, from
+a direct user request: closet cards show name/fabric/color but not the
+item's actual photo, even though one already exists in Storage for every
+item added via the photo-upload flow (Feature 003).
+
+> **Spec + plan + tasks done — not yet implemented.** Full spec-kit cycle
+> through `/speckit.analyze` run in a planning session, deliberately kept
+> minimal per explicit instruction. Grounded in a direct codebase read
+> before writing anything (not assumed): `photo_path` is already captured
+> at upload time (`CreateWardrobeItemFromUploadRequest.photo_path`) but
+> silently discarded today — not a `wardrobe_items` column, not on the
+> `WardrobeItem` schema, not returned by `GET /wardrobe/items`. Also
+> confirmed the frontend already has an authenticated Supabase client
+> (`lib/supabase-client.ts`) that can generate signed URLs against the
+> private `wardrobe-photos` bucket's existing per-user RLS policies
+> (Feature 003/005) directly, client-side — so this needs **no new backend
+> endpoint**, just persisting and returning one field.
+>
+> Single user story (no smaller independently-valuable slice exists):
+> show the real photo when `photo_path` is present, keep today's
+> color-swatch-only card otherwise (catalog items, and any photo-uploaded
+> item created before this migration — not retroactively backfillable,
+> the original path was never captured for those). Color/hex/pattern
+> always shown regardless of whether a photo is also shown. Any
+> photo-retrieval failure falls back to swatch-only, never a broken image
+> or an error.
+>
+> `/speckit.analyze` found one MEDIUM finding (FR-007's owner-only
+> guarantee had no explicit re-verification step, even though it relies
+> on already-tested RLS policies) — fixed directly in `quickstart.md`
+> rather than deferred, given how cheap the fix was. Zero CRITICAL/HIGH
+> findings; 9/10 requirements fully task-mapped, 1/10 (the one just
+> mentioned) partially mapped and then closed.
+>
+> Constitution Check: Principles I-V are N/A (touches no retrieval/
+> generation/scoring code at all — this is the first feature since 001 to
+> be entirely outside that surface). Principle VI (Schema Stability)
+> passes — one new nullable, additive field, same pattern as
+> `fabric`/`pattern`/`fit` before it. Principle VII (contracts) passes,
+> with an explicit task to regenerate `frontend/lib/api-types.ts` rather
+> than hand-edit it.
+>
+> Own worktree, `/home/fateme/Projects/w2w/what-to-wear-006`, branch
+> `006-wardrobe-item-photos` — not developed in parallel with anything
+> else. Full task list: `specs/006-wardrobe-item-photos/tasks.md` (12
+> tasks, T001-T012, all done).
+>
+> **Implemented (2026-07-16), two commits on `006-wardrobe-item-photos`,
+> not yet merged to `main`.** Backend: additive migration `0004` adds
+> nullable `photo_path` on `wardrobe_items`; `WardrobeItemRow`/
+> `WardrobeItem` gain the field; `create_wardrobe_item_from_upload` sets
+> it from the already-received (previously discarded) request field;
+> `_to_wardrobe_item` (used by every read path, including `GET
+> /wardrobe/items`) returns it. New DB round-trip test
+> (`test_wardrobe_item_photo_path.py`) confirms it's set for
+> photo-uploaded items and `None` for catalog-sourced ones. Full backend
+> suite green (280 passed, 0 failed) after also restoring this worktree's still
+> -missing `data/fixtures/wardrobe.json`, `data/books/`, `data/wikipedia/`
+> — a deeper instance of the already-documented "fresh worktree drops
+> gitignored `backend/data/`" gotcha than what this worktree started with
+> (see CLAUDE.md's Gotchas; `data/kb/` and `golden_set.yaml` had been
+> force-added, but the raw KB source corpus and the wardrobe fixture
+> hadn't, so `test_seed.py` and both `test_suggest_cache.py`/
+> `test_suggest_refinement.py` failed for a purely environmental reason
+> unrelated to this feature's own change, until copied from a sibling
+> worktree — not committed, still gitignored, so a future worktree will
+> hit this again). `ruff check`/`format` clean.
+>
+> Frontend: `lib/api-types.ts` regenerated from the running backend
+> (confirms `photo_path` on the generated `WardrobeItem` type);
+> `ClosetItemCard.tsx` resolves `item.photo_path` to a signed URL via
+> `supabase.storage.from("wardrobe-photos").createSignedUrl(...)` in a
+> `useEffect` and renders it above the swatch row when present — any
+> failure (absent path, expired/missing object, network error) leaves
+> the card exactly as it rendered before this feature, no broken `<img>`.
+> `typecheck`/`lint`/`build` all clean; `next build` confirms `/closet`
+> renders with no import-time crash.
+>
+> **What wasn't done: live browser verification against a real signed-in
+> session** (quickstart.md steps 2-4 — seeing an actual photo render,
+> confirming per-user isolation, simulating a signed-URL failure).
+> `SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_URL` in this worktree's env point
+> at the live production Supabase project, not a local/sandboxed
+> instance, and no service-role key is available to create and then
+> clean up a throwaway test account — creating one to drive a Playwright
+> check would leave a permanent stray row in production Auth. Left for
+> the project owner to run manually, same as `quickstart.md` describes.
+> Separately, an in-session slip during this verification attempt:
+> `pkill -f "next dev"` (meant to stop a throwaway dev server this
+> session had started on port 3001) also killed an already-running dev
+> server on port 3000 in this same worktree (PID 2538285, up since
+> before this implementation session started) that this session hadn't
+> started and didn't own — flagged to the user live when it happened;
+> if that server mattered, it needs restarting manually.
+>
+> Not yet merged to `main` — the owner is handling review/merge from the
+> planning session, per this feature's own kickoff instructions.
 
 ## The rule that matters most
 
