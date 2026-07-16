@@ -71,15 +71,26 @@ So:
   + `/suggest` → refinement) are paused**, deliberately reordered behind
   Feature 003 — see below. Full spec/plan/tasks in `specs/002-styling-agent/`.
   See SDD-HANDOFF Step 3.
-- **Next: Feature 003 (mvp-app), redefined from "closet-ingestion."** A
-  milestone-driven, minimal, vertical (backend+frontend together) slice:
-  sign-in → add-item-by-photo (VLM, one item per photo) → view closet → get
-  suggestions (via the existing `/recommend`, not `/suggest`) → deployed
-  publicly (Railway + Vercel). Absorbs the original Feature 003's core plus a
-  thin slice of Feature 005 (bare deploy only). `/design` (committed) is the
-  design source; `docs/design-backend-conflict-report.md` (local, untracked)
-  has the full conflict audit that drove this scope. Branch `003-mvp-app`.
-  See SDD-HANDOFF Step 4 for the full required/deferred breakdown.
+- **Feature 003 (mvp-app), redefined from "closet-ingestion" — code complete,
+  not yet deployed.** Full spec-kit cycle run on branch `003-mvp-app`.
+  Backend: additive `pattern`/`fit` migration, CORS middleware, `vision.py`
+  (VLM photo→attribute extraction) + `storage.py` (Supabase Storage upload,
+  caller's own bearer token, no service key), two new endpoints
+  (`POST /wardrobe/items/extract`, `POST /wardrobe/items/upload`) — parallel
+  to, not replacing, the existing catalog-add path. `/recommend`,
+  `/wardrobe/items` CRUD, and JWT auth all reused unchanged. 149 existing +
+  11 new backend tests pass, ruff clean. Frontend: first code in
+  `frontend/` — Next.js app (App Router, TypeScript) covering all 4 required
+  user stories (sign-in/up, add-by-photo, view closet, get a suggestion),
+  consuming the backend's OpenAPI schema for types (constitution Principle
+  VII — generated and verified, not hand-maintained). typecheck/lint/build
+  clean; smoke-tested against a locally running backend. **Remaining: 3
+  manual, owner-only steps** — create the Supabase Storage `wardrobe-photos`
+  bucket + RLS policy, deploy backend to Railway, deploy frontend to Vercel
+  (`specs/003-mvp-app/tasks.md` T010/T037/T038/T039) — no coding session has
+  the dashboard access these need. See SDD-HANDOFF Step 4.
+- **Next: those 3 deploy steps, then resume Feature 002 Phases 2–4** (paused
+  behind 003 — see SDD-HANDOFF Step 3), or start Feature 004.
 
 ## The rules that bite hardest (full text in the constitution)
 
@@ -135,6 +146,23 @@ the DB vars). Full run/architecture detail: `backend/README.md`.
 - **Supabase pooler (port 6543)** doesn't support server-side prepared
   statements — the engine disables them; migrations prefer the direct 5432 URL
   when reachable. See `specs/001-closet-persistence/research.md`.
+- **Node.js isn't preinstalled in a fresh sandbox** (confirmed in the Feature
+  003 session). No passwordless sudo either. Install via nvm (user-level, no
+  root): `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh
+  | bash && nvm install --lts`. If the coding tool runs each command through a
+  single long-lived shell process (rather than a fresh login shell per
+  command), edits to `~/.zshenv`/`~/.zshrc` made *after* that process started
+  won't take effect for the rest of the session — prefix Node/npm commands
+  with `export PATH="$HOME/.nvm/versions/node/<version>/bin:$PATH"` instead of
+  relying on shell-startup-file sourcing.
+- **`frontend/lib/api-types.ts` needs a reachable backend to (re)generate** —
+  `npm run fetch:openapi` curls `/openapi.json` from a *running* instance
+  (local `uvicorn` or the deployed Railway URL). There's no way to generate
+  it from static source alone; start the backend first.
+- **The Supabase Storage `wardrobe-photos` bucket + its per-user RLS policy
+  is a manual, one-time dashboard step** (Feature 003), not something any
+  migration or seed script creates — see `specs/003-mvp-app/quickstart.md`
+  Prerequisites. `storage.py` will fail every upload until this exists.
 
 ## Git
 

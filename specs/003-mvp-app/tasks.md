@@ -29,10 +29,10 @@ and frontend tasks in build order, not backend-then-frontend.
 
 **Purpose**: Project initialization — first code ever written to `frontend/`.
 
-- [X T001 Scaffold Next.js 15 (App Router, TypeScript) app in `frontend/` (`package.json`, `tsconfig.json`, `next.config.ts`, `app/` root)
-- [X T002 [P] Configure frontend lint/format (ESLint + Prettier configs) in `frontend/`
-- [X T003 [P] Install frontend runtime deps (`@supabase/supabase-js`) and dev dep (`openapi-typescript`) in `frontend/package.json`
-- [X T004 [P] Add `frontend/lib/api-types.ts` generation in `frontend/package.json`: a `fetch:openapi` script (`curl $API_BASE_URL/openapi.json -o openapi.json`, checked-in snapshot) plus a `gen:types` script (`openapi-typescript ./openapi.json -o lib/api-types.ts`) — `gen:types` depends on `fetch:openapi` having been run at least once
+- [X] T001 Scaffold Next.js 15 (App Router, TypeScript) app in `frontend/` (`package.json`, `tsconfig.json`, `next.config.ts`, `app/` root)
+- [X] T002 [P] Configure frontend lint/format (ESLint + Prettier configs) in `frontend/`
+- [X] T003 [P] Install frontend runtime deps (`@supabase/supabase-js`) and dev dep (`openapi-typescript`) in `frontend/package.json`
+- [X] T004 [P] Add `frontend/lib/api-types.ts` generation in `frontend/package.json`: a `fetch:openapi` script (`curl $API_BASE_URL/openapi.json -o openapi.json`, checked-in snapshot) plus a `gen:types` script (`openapi-typescript ./openapi.json -o lib/api-types.ts`) — `gen:types` depends on `fetch:openapi` having been run at least once
 
 **Checkpoint**: `npm run dev` in `frontend/` serves an empty Next.js shell.
 
@@ -47,15 +47,15 @@ cross-origin without it), and the additive schema change (US2 writes
 
 **⚠️ CRITICAL**: No user story work starts until this phase is complete.
 
-- [X T005 Add `CORSMiddleware` to `backend/src/whattowear/api.py`, origins from new `WTW_CORS_ORIGINS` env var (comma-separated, default `*`); document in `backend/.env.example`
-- [X T006 [P] Create Alembic migration `backend/alembic/versions/0002_add_pattern_fit.py` — additive nullable `pattern`, `fit` columns on `wardrobe_items` only (mirrors `0001`'s `fabric`/`source` precedent)
-- [X T007 [P] Add `pattern: Optional[str]`, `fit: Optional[str]` to `WardrobeItem` and `WardrobeItemPatch` in `backend/src/whattowear/schema.py`
-- [X T008 Add `pattern`, `fit` nullable `String` columns to `WardrobeItemRow` in `backend/src/whattowear/models.py` (depends on T006)
-- [X T009 Update `crud._to_wardrobe_item()` to map `pattern`/`fit` in `backend/src/whattowear/crud.py` (depends on T007, T008)
+- [X] T005 Add `CORSMiddleware` to `backend/src/whattowear/api.py`, origins from new `WTW_CORS_ORIGINS` env var (comma-separated, default `*`); document in `backend/.env.example`
+- [X] T006 [P] Create Alembic migration `backend/alembic/versions/0002_add_pattern_fit.py` — additive nullable `pattern`, `fit` columns on `wardrobe_items` only (mirrors `0001`'s `fabric`/`source` precedent)
+- [X] T007 [P] Add `pattern: Optional[str]`, `fit: Optional[str]` to `WardrobeItem` and `WardrobeItemPatch` in `backend/src/whattowear/schema.py`
+- [X] T008 Add `pattern`, `fit` nullable `String` columns to `WardrobeItemRow` in `backend/src/whattowear/models.py` (depends on T006)
+- [X] T009 Update `crud._to_wardrobe_item()` to map `pattern`/`fit` in `backend/src/whattowear/crud.py` (depends on T007, T008)
 - [ ] T010 Manual one-time Supabase setup: create Storage bucket `wardrobe-photos` with a per-`{user_id}`-folder RLS policy (see `quickstart.md` Prerequisites) — no repo file, tracked here so it isn't skipped
-- [X T011 [P] Create `frontend/lib/supabase-client.ts` — Supabase Auth JS client (env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
-- [X T012 Create `frontend/lib/api-client.ts` — thin `apiFetch<T>()` wrapper attaching the Supabase session's JWT as `Authorization: Bearer`, typed via `lib/api-types.ts`; on a `401` response, redirect to `/sign-in` **without discarding caller-held in-progress state** (the caller — e.g. T029's draft form — is responsible for holding its own unsaved data until resubmit, this wrapper only redirects) (depends on T004, T011)
-- [X T013 Create app shell + auth guard in `frontend/app/layout.tsx` — redirects to `/sign-in` when no Supabase session exists (depends on T011)
+- [X] T011 [P] Create `frontend/lib/supabase-client.ts` — Supabase Auth JS client (env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+- [X] T012 Create `frontend/lib/api-client.ts` — thin `apiFetch<T>()` wrapper attaching the Supabase session's JWT as `Authorization: Bearer`, typed via `lib/api-types.ts`; on a `401` response, redirect to `/sign-in` **without discarding caller-held in-progress state** (the caller — e.g. T029's draft form — is responsible for holding its own unsaved data until resubmit, this wrapper only redirects) (depends on T004, T011)
+- [X] T013 Create app shell + auth guard in `frontend/app/layout.tsx` — redirects to `/sign-in` when no Supabase session exists (depends on T011)
 
 **Checkpoint**: Backend runs with CORS + migrated schema; frontend has a
 typed API client and an auth-gated shell. User story work can begin.
@@ -77,9 +77,9 @@ already-verified Supabase JWT the auth guard (T013) expects.
 
 ### Implementation for User Story 1
 
-- [X T014 [P] [US1] Build sign-up page (`supabase.auth.signUp`) in `frontend/app/(auth)/sign-up/page.tsx`
-- [X T015 [P] [US1] Build sign-in page (`supabase.auth.signInWithPassword`) in `frontend/app/(auth)/sign-in/page.tsx`
-- [X T016 [US1] Add sign-out control + signed-in identity display to the app shell in `frontend/app/layout.tsx` (depends on T013)
+- [X] T014 [P] [US1] Build sign-up page (`supabase.auth.signUp`) in `frontend/app/(auth)/sign-up/page.tsx`
+- [X] T015 [P] [US1] Build sign-in page (`supabase.auth.signInWithPassword`) in `frontend/app/(auth)/sign-in/page.tsx`
+- [X] T016 [US1] Add sign-out control + signed-in identity display to the app shell in `frontend/app/layout.tsx` (depends on T013)
 
 **Checkpoint**: US1 is fully functional and testable independently — sign up,
 reload-persists, sign out/in, anonymous redirect all work.
@@ -99,25 +99,25 @@ shows the corrected value. Submit a blurry/no-garment photo, confirm a clear
 
 ### Tests for User Story 2
 
-- [X T017 [US2] Unit tests for extraction payload building + `ExtractedAttributes` validation (LLM call mocked) in `backend/tests/unit/test_vision.py` — written against `vision.py`'s intended interface; expected to fail (or be written alongside) until T020 lands, not a true parallel/independent task
-- [X T018 [US2] Integration tests for `POST /wardrobe/items/extract` and `POST /wardrobe/items/upload` (incl. `extraction_ok: false` path, a 422 when `fabric`/`pattern`/`fit` is blank on upload, and a cross-user isolation assertion — a second user's token must never see or overwrite the first user's uploaded item, matching the precedent in `tests/integration/test_recommend_auth.py`) in `backend/tests/integration/test_wardrobe_photo_flow.py` (depends on T023, T024)
+- [X] T017 [US2] Unit tests for extraction payload building + `ExtractedAttributes` validation (LLM call mocked) in `backend/tests/unit/test_vision.py` — written against `vision.py`'s intended interface; expected to fail (or be written alongside) until T020 lands, not a true parallel/independent task
+- [X] T018 [US2] Integration tests for `POST /wardrobe/items/extract` and `POST /wardrobe/items/upload` (incl. `extraction_ok: false` path, a 422 when `fabric`/`pattern`/`fit` is blank on upload, and a cross-user isolation assertion — a second user's token must never see or overwrite the first user's uploaded item, matching the precedent in `tests/integration/test_recommend_auth.py`) in `backend/tests/integration/test_wardrobe_photo_flow.py` (depends on T023, T024)
 
 ### Backend Implementation for User Story 2
 
-- [X T019 [P] [US2] Add `ExtractedAttributes` model to `backend/src/whattowear/schema.py`
-- [X T020 [P] [US2] Create `backend/src/whattowear/vision.py` — `extract_attributes_from_image()` using `config.get_chat_model().with_structured_output(ExtractedAttributes)` with a multimodal (base64 image) human message (depends on T019)
-- [X T021 [P] [US2] Create `backend/src/whattowear/storage.py` — `upload_wardrobe_photo(user_id, file_bytes, filename, access_token)` uploading to the `wardrobe-photos` bucket under `{user_id}/{uuid4}-{filename}` using the caller's own bearer token (depends on T010)
-- [X T022 [US2] Add `PhotoExtractionResponse`, `CreateWardrobeItemFromUploadRequest` models to `backend/src/whattowear/schema.py` — `fabric`/`pattern`/`fit` are **required** (non-optional `str`) on `CreateWardrobeItemFromUploadRequest` specifically, so a 422 rejects a blank submission (SC-003); `WardrobeItem`/`WardrobeItemPatch` keep all three optional, unchanged (depends on T019, T007)
-- [X T023 [US2] Add `POST /wardrobe/items/extract` endpoint to `backend/src/whattowear/api.py` per `contracts/wardrobe-items-extract.md` (depends on T020, T021, T022)
-- [X T024 [US2] Add `crud.create_wardrobe_item_from_upload()` in `backend/src/whattowear/crud.py`, then `POST /wardrobe/items/upload` endpoint in `backend/src/whattowear/api.py` per `contracts/wardrobe-items-upload.md` (depends on T009, T022)
-- [X T025 [P] [US2] Add `vision_cases:` section to `backend/data/golden_set.yaml` + sample photos in `backend/data/fixtures/vision_samples/`
-- [X T026 [US2] Create `backend/src/whattowear/eval/vision_harness.py` — checks extraction output against `vision_cases:` (depends on T020, T025)
+- [X] T019 [P] [US2] Add `ExtractedAttributes` model to `backend/src/whattowear/schema.py`
+- [X] T020 [P] [US2] Create `backend/src/whattowear/vision.py` — `extract_attributes_from_image()` using `config.get_chat_model().with_structured_output(ExtractedAttributes)` with a multimodal (base64 image) human message (depends on T019)
+- [X] T021 [P] [US2] Create `backend/src/whattowear/storage.py` — `upload_wardrobe_photo(user_id, file_bytes, filename, access_token)` uploading to the `wardrobe-photos` bucket under `{user_id}/{uuid4}-{filename}` using the caller's own bearer token (depends on T010)
+- [X] T022 [US2] Add `PhotoExtractionResponse`, `CreateWardrobeItemFromUploadRequest` models to `backend/src/whattowear/schema.py` — `fabric`/`pattern`/`fit` are **required** (non-optional `str`) on `CreateWardrobeItemFromUploadRequest` specifically, so a 422 rejects a blank submission (SC-003); `WardrobeItem`/`WardrobeItemPatch` keep all three optional, unchanged (depends on T019, T007)
+- [X] T023 [US2] Add `POST /wardrobe/items/extract` endpoint to `backend/src/whattowear/api.py` per `contracts/wardrobe-items-extract.md` (depends on T020, T021, T022)
+- [X] T024 [US2] Add `crud.create_wardrobe_item_from_upload()` in `backend/src/whattowear/crud.py`, then `POST /wardrobe/items/upload` endpoint in `backend/src/whattowear/api.py` per `contracts/wardrobe-items-upload.md` (depends on T009, T022)
+- [X] T025 [P] [US2] Add `vision_cases:` section to `backend/data/golden_set.yaml` + sample photos in `backend/data/fixtures/vision_samples/`
+- [X] T026 [US2] Create `backend/src/whattowear/eval/vision_harness.py` — checks extraction output against `vision_cases:` (depends on T020, T025)
 
 ### Frontend Implementation for User Story 2
 
-- [X T027 [US2] Build add-item page (camera capture / gallery file picker → `POST /wardrobe/items/extract`) in `frontend/app/closet/add/page.tsx` (depends on T012, T023)
-- [X T028 [US2] Build editable extracted-attributes form (all 8 fields, category/formality/season as pickers matching the full frozen taxonomy, pattern/fit/fabric as free text) in `frontend/components/ExtractedItemForm.tsx` — disable the save action client-side until `fabric`/`pattern`/`fit` are all non-blank (SC-003; the backend 422 in T022/T024 is the enforced fallback, this is the UX-level guard)
-- [X T029 [US2] Wire save action (`POST /wardrobe/items/upload`) and the `extraction_ok: false` fallback (manual-entry state, no crash) in `frontend/app/closet/add/page.tsx`; hold the draft in component state so a `401` mid-flow (session expiry, see T012) redirects to sign-in without discarding what the user already entered (depends on T024, T027, T028)
+- [X] T027 [US2] Build add-item page (camera capture / gallery file picker → `POST /wardrobe/items/extract`) in `frontend/app/closet/add/page.tsx` (depends on T012, T023)
+- [X] T028 [US2] Build editable extracted-attributes form (all 8 fields, category/formality/season as pickers matching the full frozen taxonomy, pattern/fit/fabric as free text) in `frontend/components/ExtractedItemForm.tsx` — disable the save action client-side until `fabric`/`pattern`/`fit` are all non-blank (SC-003; the backend 422 in T022/T024 is the enforced fallback, this is the UX-level guard)
+- [X] T029 [US2] Wire save action (`POST /wardrobe/items/upload`) and the `extraction_ok: false` fallback (manual-entry state, no crash) in `frontend/app/closet/add/page.tsx`; hold the draft in component state so a `401` mid-flow (session expiry, see T012) redirects to sign-in without discarding what the user already entered (depends on T024, T027, T028)
 
 **Checkpoint**: US1 + US2 both work independently — a signed-in user can add
 a real item by photo, corrected values save.
@@ -138,9 +138,9 @@ user-scoped (Feature 001).
 
 ### Implementation for User Story 3
 
-- [X T030 [US3] Build closet grid/list view calling `GET /wardrobe/items` in `frontend/app/closet/page.tsx` (depends on T012)
-- [X T031 [P] [US3] Build item display component (category, colors, formality, warmth, season, fabric, pattern, fit) in `frontend/components/ClosetItemCard.tsx`
-- [X T032 [US3] Add empty-state UI (zero items, not an error) in `frontend/app/closet/page.tsx` (depends on T030)
+- [X] T030 [US3] Build closet grid/list view calling `GET /wardrobe/items` in `frontend/app/closet/page.tsx` (depends on T012)
+- [X] T031 [P] [US3] Build item display component (category, colors, formality, warmth, season, fabric, pattern, fit) in `frontend/components/ClosetItemCard.tsx`
+- [X] T032 [US3] Add empty-state UI (zero items, not an error) in `frontend/app/closet/page.tsx` (depends on T030)
 
 **Checkpoint**: US1 + US2 + US3 all independently functional.
 
@@ -161,9 +161,9 @@ No backend tasks — `POST /recommend` already exists, is already JWT-gated
 
 ### Implementation for User Story 4
 
-- [X T033 [US4] Build suggestion request page (free-text field → `POST /recommend`) in `frontend/app/suggest/page.tsx` (depends on T012)
-- [X T034 [P] [US4] Build outfit + rationale result display in `frontend/components/SuggestionResult.tsx`
-- [X T035 [US4] Handle the "closet can't fulfill this request" explanation state (no error, no fabricated outfit) in `frontend/app/suggest/page.tsx` (depends on T033)
+- [X] T033 [US4] Build suggestion request page (free-text field → `POST /recommend`) in `frontend/app/suggest/page.tsx` (depends on T012)
+- [X] T034 [P] [US4] Build outfit + rationale result display in `frontend/components/SuggestionResult.tsx`
+- [X] T035 [US4] Handle the "closet can't fulfill this request" explanation state (no error, no fabricated outfit) in `frontend/app/suggest/page.tsx` (depends on T033)
 
 **Checkpoint**: All four P1 user stories independently functional — this is
 the full MVP.
@@ -175,7 +175,7 @@ the full MVP.
 **Purpose**: Responsive layout (SC-004) and public deployment (SC-005/FR-012),
 which no single story owns.
 
-- [X T036 [P] Responsive styling pass (phone-width and laptop-width viewports) across `frontend/app/**` and `frontend/components/**`, adapting design tokens from `design/_ds/nocturne-6d6fcdf7-6dc8-4d75-b4ec-a4605bf9306c/styles.css` (not a pixel-perfect port — full 6-value formality/6 category groups, no occasion-picker buttons)
+- [X] T036 [P] Responsive styling pass (phone-width and laptop-width viewports) across `frontend/app/**` and `frontend/components/**`, adapting design tokens from `design/_ds/nocturne-6d6fcdf7-6dc8-4d75-b4ec-a4605bf9306c/styles.css` (not a pixel-perfect port — full 6-value formality/6 category groups, no occasion-picker buttons)
 - [ ] T037 [P] Configure Railway deploy for backend: start command `uv run uvicorn whattowear.api:app --host 0.0.0.0 --port $PORT`; set env vars (incl. `WTW_CORS_ORIGINS`) in the Railway dashboard
 - [ ] T038 [P] Configure Vercel deploy for frontend: set env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_API_BASE_URL`) in the Vercel dashboard
 - [ ] T039 Run full `quickstart.md` validation locally, then again against the deployed Railway/Vercel URLs from a browser that never touched local dev (depends on T036, T037, T038)
