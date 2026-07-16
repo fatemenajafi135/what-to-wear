@@ -1,10 +1,15 @@
 """Eval harness (core, needs the gateway).
 
-Runs the pipeline over the golden set for each strategy, computes:
+Runs the compiled graph (pipeline/graph.py) over the golden set for each
+strategy — not the retired linear `pipeline.run.run_pipeline` (Feature 002
+Phase 3, T032a: one entrypoint, not two to keep in sync). Computes:
 - **verifiable checks** (owned-only, cites-grounded, every-choice-cites, and the
-  outfit-property checks), and
+  outfit-property checks),
 - **retrieval recall** (relevant rule_ids ∩ retrieved) — the crisp retrieval
-  metric that shows baseline < hybrid < advanced.
+  metric that shows baseline < hybrid < advanced, and
+- **scoring/ranking checks** (SC-003 outfit count, SC-005 all-four-dimensions) —
+  what actually measures the graph's `/suggest`-shaped output, not just
+  asserts it.
 
 It writes per-strategy JSONL run artifacts (user_input / reference /
 reference_contexts / response / retrieved_contexts + checks) that the isolated
@@ -14,18 +19,24 @@ reference_contexts / response / retrieved_contexts + checks) that the isolated
 from __future__ import annotations
 
 import json
+import uuid
 from collections import defaultdict
 
 from ..crud import EVAL_BASELINE_USER_ID
 from ..ingest.loaders import REPO_ROOT
 from ..kb import get_kb
 from ..pipeline import cite
-from ..pipeline.run import run_pipeline
+from ..pipeline.generator import GenOutput
+from ..pipeline.graph import get_compiled_graph
 from .golden_set import GoldenCase, load_cases
 from .properties import check_outfit
 
 ARTIFACTS_DIR = REPO_ROOT / "artifacts" / "eval_runs"
 STRATEGIES = ["baseline", "hybrid", "advanced"]
+
+# SC-003: 3-5 complete outfits when the closet can support them.
+_MIN_EXPECTED_OUTFITS = 3
+_MAX_EXPECTED_OUTFITS = 5
 
 
 def _user_input(case: GoldenCase) -> str:
@@ -39,17 +50,29 @@ def _rule_text_map() -> dict[str, str]:
 
 
 def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str]) -> dict:
-    run = run_pipeline(
-        case.occasion,
-        mood=case.mood,
-        formality=case.formality,
-        temp_c=case.temp_c,
-        strategy=strategy,
-        user_id=str(EVAL_BASELINE_USER_ID),
+    graph = get_compiled_graph()
+    thread_id = str(uuid.uuid4())
+    final_state = graph.invoke(
+        {
+            "occasion": case.occasion,
+            "mood": case.mood,
+            "formality": case.formality,
+            "temp_c": case.temp_c,
+            "strategy": strategy,
+            "thread_id": thread_id,
+            "user_id": str(EVAL_BASELINE_USER_ID),
+        },
+        config={"configurable": {"thread_id": thread_id}},
     )
-    wardrobe = {it.id: it for it in run.ctx.wardrobe}
-    retrieved_ids = run.retrieval.rule_ids()
-    gen = run.generation
+
+    ctx = final_state["ctx"]
+    retrieval = final_state["retrieval"]
+    gen: GenOutput = final_state["generated"]
+    scored = final_state["scored_outfits"]
+    result = final_state["result"]
+
+    wardrobe = {it.id: it for it in ctx.wardrobe}
+    retrieved_ids = retrieval.rule_ids()
 
     # retrieval recall (crisp)
     relevant = set(case.relevant_rule_ids)
@@ -60,9 +83,16 @@ def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str]) -> dict
     cites_ok, bad_cites = cite.all_cites_grounded(gen, set(retrieved_ids))
     every_cites = cite.every_choice_cites(gen)
 
-    # outfit-property checks on the first outfit
-    first = gen.outfits[0].items if gen.outfits else []
-    props = check_outfit(first, wardrobe, case.expected)
+    # outfit-property checks on the top-ranked outfit
+    top = scored[0].items if scored else []
+    props = check_outfit(top, wardrobe, case.expected)
+
+    # scoring/ranking checks (Phase 3) — SC-003, SC-005
+    outfit_count_in_range = _MIN_EXPECTED_OUTFITS <= len(scored) <= _MAX_EXPECTED_OUTFITS
+    all_have_four_scores = all(len(o.scores) == 4 for o in scored) if scored else True
+    ranked_descending = [o.rank_score for o in scored] == sorted(
+        (o.rank_score for o in scored), reverse=True
+    )
 
     return {
         "case_id": case.id,
@@ -70,17 +100,22 @@ def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str]) -> dict
         "user_input": _user_input(case),
         "reference": case.reference,
         "reference_contexts": [rule_text[r] for r in case.relevant_rule_ids if r in rule_text],
-        "response": cite.render_text(run.result),
-        "retrieved_contexts": [d.page_content for d in run.retrieval.all()],
+        "response": cite.render_text(result),
+        "retrieved_contexts": [d.page_content for d in retrieval.all()],
         "retrieval_recall": hit,
         "checks": {
             "owned_only": owned_ok,
             "cites_grounded": cites_ok,
             "every_choice_cites": every_cites,
+            "outfit_count_in_range": outfit_count_in_range,
+            "all_have_four_scores": all_have_four_scores,
+            "ranked_descending": ranked_descending,
             **props,
         },
         "hallucinated_items": hallucinated,
         "ungrounded_cites": bad_cites,
+        "num_outfits": len(scored),
+        "top_rank_score": scored[0].rank_score if scored else None,
     }
 
 
@@ -126,6 +161,12 @@ def summarize(rows_by_strategy: dict[str, list[dict]]) -> None:
                 val = sum(1 for r in rows if r["checks"].get(key)) / len(rows)
             line += f"{val:>12.2f}"
         print(line)
+
+    line = f"{'top_rank_score':<22}"
+    for rows in rows_by_strategy.values():
+        scored = [r["top_rank_score"] for r in rows if r["top_rank_score"] is not None]
+        line += f"{sum(scored) / len(scored):>12.2f}" if scored else f"{'-':>12}"
+    print(line)
 
 
 def main(strategies: list[str] | None = None, limit: int | None = None) -> None:
