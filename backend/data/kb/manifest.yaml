@@ -1,0 +1,210 @@
+# What to Wear — knowledge-base source registry.
+#
+# build_kb.py reads this and ingests every source with `ingest: true`.
+# status:  have | fetch | distill | want-later
+#   have        - file already local (see path)
+#   fetch       - pulled live at build time (Wikipedia)
+#   distill     - our own/authored or LLM-distilled cards stored as jsonl
+#   want-later  - logged, NOT ingested this phase (acquisition pending)
+# license: PD | CC-BY-SA | own | copyrighted
+# chunker: atomic (one rule/concept per chunk) | section (long articles)
+#
+# Legal policy (handoff §4): PD + CC-BY-SA + own + API data are ingestable.
+# Copyrighted books are REFERENCE-ONLY: a human/LLM distills rules in our own
+# words into jsonl cards; the book text itself is never stored -> ingest: false
+# on the book, ingest: true on the distilled card file.
+
+sources:
+  # ---------------- L1 Static (harmony / proportion) ----------------
+  # Wikipedia sources below are LOCAL refined pages (see wiki_refine.py) —
+  # downloaded complete from a browser into data/wikipedia/, then refined to
+  # clean .md. No live-fetch dependency; reproducible and reviewable.
+  - name: "Wikipedia: Color theory"
+    layer: L1
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "data/wikipedia/Color theory - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/Color_theory"
+    chunker: section
+    ingest: true
+
+  - name: "Wikipedia: Color harmony"
+    layer: L1
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "data/wikipedia/Harmony (color) - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/Harmony_(color)"
+    chunker: section
+    ingest: true
+
+  - name: "Wikipedia: Complementary colors"
+    layer: L1
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "data/wikipedia/Complementary colors - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/Complementary_colors"
+    chunker: section
+    ingest: true
+
+  - name: "Chevreul: Principles of Harmony & Contrast of Colours"
+    layer: L1
+    status: have
+    license: PD
+    loader: epub
+    path: "data/books/The laws of contrast of colour.epub"
+    url: "https://www.gutenberg.org/ebooks/76939"
+    chunker: section
+    ingest: true
+    notes: "19th-c prose - raw ingest is deliberate; raw-vs-distilled is the Task-6 experiment."
+
+  - name: "Munsell: A Color Notation"
+    layer: L1
+    status: have
+    license: PD
+    loader: epub
+    path: "data/books/A Color Notation by A. H. Munsell.epub"
+    url: "https://www.gutenberg.org/ebooks/26054"
+    chunker: section
+    ingest: true
+
+  - name: "Distilled L1 rules (harmony/proportion, our words)"
+    layer: L1
+    status: distill
+    license: own
+    loader: cards
+    path: "data/kb/l1_rules.jsonl"
+    url: "internal://l1_rules"
+    chunker: atomic
+    ingest: true
+    notes: "Includes rules distilled REFERENCE-ONLY from Dressing the Man & The Curated Closet."
+
+  # book sources kept for provenance ONLY - never raw-ingested
+  - name: "Dressing the Man (Flusser)"
+    layer: L1
+    status: have
+    license: copyrighted
+    loader: reference_only
+    path: "data/books/Alan Flusser - Dressing the Man_ Mastering the Art of Permanent Fashion (2002, HarperCollins).pdf"
+    url: "reference-only://dressing-the-man"
+    ingest: false
+    notes: "REFERENCE-ONLY. Distill menswear/proportion rules into l1_rules.jsonl. Text never stored."
+
+  - name: "The Curated Closet (Rees)"
+    layer: L1
+    status: have
+    license: copyrighted
+    loader: reference_only
+    path: "data/books/Rees, Anuschka - The curated closet _ a simple system for discovering your personal style and building your dream wardrobe (2016, Ten Speed Press).epub"
+    url: "reference-only://curated-closet"
+    ingest: false
+    notes: "REFERENCE-ONLY. Distill personal-style/wardrobe rules into l1_rules.jsonl."
+
+  # ---------------- L2 Seasonal (INGESTED but GATED) ----------------
+  - name: "Wikipedia: Color analysis"
+    layer: L2
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "data/wikipedia/Color analysis - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/Color_analysis"
+    chunker: section
+    ingest: true
+    notes: >
+      Formerly titled "Seasonal color analysis" on Wikipedia (current article is
+      "Color analysis"). Indexed with layer:L2 but the router NEVER selects L2
+      (no user coloring captured) — see the L2 design note: this should apply as
+      a soft rerank/boost over already-valid L4/L1 combinations, never a hard
+      filter, since the wardrobe is finite (resolved in conversation, not yet
+      implemented).
+
+  # ---------------- L3 Trendy (dense-retrieval showcase) ----------------
+  - name: "Wikipedia: 2020s in fashion"
+    layer: L3
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "data/wikipedia/2020s in fashion - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/2020s_in_fashion"
+    chunker: section
+    ingest: true
+
+  - name: "Distilled trend cards (Who What Wear / Vogue / Refinery29 / GQ)"
+    layer: L3
+    status: distill
+    license: own
+    loader: cards
+    path: "data/kb/l3_trend_cards.jsonl"
+    url: "internal://l3_trend_cards"
+    chunker: atomic
+    ingest: true
+    notes: "Distilled+linked only, full article text never stored. Refresh via external/trends.py (Tavily)."
+
+  # ---------------- L4 Occasion + Weather (structured filter) ----------------
+  - name: "Our dress-code definitions"
+    layer: L4
+    status: distill
+    license: own
+    loader: cards
+    path: "data/kb/l4_dresscodes.jsonl"
+    url: "internal://l4_dresscodes"
+    chunker: atomic
+    ingest: true
+    notes: "In-house occasion->formality->garment-band rules + temp_band garment guidance."
+
+  - name: "Wikipedia: Dress code"
+    layer: L4
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "data/wikipedia/Dress code - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/Dress_code"
+    chunker: section
+    ingest: true
+    notes: >
+      Covers Business casual, Formal wear, and Weddings as subsections already
+      (see the article's own headings) — Black tie, Cocktail attire, and
+      Semi-formal wear are separate articles not yet downloaded (see want-later).
+
+  # ---------------- want-later (logged, NOT ingested) ----------------
+  - name: "Wikipedia: Black tie"
+    layer: L4
+    status: want-later
+    license: CC-BY-SA
+    ingest: false
+    notes: 'Download complete + refine with wiki_refine.py, same as the other Wikipedia sources, then flip loader: wiki_md.'
+  - name: "Wikipedia: Cocktail attire"
+    layer: L4
+    status: want-later
+    license: CC-BY-SA
+    ingest: false
+  - name: "Wikipedia: Semi-formal wear"
+    layer: L4
+    status: want-later
+    license: CC-BY-SA
+    ingest: false
+  - name: "Color With Style (inclusivity: non-white skin tones)"
+    layer: L1
+    status: want-later
+    license: copyrighted
+    ingest: false
+    notes: "KEY inclusivity ref - open sources under-cover non-white palettes. Acquire licensed/open substitute."
+  - name: "Science of Sexy (body proportion)"
+    layer: L1
+    status: want-later
+    license: copyrighted
+    ingest: false
+    notes: "Body-proportion/silhouette open coverage is thin (handoff §4 known gap)."
+  - name: "Color Me Beautiful"
+    layer: L2
+    status: want-later
+    license: copyrighted
+    ingest: false
+  - name: "WGSN / Heuritech / Lyst (paid trend feeds)"
+    layer: L3
+    status: want-later
+    license: paid
+    ingest: false
+    notes: "Legal only if licensed. Post-MVP."
