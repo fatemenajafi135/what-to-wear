@@ -56,3 +56,15 @@ def get_current_user_id(
     except jwt.PyJWTError as e:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Invalid token: {e}") from e
     return payload["sub"]
+
+
+def get_bearer_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> str:
+    """The raw bearer token string, for passthrough to Supabase Storage
+    (Feature 003: mvp-app) — Storage verifies it itself via RLS, so this
+    dependency only extracts it, it doesn't re-verify (get_current_user_id,
+    used alongside it on the same endpoint, already does that)."""
+    if credentials is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")
+    return credentials.credentials

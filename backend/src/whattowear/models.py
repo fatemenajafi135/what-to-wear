@@ -57,5 +57,8 @@ class WardrobeItemRow(Base):
     catalog_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("catalog_items.id"), nullable=True
     )
+    # Additive, nullable (Feature 003) — catalog-sourced rows have neither.
+    pattern: Mapped[str | None] = mapped_column(String, nullable=True)
+    fit: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now(), nullable=False)

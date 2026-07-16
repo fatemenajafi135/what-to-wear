@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from .ingest.loaders import REPO_ROOT
 from .models import CatalogItemRow, WardrobeItemRow
-from .schema import WardrobeItem, WardrobeItemPatch
+from .schema import CreateWardrobeItemFromUploadRequest, WardrobeItem, WardrobeItemPatch
 
 WARDROBE_FIXTURE = REPO_ROOT / "data" / "fixtures" / "wardrobe.json"
 
@@ -47,6 +47,8 @@ def _to_wardrobe_item(row: WardrobeItemRow | CatalogItemRow) -> WardrobeItem:
         season=row.season,
         fabric=row.fabric,
         source=getattr(row, "source", None),
+        pattern=getattr(row, "pattern", None),
+        fit=getattr(row, "fit", None),
     )
 
 
@@ -161,6 +163,30 @@ def add_wardrobe_items_from_catalog(
     session.add_all(rows)
     session.commit()
     return [_to_wardrobe_item(r) for r in rows]
+
+
+def create_wardrobe_item_from_upload(
+    session: Session, user_id: str | uuid.UUID, req: CreateWardrobeItemFromUploadRequest
+) -> WardrobeItem:
+    """Persists a wardrobe item from user-confirmed photo-extraction
+    attributes. source='upload', no catalog_item_id -- parallel to, not
+    replacing, add_wardrobe_item_from_catalog (US2)."""
+    row = WardrobeItemRow(
+        user_id=uuid.UUID(str(user_id)),
+        category=req.category,
+        colors=req.colors,
+        fabric=req.fabric,
+        warmth=req.warmth,
+        formality=req.formality,
+        season=req.season,
+        pattern=req.pattern,
+        fit=req.fit,
+        source="upload",
+        catalog_item_id=None,
+    )
+    session.add(row)
+    session.commit()
+    return _to_wardrobe_item(row)
 
 
 def seed_catalog(session: Session) -> int:

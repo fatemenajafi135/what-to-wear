@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/nocturne-6d6fcdf7-6dc8-4d75-b4ec-a4605bf9306c/styles.css">
+  <script src="_ds/nocturne-6d6fcdf7-6dc8-4d75-b4ec-a4605bf9306c/_ds_bundle.js"></script>
+  <style>.no-scrollbar::-webkit-scrollbar{display:none}</style>
+  <style>
+    @keyframes add-item-spin{to{transform:rotate(360deg)}}
+    @keyframes add-item-pulse{0%,100%{opacity:.35}50%{opacity:.7}}
+  </style>
+  <style>
+    body{margin:0;background:var(--color-bg);color:var(--color-text)}
+    a{color:var(--color-accent)}
+    a:hover{color:var(--color-accent-2)}
+  </style>
+</helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:28px;padding:56px 24px;font-family:var(--font-body)">
+
+  <div style="text-align:center;max-width:480px">
+    <div style="font-family:var(--font-heading);font-weight:500;font-size:25px;letter-spacing:-0.015em;margin-bottom:6px">What to Wear</div>
+    <div style="font-size:13px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Clickable prototype — tap through the 5-step flow, or use the dots below the notch</div>
+  </div>
+
+  <div style="position:relative;padding:24px;border-radius:48px;background:color-mix(in srgb, var(--color-text) 6%, var(--color-bg));box-shadow:0 30px 60px -20px rgba(0,0,0,0.5)">
+    <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402,874">
+
+      <div style="height:100%;display:flex;flex-direction:column;background:var(--color-bg);padding-top:54px;box-sizing:border-box">
+
+        <!-- progress dots + back -->
+        <div style="display:{{ dotsRowDisplay }};align-items:center;gap:10px;padding:8px 20px 4px;flex:none">
+          <sc-if value="{{ showBack }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ back }}" class="btn btn-icon btn-secondary" style="flex:none">
+              <svg width="8" height="14" viewBox="0 0 8 14"><path d="M7 1L1 7l6 6" stroke="var(--color-text)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </button>
+          </sc-if>
+          <div style="display:flex;gap:7px;flex:1;justify-content:center">
+            <sc-for list="{{ dots }}" as="d" hint-placeholder-count="5">
+              <div onClick="{{ d.jump }}" style="width:{{ d.size }}px;height:{{ d.size }}px;border-radius:50%;background:{{ d.color }};cursor:pointer;transition:all .25s ease"></div>
+            </sc-for>
+          </div>
+          <div style="width:34px;flex:none"></div>
+        </div>
+
+        <!-- screen content -->
+        <div style="flex:1;position:relative;overflow:hidden">
+        <div style="height:100%;overflow:auto;padding:8px 24px 32px;box-sizing:border-box;opacity:{{ screenOpacity }};transform:{{ screenTransform }};transition:opacity .35s ease, transform .35s ease">
+
+          <!-- STEP 0: home -->
+          <sc-if value="{{ isStep0AndNotCloset }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;min-height:100%">
+
+              <div style="display:flex;align-items:center;gap:12px;padding:4px 0 8px">
+                <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="home-avatar" shape="circle" placeholder="Photo" style="width:44px;height:44px;flex:none" hint-size="44px,44px"></x-import>
+                <div>
+                  <div style="font-size:15px;font-weight:500">Alex Morgan</div>
+                  <div style="font-size:12px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Denim &amp; neutrals</div>
+                </div>
+              </div>
+
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:160px">
+                <button onClick="{{ next }}" class="btn btn-secondary" style="width:100%;height:52px;font-size:15px">What should I wear?</button>
+                <button onClick="{{ goCloset }}" class="btn btn-ghost" style="font-size:14px">Look at your closet</button>
+              </div>
+
+              <div style="font-size:13px;font-weight:500;margin-bottom:8px">Ask me to style you…</div>
+              <div>
+                <textarea ref="{{ homeInputRef }}" onKeyDown="{{ startChatOnEnter }}" class="input" placeholder="I want to go to the gym…" style="width:100%;min-height:88px;resize:none;font-family:var(--font-body);box-sizing:border-box"></textarea>
+                <button onClick="{{ startChatFromCta }}" class="btn btn-primary btn-block" aria-label="Send" style="width:100%;height:44px;font-size:14px;margin-top:10px">Send</button>
+              </div>
+
+              <div style="border-top:1px solid var(--color-neutral-700);margin:20px 0 16px"></div>
+
+              <div style="font-size:13px;font-weight:500;margin-bottom:10px">Future events</div>
+              <sc-if value="{{ calendarConnected }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                  <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="future-1" shape="rounded" radius="8" placeholder="Photo" style="width:100%;aspect-ratio:0.8;flex:none" hint-size="100%,90px"></x-import>
+                  <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="future-2" shape="rounded" radius="8" placeholder="Photo" style="width:100%;aspect-ratio:0.8;flex:none" hint-size="100%,90px"></x-import>
+                  <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="future-3" shape="rounded" radius="8" placeholder="Photo" style="width:100%;aspect-ratio:0.8;flex:none" hint-size="100%,90px"></x-import>
+                </div>
+              </sc-if>
+              <sc-if value="{{ calendarNotConnected }}" hint-placeholder-val="{{ false }}">
+                <div class="card" style="align-items:center;text-align:center;gap:10px;padding:22px 18px;border:1px dashed var(--color-neutral-600);background:transparent">
+                  <div style="width:40px;height:40px;border-radius:10px;background:var(--color-accent-900);display:flex;align-items:center;justify-content:center">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="var(--color-accent)" stroke-width="1.6"></rect><path d="M3 9H21" stroke="var(--color-accent)" stroke-width="1.6"></path><path d="M8 3V6M16 3V6" stroke="var(--color-accent)" stroke-width="1.6" stroke-linecap="round"></path></svg>
+                  </div>
+                  <div style="font-size:13px;font-weight:500">No calendar connected</div>
+                  <div style="font-size:12px;color:color-mix(in srgb, var(--color-text) 55%, transparent);line-height:1.5">Connect your calendar and upcoming events will show up here, styled and ready</div>
+                  <button onClick="{{ connectCalendar }}" class="btn btn-secondary" style="height:38px;font-size:13px;padding:0 16px;margin-top:4px">Connect calendar</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <!-- CLOSET -->
+          <sc-if value="{{ isCloset }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;min-height:100%">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 14px">
+                <button onClick="{{ exitCloset }}" class="btn btn-icon btn-secondary">
+                  <svg width="8" height="14" viewBox="0 0 8 14"><path d="M7 1L1 7l6 6" stroke="var(--color-text)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                </button>
+                <div style="font-size:15px;font-weight:500">Your closet</div>
+                <div style="width:34px"></div>
+              </div>
+
+              
+
+              <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin:0 -24px;padding-left:24px;padding-right:24px;scrollbar-width:none;-ms-overflow-style:none" class="no-scrollbar">
+                <sc-for list="{{ closetFilters }}" as="f" hint-placeholder-count="6">
+                  <div onClick="{{ f.toggle }}" style="cursor:pointer;user-select:none;white-space:nowrap;flex:none;padding:8px 15px;border-radius:9999px;font-size:13px;font-weight:500;background:{{ f.bg }};color:{{ f.fg }};transition:all .2s ease">{{ f.label }}</div>
+                </sc-for>
+              </div><div style="column-count:2;column-gap:10px;margin-top:12px;flex:1">
+                <sc-for list="{{ closetItems }}" as="ci" hint-placeholder-count="8">
+                  <div style="break-inside:avoid;margin-bottom:10px;opacity:{{ ci.opacity }};transform:{{ ci.scale }};max-height:{{ ci.maxH }};overflow:hidden;transition:opacity .3s ease, transform .3s ease, max-height .3s ease">
+                    <div class="card elev-sm" style="padding:8px;gap:6px">
+                      <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="{{ ci.slotId }}" shape="rounded" radius="8" placeholder="Photo" style="width:100%;aspect-ratio:{{ ci.ratio }};flex:none" hint-size="100%,140px"></x-import>
+                      <div style="font-size:12.5px;font-weight:500">{{ ci.label }}</div>
+                      <div style="font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">{{ ci.category }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ADD ITEM -->
+          <sc-if value="{{ isAddItem }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;min-height:100%;padding-bottom:70px">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 14px">
+                <button onClick="{{ exitAddItem }}" class="btn btn-icon btn-secondary">
+                  <svg width="8" height="14" viewBox="0 0 8 14"><path d="M7 1L1 7l6 6" stroke="var(--color-text)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                </button>
+                <div style="font-size:15px;font-weight:500">Add to closet</div>
+                <div style="width:34px"></div>
+              </div>
+
+              <div style="position:relative;width:100%;height:270px;flex:none;border-radius:16px;overflow:hidden;background:var(--color-neutral-800)">
+                <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="{{ photoSlotId }}" shape="rect" placeholder="Snap it and we'll handle the rest" style="width:100%;height:100%" hint-size="100%,270px"></x-import>
+
+                <sc-if value="{{ addItemIsEmpty }}" hint-placeholder-val="{{ true }}">
+                  <div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:20px;pointer-events:none">
+                    <div style="display:flex;gap:10px;pointer-events:auto">
+                      <button onClick="{{ openCamera }}" class="btn btn-secondary" style="height:42px;font-size:13px;padding:0 16px;display:flex;align-items:center;gap:7px">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 8h3l2-3h6l2 3h3v11H4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.6"></circle></svg>
+                        Camera
+                      </button>
+                      <button onClick="{{ openGallery }}" class="btn btn-secondary" style="height:42px;font-size:13px;padding:0 16px;display:flex;align-items:center;gap:7px">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6"></rect><circle cx="8.5" cy="9.5" r="1.5" stroke="currentColor" stroke-width="1.6"></circle><path d="M21 16l-5-5-9 9" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path></svg>
+                        Gallery
+                      </button>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ addItemIsUploading }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:9999px;background:rgba(0,0,0,0.55);backdrop-filter:blur(6px)">
+                    <div style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;animation:add-item-spin .7s linear infinite"></div>
+                    <div style="font-size:12px;color:#fff">Analyzing photo…</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ addItemHasPhotoResult }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ retakePhoto }}" class="btn btn-secondary" style="position:absolute;top:10px;right:10px;height:32px;font-size:12px;padding:0 12px">Retake</button>
+                </sc-if>
+
+                <sc-if value="{{ addItemIsMultiItem }}" hint-placeholder-val="{{ false }}">
+                  <sc-for list="{{ detectedBoxes }}" as="db" hint-placeholder-count="3">
+                    <div onClick="{{ db.toggle }}" style="position:absolute;top:{{ db.top }};left:{{ db.left }};width:{{ db.width }};height:{{ db.height }};border:2px solid {{ db.borderColor }};border-radius:8px;cursor:pointer;box-sizing:border-box;transition:opacity .2s ease, border-color .2s ease;opacity:{{ db.opacity }}">
+                      <div style="position:absolute;top:-11px;left:8px;padding:2px 8px;border-radius:9999px;background:{{ db.chipBg }};color:{{ db.chipFg }};font-size:11px;font-weight:500;white-space:nowrap">{{ db.label }}</div>
+                    </div>
+                  </sc-for>
+                </sc-if>
+              </div>
+
+              <sc-if value="{{ addItemIsError }}" hint-placeholder-val="{{ false }}">
+                <div class="card" style="margin-top:14px;align-items:center;text-align:center;gap:8px;padding:20px 16px;border:1px dashed var(--color-neutral-600);background:transparent">
+                  <div style="font-size:13px;font-weight:500">Couldn't process that photo</div>
+                  <div style="font-size:12px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Check your connection and try again</div>
+                  <button onClick="{{ retryUpload }}" class="btn btn-secondary" style="height:38px;font-size:13px;padding:0 16px;margin-top:2px">Try again</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ addItemIsLowConf }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px;padding:10px 12px;border-radius:10px;background:var(--color-neutral-800)">
+                  <div style="font-size:12.5px;color:color-mix(in srgb, var(--color-text) 75%, transparent)">Wasn't sure about a few things below — take a quick look</div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ addItemIsUploading }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
+                  <sc-for list="{{ skeletonRows }}" as="sk" hint-placeholder-count="5">
+                    <div style="height:20px;width:{{ sk.width }};border-radius:8px;background:var(--color-neutral-800);animation:add-item-pulse 1.2s ease-in-out infinite"></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ addItemIsMultiItem }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px;font-size:13px;font-weight:500">Found {{ detectedCountLabel }} in this photo</div>
+                <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+                  <sc-for list="{{ detectedRows }}" as="dr" hint-placeholder-count="3">
+                    <div onClick="{{ dr.toggle }}" class="card elev-sm" style="flex-direction:row;align-items:center;gap:12px;padding:10px 12px;cursor:pointer;opacity:{{ dr.rowOpacity }}">
+                      <div style="width:14px;height:14px;border-radius:4px;border:1.5px solid {{ dr.checkBorder }};background:{{ dr.checkBg }};flex:none;display:flex;align-items:center;justify-content:center;box-sizing:border-box">
+                        <sc-if value="{{ dr.selected }}" hint-placeholder-val="{{ true }}">
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                        </sc-if>
+                      </div>
+                      <div style="flex:1">
+                        <div style="font-size:13.5px;font-weight:500">{{ dr.label }}</div>
+                        <div style="font-size:11.5px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">{{ dr.meta }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ addItemShowFields }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:16px;display:flex;flex-direction:column;gap:16px">
+
+                  <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                      <div style="font-size:13px;font-weight:500">Primary color</div>
+                      <sc-if value="{{ colorField.confirmNeeded }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size:11px;color:var(--color-accent)">Confirm this</div>
+                      </sc-if>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
+                      <sc-for list="{{ colorField.options }}" as="c" hint-placeholder-count="7">
+                        <div onClick="{{ c.select }}" title="{{ c.label }}" style="width:36px;height:36px;border-radius:50%;background:{{ c.swatch }};cursor:pointer;box-shadow:{{ c.ring }};border:1px solid rgba(0,0,0,0.12)"></div>
+                      </sc-for>
+                    </div>
+                  </div>
+
+                  <sc-for list="{{ chipFields }}" as="cf" hint-placeholder-count="4">
+                    <div>
+                      <div onClick="{{ cf.toggle }}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;min-height:32px">
+                        <div style="font-size:13px;font-weight:500">{{ cf.label }}</div>
+                        <div style="display:flex;align-items:center;gap:6px">
+                          <div style="font-size:13px;color:{{ cf.valueColor }}">{{ cf.valueLabel }}</div>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="transform:{{ cf.chevRotate }};transition:transform .2s ease"><path d="M6 9l6 6 6-6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                        </div>
+                      </div>
+                      <sc-if value="{{ cf.open }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+                          <sc-for list="{{ cf.options }}" as="op" hint-placeholder-count="5">
+                            <div onClick="{{ op.select }}" style="cursor:pointer;user-select:none;padding:9px 15px;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-radius:9999px;font-size:13px;font-weight:500;background:{{ op.bg }};color:{{ op.fg }}">{{ op.label }}</div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+
+                </div>
+
+                <div style="margin-top:20px;border-top:1px solid var(--color-neutral-700);padding-top:14px">
+                  <div onClick="{{ toggleAddItemDetails }}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;min-height:32px">
+                    <div style="font-size:13px;font-weight:500">Add more details (optional)</div>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="transform:{{ detailsChevRotate }};transition:transform .2s ease"><path d="M6 9l6 6 6-6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  </div>
+
+                  <sc-if value="{{ addItemDetailsOpen }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:16px;margin-top:16px">
+
+                      <div>
+                        <div style="font-size:13px;font-weight:500;margin-bottom:8px">Formality</div>
+                        <div style="display:flex;background:var(--color-neutral-800);border-radius:9999px;padding:3px">
+                          <sc-for list="{{ formalityOptions }}" as="fo" hint-placeholder-count="4">
+                            <div onClick="{{ fo.select }}" style="flex:1;text-align:center;padding:9px 4px;min-height:32px;box-sizing:border-box;border-radius:9999px;font-size:11.5px;font-weight:500;background:{{ fo.bg }};color:{{ fo.fg }};cursor:pointer">{{ fo.label }}</div>
+                          </sc-for>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style="font-size:13px;font-weight:500;margin-bottom:8px">Season</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:8px">
+                          <sc-for list="{{ seasonOptions }}" as="so" hint-placeholder-count="4">
+                            <div onClick="{{ so.toggle }}" style="cursor:pointer;user-select:none;padding:9px 15px;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-radius:9999px;font-size:13px;font-weight:500;background:{{ so.bg }};color:{{ so.fg }}">{{ so.label }}</div>
+                          </sc-for>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div onClick="{{ fitField.toggle }}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;min-height:32px">
+                          <div style="font-size:13px;font-weight:500">Fit</div>
+                          <div style="display:flex;align-items:center;gap:6px">
+                            <div style="font-size:13px;color:color-mix(in srgb, var(--color-text) 70%, transparent)">{{ fitField.valueLabel }}</div>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="transform:{{ fitField.chevRotate }};transition:transform .2s ease"><path d="M6 9l6 6 6-6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                          </div>
+                        </div>
+                        <sc-if value="{{ fitField.open }}" hint-placeholder-val="{{ false }}">
+                          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+                            <sc-for list="{{ fitField.options }}" as="op" hint-placeholder-count="4">
+                              <div onClick="{{ op.select }}" style="cursor:pointer;user-select:none;padding:9px 15px;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-radius:9999px;font-size:13px;font-weight:500;background:{{ op.bg }};color:{{ op.fg }}">{{ op.label }}</div>
+                            </sc-for>
+                          </div>
+                        </sc-if>
+                      </div>
+
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <!-- CHAT: conversational styling -->
+          <sc-if value="{{ isChatLive }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;min-height:100%">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 16px">
+                <button onClick="{{ exitChat }}" class="btn btn-icon btn-secondary">
+                  <svg width="8" height="14" viewBox="0 0 8 14"><path d="M7 1L1 7l6 6" stroke="var(--color-text)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                </button>
+                <div onClick="{{ openAllChats }}" class="tag tag-neutral" style="font-size:12px;cursor:pointer">All chats</div>
+              </div>
+
+              <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+                <sc-for list="{{ chatMessages }}" as="msg" hint-placeholder-count="4">
+                  <div style="display:flex;justify-content:{{ msg.align }};opacity:{{ msg.opacity }};transform:{{ msg.shift }};transition:opacity .4s ease, transform .4s ease">
+                    <div style="max-width:78%;padding:11px 15px;border-radius:16px;font-size:14px;line-height:1.4;background:{{ msg.bg }};color:{{ msg.fg }}">{{ msg.text }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <sc-if value="{{ showSuiteBtn }}" hint-placeholder-val="{{ false }}">
+                <div style="opacity:{{ suiteBtnOpacity }};transform:{{ suiteCardShift }};transition:opacity .4s ease, transform .4s ease;margin:6px 0 14px">
+                  <div class="card elev-sm" style="gap:0;padding:8px">
+                    <sc-for list="{{ outfitItems }}" as="it" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:12px;padding:10px 4px">
+                        <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="{{ it.slotId }}" shape="rounded" radius="8" placeholder="Photo" style="width:52px;height:52px;flex:none" hint-size="52px,52px"></x-import>
+                        <div style="flex:1">
+                          <div style="font-size:14px;font-weight:500">{{ it.label }}</div>
+                          <button onClick="{{ it.swap }}" class="btn btn-ghost" style="padding:0;margin-top:2px;font-size:12px">
+                            <span style="display:inline-block;transform:{{ it.spin }};transition:transform .5s ease">↻</span>&nbsp;Swap
+                          </button>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <button onClick="{{ wearFromChat }}" class="btn btn-primary btn-block" style="width:100%;height:44px;font-size:14px;margin-top:10px">Add To Candidate</button>
+                  <button onClick="{{ toggleChatFavorite }}" class="btn btn-secondary btn-block" style="width:100%;height:40px;font-size:13px;margin-top:8px">{{ chatFavLabel }}</button>
+                </div>
+              </sc-if>
+
+              <textarea class="input" placeholder="Write here" style="width:100%;min-height:56px;resize:none;font-family:var(--font-body);box-sizing:border-box;flex:none"></textarea>
+            </div>
+          </sc-if>
+
+          <!-- CHAT HISTORY: list of past conversations -->
+          <sc-if value="{{ isChatHistory }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;min-height:100%">
+              <div style="display:flex;align-items:center;gap:12px;padding:4px 0 16px">
+                <button onClick="{{ backFromChatHistory }}" class="btn btn-icon btn-secondary">
+                  <svg width="8" height="14" viewBox="0 0 8 14"><path d="M7 1L1 7l6 6" stroke="var(--color-text)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                </button>
+                <h3 style="margin:0">All chats</h3>
+              </div>
+
+              <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+                <sc-for list="{{ historyList }}" as="h" hint-placeholder-count="3">
+                  <div onClick="{{ h.open }}" class="card elev-sm" style="cursor:pointer;padding:14px;gap:4px">
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                      <div style="font-size:14px;font-weight:500">{{ h.title }}</div>
+                      <div style="font-size:11px;color:color-mix(in srgb, var(--color-text) 50%, transparent)">{{ h.date }}</div>
+                    </div>
+                    <div style="font-size:12.5px;color:color-mix(in srgb, var(--color-text) 60%, transparent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ h.preview }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- CHAT HISTORY DETAIL: full past conversation -->
+          <sc-if value="{{ isChatHistoryDetail }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;min-height:100%">
+              <div style="display:flex;align-items:center;gap:12px;padding:4px 0 16px">
+                <button onClick="{{ backFromChatHistoryDetail }}" class="btn btn-icon btn-secondary">
+                  <svg width="8" height="14" viewBox="0 0 8 14"><path d="M7 1L1 7l6 6" stroke="var(--color-text)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                </button>
+                <h3 style="margin:0">{{ historyDetailTitle }}</h3>
+              </div>
+
+              <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+                <sc-for list="{{ historyDetailMessages }}" as="msg" hint-placeholder-count="4">
+                  <div style="display:flex;justify-content:{{ msg.align }}">
+                    <div style="max-width:78%;padding:11px 15px;border-radius:16px;font-size:14px;line-height:1.4;background:{{ msg.bg }};color:{{ msg.fg }}">{{ msg.text }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- STEP 1: style & mood -->
+          <sc-if value="{{ isStep1 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;min-height:100%">
+              <h3 style="margin:8px 0 2px">Your style</h3>
+              <div style="font-size:13px;color:color-mix(in srgb, var(--color-text) 55%, transparent);margin-bottom:16px">Pick a few tags — takes 20 seconds</div>
+              <div style="display:flex;flex-wrap:wrap;gap:9px">
+                <sc-for list="{{ styleTags }}" as="t" hint-placeholder-count="7">
+                  <div onClick="{{ t.toggle }}" style="cursor:pointer;user-select:none;padding:10px 17px;border-radius:9999px;font-size:14px;font-weight:500;background:{{ t.bg }};color:{{ t.fg }};transition:all .2s ease">{{ t.label }}</div>
+                </sc-for>
+              </div>
+
+              <h3 style="margin:28px 0 2px">Mood today</h3>
+              <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:12px">
+                <sc-for list="{{ moods }}" as="m" hint-placeholder-count="3">
+                  <div onClick="{{ m.select }}" style="cursor:pointer;user-select:none;padding:10px 17px;border-radius:9999px;font-size:14px;font-weight:500;background:{{ m.bg }};color:{{ m.fg }};transition:all .2s ease">{{ m.label }}</div>
+                </sc-for>
+              </div>
+
+              <div style="flex:1;min-height:24px"></div>
+              <button onClick="{{ next }}" class="btn btn-primary btn-block" style="width:100%;height:48px;font-size:15px">Next</button>
+            </div>
+          </sc-if>
+
+          <!-- STEP 2: occasion & weather -->
+          <sc-if value="{{ isStep2 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;min-height:100%">
+              <h3 style="margin:8px 0 16px">What's the occasion?</h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <sc-for list="{{ occasions }}" as="o" hint-placeholder-count="4">
+                  <div onClick="{{ o.select }}" class="card" style="cursor:pointer;padding:10px;box-shadow:{{ o.ring }};transition:box-shadow .2s ease">
+                    <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="{{ o.slotId }}" shape="rounded" radius="10" placeholder="Photo" style="width:100%;aspect-ratio:1.4;flex:none" hint-size="100%,90px"></x-import>
+                    <div style="font-size:14px;font-weight:500;text-align:center">{{ o.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div class="card" style="margin-top:20px;flex-direction:row;align-items:center;gap:12px">
+                <div style="width:36px;height:36px;border-radius:50%;background:var(--color-neutral-800);flex:none"></div>
+                <div>
+                  <div style="font-size:14px;font-weight:500">{{ weatherLine }}</div>
+                  <div style="font-size:12px;color:color-mix(in srgb, var(--color-text) 55%, transparent)">Auto-detected — suggestions match today's weather</div>
+                </div>
+              </div>
+
+              <div style="flex:1;min-height:16px"></div>
+              <button onClick="{{ next }}" class="btn btn-primary btn-block" style="width:100%;height:48px;font-size:15px">Suggest my outfit</button>
+            </div>
+          </sc-if>
+
+          <!-- STEP 3: outfit suggested -->
+          <sc-if value="{{ isStep3 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;min-height:100%">
+              <h3 style="margin:8px 0 2px">Your outfit</h3>
+              <div style="font-size:13px;color:color-mix(in srgb, var(--color-text) 55%, transparent);margin-bottom:16px">{{ outfitSubline }}</div>
+
+              <div class="card elev-sm" style="gap:0;padding:8px">
+                <sc-for list="{{ outfitItems }}" as="it" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:12px;padding:10px 4px">
+                    <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="{{ it.slotId }}" shape="rounded" radius="8" placeholder="Photo" style="width:56px;height:56px;flex:none" hint-size="56px,56px"></x-import>
+                    <div style="flex:1">
+                      <div style="font-size:14px;font-weight:500">{{ it.label }}</div>
+                      <button onClick="{{ it.swap }}" class="btn btn-ghost" style="padding:0;margin-top:2px;font-size:12px">
+                        <span style="display:inline-block;transform:{{ it.spin }};transition:transform .5s ease">↻</span>&nbsp;Swap
+                      </button>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="font-size:12px;color:color-mix(in srgb, var(--color-text) 55%, transparent);margin-top:14px;line-height:1.5">Why this works: light fabrics for warm weather, neutral palette matches your tags</div>
+
+              <div style="flex:1;min-height:16px"></div>
+              <div style="display:flex;gap:10px">
+                <button onClick="{{ next }}" class="btn btn-primary" style="flex:1;height:48px;font-size:15px">Wear this</button>
+                <button onClick="{{ swapAll }}" class="btn btn-secondary" style="height:48px;font-size:14px;padding:0 18px">
+                  <span style="display:inline-block;transform:{{ allSpin }};transition:transform .6s ease">↻</span>&nbsp;New
+                </button>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- STEP 4: wear it -->
+          <sc-if value="{{ isStep4 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;align-items:center;text-align:center;min-height:100%;padding-top:64px">
+              <div style="width:64px;height:64px;border-radius:50%;background:var(--color-accent-900);display:flex;align-items:center;justify-content:center;flex:none">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="var(--color-accent)"><path d="M12 2l2.9 6.6L22 9.6l-5 4.9 1.2 7-6.2-3.4L5.8 21.5 7 14.5l-5-4.9 7.1-1z"></path></svg>
+              </div>
+              <div style="font-family:var(--font-heading);font-weight:500;font-size:24px;margin-top:20px">Nice choice!</div>
+              <sc-if value="{{ showStreak }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:13px;color:color-mix(in srgb, var(--color-text) 60%, transparent);margin-top:8px;max-width:260px">3-day styling streak — keep it going tomorrow</div>
+              </sc-if>
+
+              <div class="card" style="flex-direction:row;gap:8px;margin-top:24px;padding:10px">
+                <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="saved-1" shape="rounded" radius="8" placeholder="" style="width:60px;height:60px;flex:none" hint-size="60px,60px"></x-import>
+                <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="saved-2" shape="rounded" radius="8" placeholder="" style="width:60px;height:60px;flex:none" hint-size="60px,60px"></x-import>
+                <x-import component-from-global-scope="image-slot" from="./image-slot.js" id="saved-3" shape="rounded" radius="8" placeholder="" style="width:60px;height:60px;flex:none" hint-size="60px,60px"></x-import>
+              </div>
+              <div style="font-size:12px;color:color-mix(in srgb, var(--color-text) 50%, transparent);margin-top:8px">Saved to your looks</div>
+
+              <div style="flex:1;min-height:40px"></div>
+              <button onClick="{{ planTomorrow }}" class="btn btn-primary btn-block" style="width:100%;height:48px;font-size:15px">Plan tomorrow's outfit</button>
+              <button class="btn btn-ghost" style="margin-top:12px;font-size:13px">Share this look</button>
+            </div>
+          </sc-if>
+
+        </div>
+        <sc-if value="{{ isCloset }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ addItem }}" class="btn btn-primary btn-icon" aria-label="Add item" style="position:absolute;right:28px;bottom:16px;width:52px;height:52px;border-radius:50%;box-shadow:var(--shadow-md);background:var(--color-bg);z-index:5">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round"></path></svg>
+          </button>
+        </sc-if>
+        <sc-if value="{{ showSingleSaveBtn }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ saveItem }}" class="btn btn-primary" disabled="{{ saveDisabled }}" style="position:absolute;left:24px;right:24px;bottom:16px;height:50px;font-size:15px;z-index:5">{{ saveButtonLabel }}</button>
+        </sc-if>
+        <sc-if value="{{ showMultiAddBtn }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ addDetectedItems }}" class="btn btn-primary" disabled="{{ multiAddDisabled }}" style="position:absolute;left:24px;right:24px;bottom:16px;height:50px;font-size:15px;z-index:5">{{ multiAddLabel }}</button>
+        </sc-if>
+        <sc-if value="{{ addItemSuccessToast }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;left:24px;right:24px;bottom:80px;padding:14px;border-radius:12px;background:var(--color-accent-900);display:flex;align-items:center;gap:10px;z-index:6">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="var(--color-accent)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <div style="font-size:13.5px;font-weight:500">{{ successToastText }}</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showCameraScreen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;z-index:30;background:linear-gradient(180deg, #0b0c12 0%, #14151d 55%, #0b0c12 100%);display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 16px 8px">
+              <button onClick="{{ closeCamera }}" class="btn btn-icon btn-secondary" aria-label="Close" style="background:rgba(255,255,255,0.1);border:none">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="2" stroke-linecap="round"></path></svg>
+              </button>
+              <button onClick="{{ toggleFlash }}" class="btn btn-icon btn-secondary" aria-label="Flash" style="background:rgba(255,255,255,0.1);border:none;color:{{ flashIconColor }}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="{{ flashIconFill }}"><path d="M11 2L3 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path></svg>
+              </button>
+            </div>
+            <div style="flex:1;position:relative;margin:4px 16px;border-radius:14px;overflow:hidden;background:radial-gradient(circle at 50% 40%, #23242f 0%, #101117 75%)">
+              <div style="position:absolute;left:33.33%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.12)"></div>
+              <div style="position:absolute;left:66.66%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.12)"></div>
+              <div style="position:absolute;top:33.33%;left:0;right:0;height:1px;background:rgba(255,255,255,0.12)"></div>
+              <div style="position:absolute;top:66.66%;left:0;right:0;height:1px;background:rgba(255,255,255,0.12)"></div>
+              <div style="position:absolute;left:50%;top:50%;width:64px;height:64px;transform:translate(-50%,-50%);border:1.5px dashed rgba(255,255,255,0.3);border-radius:10px"></div>
+              <div style="position:absolute;inset:0;background:#fff;opacity:{{ flashOverlayOpacity }};transition:opacity .1s ease;pointer-events:none"></div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:22px 28px 26px">
+              <div onClick="{{ openGallery }}" style="width:44px;height:44px;border-radius:10px;background:var(--color-neutral-800);border:1px solid rgba(255,255,255,0.15);cursor:pointer"></div>
+              <button onClick="{{ capturePhoto }}" aria-label="Capture" style-active="transform:scale(0.92)" style="width:72px;height:72px;border-radius:50%;background:transparent;border:3px solid #fff;padding:4px;cursor:pointer;transition:transform .12s ease;box-sizing:border-box">
+                <div style="width:100%;height:100%;border-radius:50%;background:#fff"></div>
+              </button>
+              <button onClick="{{ flipCamera }}" aria-label="Flip camera" class="btn btn-icon btn-secondary" style="background:rgba(255,255,255,0.1);border:none">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M17 2l4 4-4 4" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M21 6H8a5 5 0 0 0-5 5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"></path><path d="M7 22l-4-4 4-4" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M3 18h13a5 5 0 0 0 5-5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"></path></svg>
+              </button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showGalleryScreen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;z-index:30;background:var(--color-bg);display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 16px 10px;flex:none">
+              <button onClick="{{ closeGallery }}" class="btn btn-ghost" style="font-size:14px;padding:0">Cancel</button>
+              <div style="font-size:14px;font-weight:500">Recents</div>
+              <button onClick="{{ confirmGallery }}" class="btn btn-ghost" disabled="{{ galleryNextDisabled }}" style="font-size:14px;padding:0;color:{{ galleryNextColor }}">Next</button>
+            </div>
+            <div style="flex:1;overflow:auto;padding:2px 2px 16px">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px">
+                <sc-for list="{{ galleryTiles }}" as="gt" hint-placeholder-count="12">
+                  <div onClick="{{ gt.select }}" style="position:relative;aspect-ratio:1;background:{{ gt.bg }};cursor:pointer;overflow:hidden">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);opacity:0.3"><rect x="3" y="4" width="18" height="16" rx="2" stroke="var(--color-neutral-300)" stroke-width="1.4"></rect><circle cx="8.5" cy="9.5" r="1.3" stroke="var(--color-neutral-300)" stroke-width="1.4"></circle><path d="M21 16l-5-5-9 9" stroke="var(--color-neutral-300)" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+                    <sc-if value="{{ gt.selected }}" hint-placeholder-val="{{ false }}">
+                      <div style="position:absolute;inset:0;background:color-mix(in srgb, var(--color-accent) 22%, transparent);border:2px solid var(--color-accent);box-sizing:border-box"></div>
+                      <div style="position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:50%;background:var(--color-accent);display:flex;align-items:center;justify-content:center">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+        </div>
+      </div>
+    </x-import>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;calendarConnected&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Home screen&quot;},&quot;aiOutcome&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;success&quot;,&quot;options&quot;:[&quot;success&quot;,&quot;low_confidence&quot;,&quot;multi_item&quot;,&quot;error&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Add item screen&quot;}}">
+class Component extends DCLogic {
+  state = {
+    step: 0,
+    enter: true,
+    styleSel: {},
+    moodSel: 'relaxed',
+    occSel: 'casual',
+    spinItem: null,
+    allSpinning: false,
+    swapIdx: { top: 0, bottom: 0, shoes: 0 },
+    inChat: false,
+    chatReveal: 0,
+    chatView: 'live',
+    selectedHistoryChatId: null,
+    chatFavorited: false,
+    inCloset: false,
+    closetSel: {},
+    calendarConnected: false,
+    inAddItem: false,
+    showAddToast: false,
+    addItemPhase: 'empty',
+    addItemFields: { category: null, subcategory: null, color: null, pattern: null, fabric: null, formality: null, season: [], fit: null },
+    addItemOpenPicker: null,
+    addItemDetailsOpen: false,
+    addItemSubScreen: null,
+    cameraFlashOn: false,
+    cameraFlashing: false,
+    cameraFront: false,
+    gallerySelectedIdx: null,
+    detectedItems: [],
+    multiAddedCount: 0,
+    customClosetItems: [],
+    photoKeySeed: Date.now() + Math.floor(Math.random() * 100000),
+  };
+
+  colorDefs = [
+    { label: 'Black', hex: '#1a1a1a' },
+    { label: 'White', hex: '#f5f5f0' },
+    { label: 'Navy', hex: '#1f2b45' },
+    { label: 'Beige', hex: '#d8c9ab' },
+    { label: 'Olive', hex: '#5a5f3d' },
+    { label: 'Burgundy', hex: '#5c1f2c' },
+    { label: 'Gray', hex: '#8a8a86' },
+  ];
+  categoryDefs = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Accessories'];
+  subcategoryDefs = ['T-Shirt', 'Shirt', 'Sweater', 'Jeans', 'Trousers', 'Jacket', 'Coat', 'Sneakers', 'Boots', 'Belt'];
+  patternDefs = ['Solid', 'Striped', 'Plaid', 'Floral', 'Print'];
+  fabricDefs = ['Cotton', 'Denim', 'Wool', 'Linen', 'Leather', 'Polyester'];
+  formalityDefs = ['Casual', 'Smart Casual', 'Business', 'Formal'];
+  seasonDefs = ['Spring', 'Summer', 'Fall', 'Winter'];
+  fitDefs = ['Slim', 'Regular', 'Relaxed', 'Oversized'];
+
+  closetCategoryDefs = ['All', 'Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Accessories'];
+  closetItemDefs = [
+    { label: 'Linen shirt', category: 'Tops', ratio: 0.8 },
+    { label: 'Oxford shirt', category: 'Tops', ratio: 1.1 },
+    { label: 'Denim jacket', category: 'Outerwear', ratio: 1.3 },
+    { label: 'Dark jeans', category: 'Bottoms', ratio: 1.2 },
+    { label: 'Chinos', category: 'Bottoms', ratio: 0.9 },
+    { label: 'White sneakers', category: 'Shoes', ratio: 1 },
+    { label: 'Loafers', category: 'Shoes', ratio: 0.85 },
+    { label: 'Wool coat', category: 'Outerwear', ratio: 1.4 },
+    { label: 'Leather belt', category: 'Accessories', ratio: 0.7 },
+    { label: 'Tailored trousers', category: 'Bottoms', ratio: 1.15 },
+    { label: 'Knit sweater', category: 'Tops', ratio: 1 },
+    { label: 'Desert boots', category: 'Shoes', ratio: 0.95 },
+  ];
+
+  chatScript = [
+    { from: 'user', text: 'suggest me a suite for dinner party' },
+    { from: 'ai', text: 'for dinner party wearing black pants are recommended' },
+    { from: 'ai', text: 'short pants or long pants?' },
+    { from: 'user', text: 'absolutely long pants' },
+  ];
+
+  pastChats = [
+    {
+      id: 'p1', title: 'Dinner party outfit', date: 'Today', preview: 'for dinner party wearing black pants are recommended',
+      messages: [
+        { from: 'user', text: 'suggest me a suite for dinner party' },
+        { from: 'ai', text: 'for dinner party wearing black pants are recommended' },
+        { from: 'ai', text: 'short pants or long pants?' },
+        { from: 'user', text: 'absolutely long pants' },
+      ],
+    },
+    {
+      id: 'p2', title: 'Gym session', date: 'Yesterday', preview: 'something breathable and easy to move in works best',
+      messages: [
+        { from: 'user', text: 'I want to go to the gym' },
+        { from: 'ai', text: 'something breathable and easy to move in works best' },
+        { from: 'ai', text: 'do you prefer shorts or joggers?' },
+        { from: 'user', text: 'shorts today' },
+      ],
+    },
+    {
+      id: 'p3', title: 'Weekend casual', date: '2 days ago', preview: 'a relaxed denim look would fit a weekend outing',
+      messages: [
+        { from: 'user', text: 'what should I wear this weekend' },
+        { from: 'ai', text: 'a relaxed denim look would fit a weekend outing' },
+        { from: 'user', text: 'sounds good, keep it casual' },
+      ],
+    },
+  ];
+
+  styleDefs = ['Minimal', 'Streetwear', 'Classic', 'Bohemian', 'Sporty', 'Elegant', 'Vintage'];
+  moodDefs = [
+    { key: 'relaxed', label: 'Relaxed' },
+    { key: 'confident', label: 'Confident' },
+    { key: 'playful', label: 'Playful' },
+  ];
+  occDefs = [
+    { key: 'formal', label: 'Formal' },
+    { key: 'casual', label: 'Casual' },
+    { key: 'sport', label: 'Sport' },
+    { key: 'outdoor', label: 'Outdoor' },
+  ];
+  outfitDefs = {
+    top: { label: 'Top', options: ['linen shirt', 'oxford shirt', 'denim jacket'] },
+    bottom: { label: 'Bottom', options: ['chinos', 'tailored trousers', 'dark jeans'] },
+    shoes: { label: 'Shoes', options: ['white sneakers', 'loafers', 'desert boots'] },
+  };
+
+  goStep(n) {
+    this.setState({ step: n, enter: false });
+    requestAnimationFrame(() => requestAnimationFrame(() => this.setState({ enter: true })));
+  }
+  next = () => this.goStep(Math.min(this.state.step + 1, 4));
+  goCloset = () => this.setState({ inCloset: true });
+  exitCloset = () => this.setState({ inCloset: false });
+  toggleClosetFilter = (key) => {
+    const sel = { ...this.state.closetSel };
+    if (key === 'all') {
+      this.setState({ closetSel: {} });
+      return;
+    }
+    sel[key] = !sel[key];
+    this.setState({ closetSel: sel });
+  };
+  addItem = () => this.goAddItem();
+  componentDidMount() {
+    // A photo dropped straight onto the image-slot (drag-and-drop or
+    // click-to-browse) bypasses the Camera/Gallery buttons entirely — watch
+    // the slot's own "filled" signal so that path still advances the
+    // upload/AI-extraction phase (and hides the Camera/Gallery buttons).
+    this._photoObserver = new MutationObserver(() => {
+      const el = document.getElementById('add-item-photo-' + this.state.photoKeySeed);
+      if (el && el.hasAttribute('data-filled') && this.state.addItemPhase === 'empty') {
+        this.startAddItemUpload();
+      }
+    });
+    this._photoObserver.observe(document.body, { attributes: true, attributeFilter: ['data-filled'], subtree: true });
+  }
+  componentWillUnmount() {
+    if (this._photoObserver) this._photoObserver.disconnect();
+  }
+  connectCalendar = () => this.setState({ calendarConnected: true });
+
+  detectedItemDefs = [
+    { label: 'Navy T-Shirt', meta: 'Tops · Cotton', top: '6%', left: '8%', width: '42%', height: '36%' },
+    { label: 'Dark Jeans', meta: 'Bottoms · Denim', top: '40%', left: '10%', width: '36%', height: '46%' },
+    { label: 'White Sneakers', meta: 'Shoes · Canvas', top: '68%', left: '52%', width: '32%', height: '22%' },
+  ];
+  galleryTileBgDefs = ['#2b2d3a', '#232430', '#34364a', '#1f2130', '#3a3348', '#262838', '#2f3142', '#211f2e', '#363a4d', '#252738', '#302d3f', '#28293a'];
+
+  goAddItem = () => this.setState(s => ({
+    inAddItem: true,
+    addItemPhase: 'empty',
+    addItemFields: { category: null, subcategory: null, color: null, pattern: null, fabric: null, formality: null, season: [], fit: null },
+    addItemOpenPicker: null,
+    addItemDetailsOpen: false,
+    addItemSubScreen: null,
+    cameraFlashOn: false,
+    cameraFlashing: false,
+    cameraFront: false,
+    gallerySelectedIdx: null,
+    detectedItems: [],
+    multiAddedCount: 0,
+    photoKeySeed: s.photoKeySeed + 1,
+  }));
+  exitAddItem = () => this.setState({ inAddItem: false });
+
+  scheduleAddItemResolve() {
+    setTimeout(() => {
+      const outcome = this.props.aiOutcome ?? 'success';
+      if (outcome === 'error') {
+        this.setState({ addItemPhase: 'error' });
+      } else if (outcome === 'low_confidence') {
+        this.setState({
+          addItemPhase: 'lowconf',
+          addItemFields: { category: 'Tops', subcategory: null, color: 'Navy', pattern: null, fabric: null, formality: null, season: [], fit: null },
+        });
+      } else if (outcome === 'multi_item') {
+        this.setState({
+          addItemPhase: 'multiitem',
+          detectedItems: this.detectedItemDefs.map(d => ({ ...d, selected: true })),
+        });
+      } else {
+        this.setState({
+          addItemPhase: 'autofill',
+          addItemFields: { category: 'Tops', subcategory: 'Shirt', color: 'Navy', pattern: 'Solid', fabric: 'Cotton', formality: 'Smart Casual', season: ['Spring', 'Fall'], fit: 'Regular' },
+        });
+      }
+    }, 1300);
+  }
+  startAddItemUpload = () => {
+    if (this.state.addItemPhase !== 'empty') return;
+    this.setState({ addItemPhase: 'uploading' });
+    this.scheduleAddItemResolve();
+  };
+  retryUpload = () => {
+    this.setState({ addItemPhase: 'uploading' });
+    this.scheduleAddItemResolve();
+  };
+  retakePhoto = () => this.setState(s => ({ addItemPhase: 'empty', addItemOpenPicker: null, detectedItems: [], photoKeySeed: s.photoKeySeed + 1 }));
+
+  openCamera = () => this.setState({ addItemSubScreen: 'camera' });
+  closeCamera = () => this.setState({ addItemSubScreen: null });
+  toggleFlash = () => this.setState(s => ({ cameraFlashOn: !s.cameraFlashOn }));
+  flipCamera = () => this.setState(s => ({ cameraFront: !s.cameraFront }));
+  capturePhoto = () => {
+    this.setState({ cameraFlashing: true });
+    setTimeout(() => {
+      this.setState({ cameraFlashing: false, addItemSubScreen: null });
+      this.ingestPlaceholderPhoto('add-item-photo-' + this.state.photoKeySeed, '#3a3348', '#1f2130');
+      this.startAddItemUpload();
+    }, 140);
+  };
+
+  openGallery = () => this.setState({ addItemSubScreen: 'gallery', gallerySelectedIdx: null });
+  closeGallery = () => this.setState({ addItemSubScreen: null });
+  selectGalleryTile = (idx) => this.setState({ gallerySelectedIdx: idx });
+  confirmGallery = () => {
+    if (this.state.gallerySelectedIdx == null) return;
+    const bg = this.galleryTileBgDefs[this.state.gallerySelectedIdx] || '#2b2d3a';
+    this.setState({ addItemSubScreen: null });
+    this.ingestPlaceholderPhoto('add-item-photo-' + this.state.photoKeySeed, bg, '#12131c');
+    this.startAddItemUpload();
+  };
+
+  toggleDetectedItem = (idx) => this.setState(s => ({
+    detectedItems: s.detectedItems.map((it, i) => i === idx ? { ...it, selected: !it.selected } : it),
+  }));
+  addDetectedItems = () => {
+    const selected = this.state.detectedItems.filter(it => it.selected);
+    if (selected.length === 0) return;
+    const fromId = 'add-item-photo-' + this.state.photoKeySeed;
+    const newItems = selected.map(it => ({
+      label: it.label,
+      category: it.meta.split(' · ')[0],
+      ratio: 1,
+      slotId: this.cloneImageSlot(fromId),
+    }));
+    this.setState(s => ({
+      addItemPhase: 'multiitem_success',
+      multiAddedCount: selected.length,
+      customClosetItems: [...s.customClosetItems, ...newItems],
+      showAddToast: true,
+    }));
+    setTimeout(() => this.setState({ inAddItem: false }), 900);
+    clearTimeout(this.addToastTimer);
+    this.addToastTimer = setTimeout(() => this.setState({ showAddToast: false }), 4000);
+  };
+  toggleAddItemPicker = (key) => this.setState(s => ({ addItemOpenPicker: s.addItemOpenPicker === key ? null : key }));
+  setAddItemField = (key, val) => this.setState(s => ({ addItemFields: { ...s.addItemFields, [key]: val }, addItemOpenPicker: null }));
+  toggleAddItemSeason = (val) => this.setState(s => {
+    const season = s.addItemFields.season.includes(val)
+      ? s.addItemFields.season.filter(v => v !== val)
+      : [...s.addItemFields.season, val];
+    return { addItemFields: { ...s.addItemFields, season } };
+  });
+  toggleAddItemDetails = () => this.setState(s => ({ addItemDetailsOpen: !s.addItemDetailsOpen }));
+  saveItem = () => {
+    const f = this.state.addItemFields;
+    const ready = f.category && f.subcategory && f.color && f.pattern && f.fabric;
+    if (!ready || this.state.addItemPhase === 'saving') return;
+    this.setState({ addItemPhase: 'saving' });
+    const fromId = 'add-item-photo-' + this.state.photoKeySeed;
+    setTimeout(() => {
+      const slotId = this.cloneImageSlot(fromId);
+      const newItem = { label: f.color + ' ' + f.subcategory, category: f.category, ratio: 1, slotId };
+      this.setState(s => ({ addItemPhase: 'success', customClosetItems: [...s.customClosetItems, newItem], showAddToast: true }));
+      setTimeout(() => this.setState({ inAddItem: false }), 900);
+      clearTimeout(this.addToastTimer);
+      this.addToastTimer = setTimeout(() => this.setState({ showAddToast: false }), 4000);
+    }, 700);
+  };
+
+  // Copies the just-captured photo's stored image under a fresh slot id so
+  // the closet grid thumbnail shows the real photo instead of a placeholder.
+  // Minted ids are tracked on the instance (not just this render / this DOM)
+  // so two saves in the same session never get handed the same target id,
+  // even when a mint's source had no pixels to actually write.
+  cloneImageSlot(fromId) {
+    try {
+      if (!this._mintedSlotIds) this._mintedSlotIds = new Set();
+      const ImageSlotClass = customElements.get('image-slot');
+      if (!ImageSlotClass || !ImageSlotClass.cloneSlot) return null;
+      const isFree = (id) => !this._mintedSlotIds.has(id) && !document.getElementById(id);
+      const toId = ImageSlotClass.cloneSlot(fromId, isFree);
+      if (toId) this._mintedSlotIds.add(toId);
+      return toId;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Camera/Gallery are simulated (no real device access), so the photo tile
+  // never receives real pixels unless the user drags a file onto it directly.
+  // Ingest a small generated placeholder image the same way a real drop
+  // would, so every entry path leaves the source slot genuinely filled —
+  // both for its own preview and so cloneImageSlot has real bytes to copy
+  // into the closet thumbnail.
+  ingestPlaceholderPhoto(slotId, colorA, colorB) {
+    const el = document.getElementById(slotId);
+    if (!el || typeof el._ingest !== 'function') return;
+    const c = document.createElement('canvas');
+    c.width = 480; c.height = 480;
+    const ctx = c.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 480, 480);
+    grad.addColorStop(0, colorA);
+    grad.addColorStop(1, colorB);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 480, 480);
+    c.toBlob((blob) => {
+      if (!blob) return;
+      el._ingest(new File([blob], 'photo.png', { type: 'image/png' }));
+    }, 'image/png');
+  }
+
+  homeInputRef = React.createRef();
+
+  startChat(customText) {
+    if (customText) {
+      this.chatScript = [
+        { from: 'user', text: customText },
+        { from: 'ai', text: 'for dinner party wearing black pants are recommended' },
+        { from: 'ai', text: 'short pants or long pants?' },
+        { from: 'user', text: 'absolutely long pants' },
+      ];
+    }
+    this.setState({ inChat: true, chatReveal: 0 });
+    this.chatScript.forEach((_, i) => {
+      setTimeout(() => this.setState(s => ({ chatReveal: Math.max(s.chatReveal, i + 1) })), 300 + i * 550);
+    });
+  }
+  startChatOnEnter = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      this.startChat(this.homeInputRef.current?.value?.trim() || null);
+    }
+  };
+  startChatFromCta = () => {
+    this.startChat(this.homeInputRef.current?.value?.trim() || null);
+  };
+  exitChat = () => this.setState({ inChat: false, chatReveal: 0, chatView: 'live' });
+  wearFromChat = () => {
+    this.setState({ inChat: false, chatReveal: 0, chatView: 'live' });
+    this.goStep(4);
+  };
+  toggleChatFavorite = () => this.setState(s => ({ chatFavorited: !s.chatFavorited }));
+  openAllChats = () => this.setState({ chatView: 'history' });
+  backFromChatHistory = () => this.setState({ chatView: 'live' });
+  openHistoryChat = (id) => this.setState({ chatView: 'historyDetail', selectedHistoryChatId: id });
+  backFromChatHistoryDetail = () => this.setState({ chatView: 'history' });
+  back = () => this.goStep(Math.max(this.state.step - 1, 0));
+  planTomorrow = () => this.goStep(0);
+
+  toggleStyle(key) {
+    const sel = { ...this.state.styleSel };
+    sel[key] = !sel[key];
+    this.setState({ styleSel: sel });
+  }
+  selectMood(key) { this.setState({ moodSel: key }); }
+  selectOcc(key) { this.setState({ occSel: key }); }
+
+  swapItem(key) {
+    const idx = { ...this.state.swapIdx };
+    idx[key] = (idx[key] + 1) % this.outfitDefs[key].options.length;
+    this.setState({ swapIdx: idx, spinItem: key });
+    setTimeout(() => this.setState({ spinItem: null }), 500);
+  }
+  swapAll = () => {
+    const idx = {};
+    Object.keys(this.outfitDefs).forEach(k => {
+      idx[k] = (this.state.swapIdx[k] + 1) % this.outfitDefs[k].options.length;
+    });
+    this.setState({ swapIdx: idx, allSpinning: true });
+    setTimeout(() => this.setState({ allSpinning: false }), 600);
+  };
+
+  renderVals() {
+    const s = this.state;
+    const accentBg = 'var(--color-accent-800)';
+    const accentFg = 'var(--color-accent-100)';
+    const neutralBg = 'var(--color-neutral-800)';
+    const neutralFg = 'var(--color-neutral-200)';
+
+    const styleTags = this.styleDefs.map(label => {
+      const key = label.toLowerCase();
+      const sel = !!s.styleSel[key];
+      return { label, bg: sel ? accentBg : neutralBg, fg: sel ? accentFg : neutralFg, toggle: () => this.toggleStyle(key) };
+    });
+
+    const moods = this.moodDefs.map(m => {
+      const sel = s.moodSel === m.key;
+      return { label: m.label, bg: sel ? accentBg : neutralBg, fg: sel ? accentFg : neutralFg, select: () => this.selectMood(m.key) };
+    });
+
+    const occasions = this.occDefs.map(o => {
+      const sel = s.occSel === o.key;
+      return { label: o.label, slotId: 'occ-' + o.key, ring: sel ? '0 0 0 2px var(--color-accent)' : '0 0 0 0px transparent', select: () => this.selectOcc(o.key) };
+    });
+
+    const outfitItems = Object.keys(this.outfitDefs).map(key => {
+      const def = this.outfitDefs[key];
+      const garment = def.options[s.swapIdx[key]];
+      return {
+        slotId: 'item-' + key,
+        label: def.label + ' — ' + garment,
+        swap: () => this.swapItem(key),
+        spin: s.spinItem === key ? 'rotate(360deg)' : 'rotate(0deg)',
+      };
+    });
+
+    const occLabel = this.occDefs.find(o => o.key === s.occSel)?.label ?? 'Casual';
+    const moodLabel = this.moodDefs.find(m => m.key === s.moodSel)?.label ?? 'Relaxed';
+
+    const chatMessages = this.chatScript.map((m, i) => {
+      const shown = i < s.chatReveal;
+      const isUser = m.from === 'user';
+      return {
+        text: m.text,
+        align: isUser ? 'flex-end' : 'flex-start',
+        bg: isUser ? 'var(--color-accent-800)' : 'var(--color-neutral-800)',
+        fg: isUser ? 'var(--color-accent-100)' : 'var(--color-neutral-200)',
+        opacity: shown ? 1 : 0,
+        shift: shown ? 'translateY(0px)' : 'translateY(8px)',
+      };
+    });
+    const showSuiteBtn = s.chatReveal >= this.chatScript.length;
+
+    const historyList = this.pastChats.map(c => ({
+      id: c.id,
+      title: c.title,
+      date: c.date,
+      preview: c.preview,
+      open: () => this.openHistoryChat(c.id),
+    }));
+    const activeHistoryChat = this.pastChats.find(c => c.id === s.selectedHistoryChatId);
+    const historyDetailTitle = activeHistoryChat?.title ?? '';
+    const historyDetailMessages = (activeHistoryChat?.messages ?? []).map(m => {
+      const isUser = m.from === 'user';
+      return {
+        text: m.text,
+        align: isUser ? 'flex-end' : 'flex-start',
+        bg: isUser ? 'var(--color-accent-800)' : 'var(--color-neutral-800)',
+        fg: isUser ? 'var(--color-accent-100)' : 'var(--color-neutral-200)',
+      };
+    });
+
+    const activeCats = Object.keys(s.closetSel).filter(k => s.closetSel[k]);
+    const noneActive = activeCats.length === 0;
+    const closetFilters = this.closetCategoryDefs.map(label => {
+      const key = label.toLowerCase();
+      const sel = key === 'all' ? noneActive : !!s.closetSel[key];
+      return { label, bg: sel ? accentBg : neutralBg, fg: sel ? accentFg : neutralFg, toggle: () => this.toggleClosetFilter(key) };
+    });
+    const closetItems = [...this.closetItemDefs, ...s.customClosetItems].map((it, i) => {
+      const key = it.category.toLowerCase();
+      const visible = noneActive || activeCats.includes(key);
+      return {
+        slotId: it.slotId || ('closet-' + i),
+        label: it.label,
+        category: it.category,
+        ratio: it.ratio,
+        opacity: visible ? 1 : 0,
+        scale: visible ? 'scale(1)' : 'scale(0.85)',
+        maxH: visible ? '400px' : '0px',
+      };
+    });
+
+    const aif = s.addItemFields;
+    const buildChipField = (key, label, options, required) => {
+      const value = aif[key];
+      const isOpen = s.addItemOpenPicker === key;
+      const confirmNeeded = required && s.addItemPhase === 'lowconf' && !value;
+      return {
+        key, label,
+        valueLabel: value || (confirmNeeded ? 'Tap to set' : '—'),
+        valueColor: confirmNeeded ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-text) 70%, transparent)',
+        open: isOpen,
+        chevRotate: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+        toggle: () => this.toggleAddItemPicker(key),
+        options: options.map(o => ({ label: o, bg: o === value ? accentBg : neutralBg, fg: o === value ? accentFg : neutralFg, select: () => this.setAddItemField(key, o) })),
+      };
+    };
+    const colorField = {
+      confirmNeeded: s.addItemPhase === 'lowconf' && !aif.color,
+      options: this.colorDefs.map(c => ({
+        label: c.label, swatch: c.hex,
+        ring: aif.color === c.label ? '0 0 0 2px var(--color-accent), 0 0 0 4px var(--color-bg)' : '0 0 0 0px transparent',
+        select: () => this.setAddItemField('color', c.label),
+      })),
+    };
+    const chipFields = [
+      buildChipField('category', 'Category', this.categoryDefs, true),
+      buildChipField('subcategory', 'Subcategory', this.subcategoryDefs, true),
+      buildChipField('pattern', 'Pattern', this.patternDefs, true),
+      buildChipField('fabric', 'Fabric', this.fabricDefs, true),
+    ];
+    const fitField = buildChipField('fit', 'Fit', this.fitDefs, false);
+    const formalityOptions = this.formalityDefs.map(label => ({
+      label, bg: aif.formality === label ? accentBg : 'transparent', fg: aif.formality === label ? accentFg : neutralFg,
+      select: () => this.setAddItemField('formality', label),
+    }));
+    const seasonOptions = this.seasonDefs.map(label => ({
+      label, bg: aif.season.includes(label) ? accentBg : neutralBg, fg: aif.season.includes(label) ? accentFg : neutralFg,
+      toggle: () => this.toggleAddItemSeason(label),
+    }));
+    const allRequiredFilled = !!(aif.category && aif.subcategory && aif.color && aif.pattern && aif.fabric);
+
+    const isMultiFlow = s.addItemPhase === 'multiitem' || s.addItemPhase === 'multiitem_success';
+    const detectedBoxes = (s.detectedItems || []).map((it, i) => ({
+      top: it.top, left: it.left, width: it.width, height: it.height,
+      label: it.label,
+      opacity: it.selected ? 1 : 0.4,
+      borderColor: it.selected ? 'var(--color-accent)' : 'var(--color-neutral-500)',
+      chipBg: it.selected ? 'var(--color-accent)' : 'var(--color-neutral-700)',
+      chipFg: it.selected ? '#ffffff' : 'var(--color-neutral-300)',
+      toggle: () => this.toggleDetectedItem(i),
+    }));
+    const detectedRows = (s.detectedItems || []).map((it, i) => ({
+      label: it.label, meta: it.meta,
+      selected: it.selected,
+      rowOpacity: it.selected ? 1 : 0.55,
+      checkBorder: it.selected ? 'var(--color-accent)' : 'var(--color-neutral-600)',
+      checkBg: it.selected ? 'var(--color-accent)' : 'transparent',
+      toggle: () => this.toggleDetectedItem(i),
+    }));
+    const detectedCount = (s.detectedItems || []).length;
+    const selectedDetectedCount = (s.detectedItems || []).filter(it => it.selected).length;
+    const detectedCountLabel = detectedCount === 1 ? '1 item' : detectedCount + ' items';
+
+    const galleryTiles = this.galleryTileBgDefs.map((bg, i) => ({
+      bg, selected: s.gallerySelectedIdx === i,
+      select: () => this.selectGalleryTile(i),
+    }));
+    const galleryNextDisabled = s.gallerySelectedIdx == null;
+    const photoSlotId = 'add-item-photo-' + s.photoKeySeed;
+
+    const dotColors = [0, 1, 2, 3, 4].map(i => ({
+      size: i === s.step ? 9 : 7,
+      color: i === s.step ? 'var(--color-accent)' : (i < s.step ? 'var(--color-accent-700)' : 'var(--color-neutral-700)'),
+      jump: () => this.goStep(i),
+    }));
+
+    return {
+      isStep0: s.step === 0 && !s.inChat,
+      isStep0AndNotCloset: s.step === 0 && !s.inChat && !s.inCloset,
+      isStep1: s.step === 1,
+      isStep2: s.step === 2,
+      isStep3: s.step === 3,
+      isStep4: s.step === 4,
+      showBack: s.step > 0,
+      dots: dotColors,
+      next: this.next,
+      back: this.back,
+      goCloset: this.goCloset,
+      isCloset: s.inCloset && !s.inAddItem,
+      exitCloset: this.exitCloset,
+      closetFilters,
+      closetItems,
+      addItem: this.addItem,
+      calendarConnected: this.props.calendarConnected ?? s.calendarConnected,
+      calendarNotConnected: !(this.props.calendarConnected ?? s.calendarConnected),
+      connectCalendar: this.connectCalendar,
+      isChat: s.inChat,
+      isChatLive: s.inChat && s.chatView === 'live',
+      isChatHistory: s.inChat && s.chatView === 'history',
+      isChatHistoryDetail: s.inChat && s.chatView === 'historyDetail',
+      startChatOnEnter: this.startChatOnEnter,
+      startChatFromCta: this.startChatFromCta,
+      homeInputRef: this.homeInputRef,
+      exitChat: this.exitChat,
+      wearFromChat: this.wearFromChat,
+      chatMessages,
+      showSuiteBtn,
+      suiteBtnOpacity: showSuiteBtn ? 1 : 0,
+      suiteCardShift: showSuiteBtn ? 'translateY(0px)' : 'translateY(8px)',
+      openAllChats: this.openAllChats,
+      backFromChatHistory: this.backFromChatHistory,
+      backFromChatHistoryDetail: this.backFromChatHistoryDetail,
+      historyList,
+      historyDetailTitle,
+      historyDetailMessages,
+      toggleChatFavorite: this.toggleChatFavorite,
+      chatFavLabel: s.chatFavorited ? 'Added to Favorites ✓' : 'Add to Favorite',
+      dotsRowDisplay: (s.inChat || s.inCloset) ? 'none' : 'flex',
+      isAddItem: s.inAddItem,
+      exitAddItem: this.exitAddItem,
+      photoSlotId,
+      addItemIsEmpty: s.addItemPhase === 'empty',
+      addItemIsUploading: s.addItemPhase === 'uploading',
+      addItemIsError: s.addItemPhase === 'error',
+      addItemIsLowConf: s.addItemPhase === 'lowconf',
+      addItemHasPhotoResult: s.addItemPhase !== 'empty' && s.addItemPhase !== 'uploading',
+      addItemShowFields: ['autofill', 'lowconf', 'saving', 'success'].includes(s.addItemPhase),
+      addItemDetailsOpen: s.addItemDetailsOpen,
+      toggleAddItemDetails: this.toggleAddItemDetails,
+      detailsChevRotate: s.addItemDetailsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+      openCamera: this.openCamera,
+      closeCamera: this.closeCamera,
+      toggleFlash: this.toggleFlash,
+      flipCamera: this.flipCamera,
+      capturePhoto: this.capturePhoto,
+      showCameraScreen: s.inAddItem && s.addItemSubScreen === 'camera',
+      flashIconColor: s.cameraFlashOn ? 'var(--color-accent)' : '#ffffff',
+      flashIconFill: s.cameraFlashOn ? 'var(--color-accent)' : 'none',
+      flashOverlayOpacity: s.cameraFlashing ? 0.85 : 0,
+      openGallery: this.openGallery,
+      closeGallery: this.closeGallery,
+      confirmGallery: this.confirmGallery,
+      showGalleryScreen: s.inAddItem && s.addItemSubScreen === 'gallery',
+      galleryTiles,
+      galleryNextDisabled,
+      galleryNextColor: galleryNextDisabled ? 'color-mix(in srgb, var(--color-text) 35%, transparent)' : 'var(--color-accent)',
+      addItemIsMultiItem: isMultiFlow && s.addItemPhase === 'multiitem',
+      detectedBoxes,
+      detectedRows,
+      detectedCountLabel,
+      addDetectedItems: this.addDetectedItems,
+      multiAddDisabled: selectedDetectedCount === 0,
+      multiAddLabel: 'Add ' + selectedDetectedCount + (selectedDetectedCount === 1 ? ' item' : ' items'),
+      retryUpload: this.retryUpload,
+      retakePhoto: this.retakePhoto,
+      skeletonRows: [{ width: '40%' }, { width: '70%' }, { width: '55%' }, { width: '65%' }, { width: '50%' }],
+      colorField,
+      chipFields,
+      fitField,
+      formalityOptions,
+      seasonOptions,
+      saveItem: this.saveItem,
+      saveDisabled: !['autofill', 'lowconf'].includes(s.addItemPhase) || !allRequiredFilled,
+      saveButtonLabel: s.addItemPhase === 'saving' ? 'Saving…' : 'Save',
+      showSingleSaveBtn: s.inAddItem && !isMultiFlow,
+      showMultiAddBtn: s.addItemPhase === 'multiitem',
+      addItemSuccessToast: !!s.showAddToast,
+      successToastText: s.addItemPhase === 'multiitem_success' ? 'Added ' + s.multiAddedCount + (s.multiAddedCount === 1 ? ' item' : ' items') + ' to your closet' : 'Added to your closet',
+      planTomorrow: this.planTomorrow,
+      styleTags,
+      moods,
+      occasions,
+      weatherLine: 'Frankfurt · 24° partly cloudy',
+      outfitSubline: occLabel + ' · 24° · ' + moodLabel.toLowerCase(),
+      outfitItems,
+      swapAll: this.swapAll,
+      allSpin: s.allSpinning ? 'rotate(360deg)' : 'rotate(0deg)',
+      showStreak: this.props.showStreak ?? true,
+      screenOpacity: s.enter ? 1 : 0,
+      screenTransform: s.enter ? 'translateY(0px)' : 'translateY(10px)',
+    };
+  }
+}
+</script>
+</body>
+</html>
