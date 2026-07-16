@@ -2,8 +2,10 @@
 
 These types are the stable seams between phases: `WardrobeItem` is the contract
 the (future) wardrobe-capture flow must produce; `Context` is what the pipeline
-consumes; `OutfitResult` is what `recommend()` returns to any caller (test API,
-Demo Day UI, MCP tool).
+consumes; `OutfitResult` is `pipeline.cite.build_result`'s internal return
+shape (its only remaining consumer since /recommend's retirement — Feature
+002 Phase 3 T037a); `SuggestResult` is what `POST /suggest` actually returns
+to callers.
 """
 
 from __future__ import annotations
@@ -190,7 +192,11 @@ class Outfit(BaseModel):
 
 
 class OutfitResult(BaseModel):
-    """What `recommend()` returns. 1-3 outfits + resolved sources."""
+    """`pipeline.cite.build_result`'s return shape — its only remaining
+    consumer is `pipeline.graph.explain`, which uses just `.sources` from
+    it (the graph's own `ScoredOutfit` list is the real outfits, see
+    `SuggestResult`). Kept only because `cite.py` stays unchanged
+    (constitution Principle I); not a public response type."""
 
     outfits: list[Outfit]
     sources: list[CitedSource] = Field(default_factory=list)

@@ -1,5 +1,5 @@
-"""Thin FastAPI test surface over `recommend()` — for exercising the engine over
-HTTP. No UI/frontend (that's a parallel track). Run:
+"""Thin FastAPI test surface over the styling graph — for exercising the
+engine over HTTP. No UI/frontend (that's a parallel track). Run:
 
     uv run uvicorn whattowear.api:app --reload
 """
@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from typing import Optional
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,14 +19,10 @@ from sqlalchemy.orm import Session
 from . import crud, storage, vision
 from .auth import get_bearer_token, get_current_user_id
 from .db import get_session
-from .pipeline import cite
 from .pipeline.graph import get_compiled_graph
-from .pipeline.run import run_pipeline
 from .schema import (
     CreateWardrobeItemFromUploadRequest,
     ExtractedAttributes,
-    Formality,
-    OutfitResult,
     PhotoExtractionResponse,
     SuggestRequest,
     SuggestResult,
@@ -47,43 +42,9 @@ app.add_middleware(
 )
 
 
-class RecommendRequest(BaseModel):
-    occasion: str
-    mood: Optional[str] = None
-    formality: Optional[Formality] = None
-    location: Optional[str] = None  # geocoded via Open-Meteo
-    temp_c: Optional[float] = None  # fallback if no location / offline
-    strategy: str = "advanced"  # baseline | hybrid | advanced
-    # user_id is NOT accepted from the body — it comes from the verified JWT
-    # `sub` claim (see get_current_user_id). A client-supplied id here would let
-    # any caller read any user's closet through the pipeline (the pre-002 leak).
-
-
-class RecommendResponse(BaseModel):
-    result: OutfitResult
-    rendered: str  # human-readable "why + sources"
-
-
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
-
-
-@app.post("/recommend", response_model=RecommendResponse)
-def recommend_endpoint(
-    req: RecommendRequest,
-    user_id: str = Depends(get_current_user_id),
-) -> RecommendResponse:
-    run = run_pipeline(
-        req.occasion,
-        mood=req.mood,
-        formality=req.formality,
-        location=req.location,
-        temp_c=req.temp_c,
-        user_id=user_id,
-        strategy=req.strategy,
-    )
-    return RecommendResponse(result=run.result, rendered=cite.render_text(run.result))
 
 
 @app.post("/suggest", response_model=SuggestResult)
