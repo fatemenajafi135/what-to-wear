@@ -88,7 +88,14 @@ So:
   manual, owner-only steps** — create the Supabase Storage `wardrobe-photos`
   bucket + RLS policy, deploy backend to Railway, deploy frontend to Vercel
   (`specs/003-mvp-app/tasks.md` T010/T037/T038/T039) — no coding session has
-  the dashboard access these need. See SDD-HANDOFF Step 4.
+  the dashboard access these need. **Also remaining, deliberately paused:
+  visual polish** — three styling passes (ad hoc CSS, then the Nocturne
+  design system's own component classes, then tracing exact colors out of
+  `design/What to Wear.dc.html`'s render logic) still didn't match
+  expectations; stopped rather than keep iterating without a way to
+  actually see it rendered. Full narrative:
+  `docs/003-mvp-app-implementation-report.md` (local, untracked). See
+  SDD-HANDOFF Step 4.
 - **Next: those 3 deploy steps, then resume Feature 002 Phases 2–4** (paused
   behind 003 — see SDD-HANDOFF Step 3), or start Feature 004.
 

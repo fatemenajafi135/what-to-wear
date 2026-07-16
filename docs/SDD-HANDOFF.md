@@ -81,7 +81,7 @@ from drifting.
 |---|---|---|
 | 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
 | 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **Phase 1 ✅ done and merged**; Phases 2–4 paused — deliberately reordered behind Feature 003 (see below), resume after. |
-| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | **Code complete, not yet deployed.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access this session didn't have): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). See Step 4 and `specs/003-mvp-app/tasks.md`. |
+| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | **Code complete, not yet deployed.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access this session didn't have): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). **Known, explicitly deferred gap: visual polish.** Three styling passes this session still didn't match `design/What to Wear.dc.html` to your satisfaction — you said to stop and pick it up later rather than keep iterating blind (no browser/screenshot tool was available to verify visually). Full narrative, including exactly what each pass got wrong and what to do differently next time: `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
 | 004 | preference-memory | Feedback capture, preference derivation. Unchanged, still after 003. |
 | 005 | production-hardening | Gateway, cache, guardrails, **full** deploy hardening (bare deploy pulled into 003; this is everything beyond that). |
 
@@ -369,8 +369,16 @@ small/mechanical. Artifacts land in `specs/003-mvp-app/`.
 >   access no coding session has): create the Supabase Storage
 >   `wardrobe-photos` bucket + per-user RLS policy; deploy backend to
 >   Railway; deploy frontend to Vercel; then re-run `quickstart.md` against
->   the live URLs. Tracked as `tasks.md` T010/T037/T038/T039 — do these next,
->   the feature is otherwise ready to merge.
+>   the live URLs. Tracked as `tasks.md` T010/T037/T038/T039.
+> - **Not done — visual polish, explicitly deferred.** Three styling passes
+>   this session (ad hoc CSS → the Nocturne design *system*'s token/component
+>   classes → tracing the actual selected/unselected chip colors out of
+>   `design/What to Wear.dc.html`'s own render logic) still didn't match your
+>   expectation. You said to stop iterating blind (no browser/screenshot tool
+>   was available to verify) and pick it up in a later session — this is a
+>   deliberate pause, not a resolved issue. Full narrative of what each pass
+>   got wrong and what to try differently: `docs/003-mvp-app-implementation-report.md`
+>   (local, untracked).
 >
 > Full narrative: `docs/003-mvp-app-planning-report.md` (local, untracked).
 
