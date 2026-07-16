@@ -75,6 +75,18 @@ def test_repeated_fresh_request_hits_cache_and_skips_the_graph(client, graph_cal
 
 
 def test_closet_edit_invalidates_the_cache(client, graph_call_spy):
+    """Known intermittent failure, not yet root-caused: this test has failed
+    twice in ~275-test full-suite runs (never in isolation, never paired
+    with just its preceding test, never in an 18-test combined-file rerun —
+    6/6 narrower reproductions passed). Both failures happened while other
+    heavy concurrent activity was hitting the same live Supabase pooler
+    (this session's own debugging scripts, or the eval harness, running in
+    parallel) — the leading hypothesis is pooler-level read-consistency
+    contention under concurrent load, not a logic bug in
+    pipeline/cache.py's fingerprint mechanism itself (independently
+    verified correct via manual reproduction and every narrower rerun
+    above). If this reproduces again in a *clean*, non-concurrent full run,
+    that hypothesis is wrong and needs revisiting."""
     _suggest(client, occasion="office")
     assert graph_call_spy.call_count == 1
 
