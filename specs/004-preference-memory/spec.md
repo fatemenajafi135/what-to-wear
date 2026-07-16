@@ -208,6 +208,14 @@ subsequent suggestions behave as if the user had no feedback history.
   signals (rejected colors, avoided categories, formality drift direction),
   computed from that user's accumulated feedback and used to softly
   influence future suggestions for that user only.
+- **Signal Dismissal** (implementation detail, not a user-facing entity):
+  a per-user, per-signal marker recording when a user removed or cleared a
+  specific derived signal (User Story 4). Not a stored copy of the profile
+  itself — it only affects which feedback counts toward that one signal
+  going forward, which is what lets a dismissed signal be learned again
+  later from new feedback (see Edge Cases). Left unspecified beyond this
+  because the Assumptions below already leave persistence mechanics to
+  implementation.
 
 ## Success Criteria *(mandatory)*
 
