@@ -195,3 +195,43 @@ class OutfitResult(BaseModel):
     outfits: list[Outfit]
     sources: list[CitedSource] = Field(default_factory=list)
     context: Optional[Context] = None
+
+
+# --- preference memory (Feature 004: preference-memory) ----------------------
+
+Verdict = Literal["liked", "rejected"]
+
+
+class SubmitFeedbackRequest(BaseModel):
+    """Body of POST /preferences/feedback. item_ids identify the reacted-to
+    outfit -- resolved server-side against the caller's own wardrobe_items,
+    never trusted as-is (see crud.record_feedback)."""
+
+    verdict: Verdict
+    reason: Optional[str] = None  # only meaningful when verdict == "rejected"
+    item_ids: list[str] = Field(min_length=1)
+
+
+class SuggestionFeedback(BaseModel):
+    """What POST /preferences/feedback returns."""
+
+    id: str
+    verdict: Verdict
+    reason: Optional[str] = None
+    item_ids: list[str]
+    created_at: str
+
+
+class PreferenceSignal(BaseModel):
+    key: str  # "color:#1b2a4a" / "category:blazer" / "formality_drift"
+    summary: str  # plain-language, e.g. "You tend to reject navy items."
+
+
+class PreferenceProfile(BaseModel):
+    """What GET /preferences returns. has_feedback distinguishes "no
+    feedback at all" (FR-008's empty state) from "feedback exists but no
+    signal has crossed threshold yet" (also signals=[], but has_feedback is
+    True)."""
+
+    has_feedback: bool
+    signals: list[PreferenceSignal] = Field(default_factory=list)

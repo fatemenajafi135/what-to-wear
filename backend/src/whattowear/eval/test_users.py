@@ -37,7 +37,13 @@ class TestUser:
     name: str
     description: str
     wardrobe: list[WardrobeItem]
-    preferences: dict[str, str] = field(default_factory=dict)  # seeded into the memory profile
+    # Descriptive only, for a human reading this file -- as of Feature 004
+    # (preference-memory), the profile is derived exclusively from real
+    # recorded feedback (memory.store.get_profile() aggregates Postgres
+    # suggestion_feedback rows); there's no longer a way to inject an
+    # arbitrary preference string directly, so this dict is no longer
+    # threaded into memory (see seed_test_user_memory's docstring below).
+    preferences: dict[str, str] = field(default_factory=dict)
 
 
 # --- Maya: minimalist office capsule, deliberately owns nothing formal/beachy
@@ -126,17 +132,6 @@ def get_test_user(user_id: str) -> TestUser:
     return TEST_USERS[user_id]
 
 
-def seed_test_user_memory(user: TestUser) -> None:
-    """Write this persona's preferences into the memory profile store, so a
-    later recommend(user_id=user.user_id) picks them up via profile_note().
-    Not called automatically anywhere — call it yourself when you want a
-    persona's preferences live in a session."""
-    from ..memory import store as memory
-
-    for key, value in user.preferences.items():
-        memory.set_preference(user.user_id, key, value)
-
-
 if __name__ == "__main__":
     # Manual check — NOT run automatically. Example:
     #   uv run python -m whattowear.eval.test_users test-amara office --temp-c 2
@@ -154,7 +149,11 @@ if __name__ == "__main__":
     args = ap.parse_args()
 
     user = get_test_user(args.user_id)
-    seed_test_user_memory(user)
+    # Profile seeding is no longer available here (Feature 004: the profile
+    # is derived only from real recorded feedback, via /preferences/feedback
+    # -> memory.store.get_profile()) -- this persona's `preferences` dict is
+    # descriptive only. To exercise profile_note()'s effect manually, record
+    # real feedback for this user_id through the API first.
     run = run_pipeline(
         args.occasion, mood=args.mood, temp_c=args.temp_c,
         wardrobe=user.wardrobe, user_id=user.user_id, strategy=args.strategy,

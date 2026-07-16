@@ -3,14 +3,22 @@
 Two layers, matching the course (AIE10 session 3):
 - **short-term**: a LangGraph `InMemorySaver` checkpointer (thread state). Exposed
   for any graph-based caller; also used here to keep per-thread interaction turns.
-- **long-term**: a LangGraph `InMemoryStore` holding a per-user **style profile**
-  (preferences learned over time), namespaced `(user_id, "profile")`.
+  Still in-memory — out of scope for Feature 004 (preference-memory); lost on
+  restart, unchanged from before.
+- **long-term**: a per-user **style profile** (preferences learned from
+  feedback over time). As of Feature 004, this is Postgres-backed, not an
+  in-memory store: `get_profile()` derives the profile on read by
+  aggregating that user's `suggestion_feedback` rows
+  (`memory.preferences.derive_signals()`) rather than reading back
+  previously-`put()` values — there is no longer a way to inject an
+  arbitrary preference string directly; a preference is only ever learned
+  from real recorded feedback (see `api.py`'s `/preferences/feedback`).
+  `profile_note(user_id)`'s signature and behavior are unchanged so
+  `pipeline/run.py`/`pipeline/generator.py` needed zero changes
+  (specs/004-preference-memory/research.md #4).
 
 This is deliberately NOT the knowledge base: the KB is shared fashion rules; this
 is private user state. Both are instantiated and visibly used by `recommend()`.
-
-Extension seam: swap `InMemoryStore`/`InMemorySaver` for persistent backends with
-the same API to make the profile durable in production.
 """
 
 from __future__ import annotations
@@ -21,28 +29,32 @@ from typing import Optional
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 
-# short-term (thread) + long-term (per-user) memory singletons
+from .. import crud
+from ..db import SessionLocal
+from . import preferences as preference_derivation
+
+# short-term (thread) memory singleton — untouched by Feature 004.
 checkpointer = InMemorySaver()
 _store = InMemoryStore()
-
-
-def _profile_ns(user_id: str) -> tuple[str, str]:
-    return (user_id, "profile")
 
 
 def _history_ns(user_id: str) -> tuple[str, str]:
     return (user_id, "history")
 
 
-# --- long-term style profile -------------------------------------------------
-
-
-def set_preference(user_id: str, key: str, value: str) -> None:
-    _store.put(_profile_ns(user_id), key, {"value": value, "updated_at": _now()})
+# --- long-term style profile (Postgres-backed, Feature 004) ------------------
 
 
 def get_profile(user_id: str) -> dict[str, str]:
-    return {item.key: item.value["value"] for item in _store.search(_profile_ns(user_id))}
+    """The derived preference profile, projected to the short `key: value`
+    shape `profile_note()` joins into a prompt sentence. Opens its own
+    short-lived session (no session parameter -- `profile_note()`'s call
+    site in `pipeline/run.py` passes none) via `db.SessionLocal()`, same as
+    any other non-request-scoped caller (research.md #4)."""
+    with SessionLocal() as session:
+        feedback, dismissals = crud.get_derivation_inputs(session, user_id)
+    signals = preference_derivation.derive_signals(feedback, dismissals)
+    return {s.key: s.detail for s in signals}
 
 
 def profile_note(user_id: Optional[str]) -> Optional[str]:
