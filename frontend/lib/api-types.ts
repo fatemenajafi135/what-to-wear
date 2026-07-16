@@ -21,23 +21,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/recommend": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Recommend Endpoint */
-        post: operations["recommend_endpoint_recommend_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/suggest": {
         parameters: {
             query?: never;
@@ -318,24 +301,6 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** Outfit */
-        Outfit: {
-            /** Items */
-            items: string[];
-            /** Rationale */
-            rationale: components["schemas"]["Rationale"][];
-        };
-        /**
-         * OutfitResult
-         * @description What `recommend()` returns. 1-3 outfits + resolved sources.
-         */
-        OutfitResult: {
-            /** Outfits */
-            outfits: components["schemas"]["Outfit"][];
-            /** Sources */
-            sources?: components["schemas"]["CitedSource"][];
-            context?: components["schemas"]["Context"] | null;
-        };
         /**
          * PhotoExtractionResponse
          * @description What POST /wardrobe/items/extract returns — an unsaved draft.
@@ -353,30 +318,6 @@ export interface components {
             text: string;
             /** Cites */
             cites?: string[];
-        };
-        /** RecommendRequest */
-        RecommendRequest: {
-            /** Occasion */
-            occasion: string;
-            /** Mood */
-            mood?: string | null;
-            /** Formality */
-            formality?: ("casual" | "smart_casual" | "business_casual" | "semi_formal" | "formal" | "black_tie") | null;
-            /** Location */
-            location?: string | null;
-            /** Temp C */
-            temp_c?: number | null;
-            /**
-             * Strategy
-             * @default advanced
-             */
-            strategy: string;
-        };
-        /** RecommendResponse */
-        RecommendResponse: {
-            result: components["schemas"]["OutfitResult"];
-            /** Rendered */
-            rendered: string;
         };
         /**
          * ScoredOutfit
@@ -537,39 +478,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
-                };
-            };
-        };
-    };
-    recommend_endpoint_recommend_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RecommendRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecommendResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
