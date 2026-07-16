@@ -25,6 +25,15 @@ what's being spent and on what, aren't scattered across the codebase. Out of
 scope: any change to what an outfit suggestion contains or how it's chosen,
 and any new user-facing feature."
 
+## Clarifications
+
+### Session 2026-07-16
+
+- Q: Should the cache be scoped strictly per-user, or shared globally whenever the context/closet-state key matches, regardless of which user made the request? → A: Per-user only — cache key always includes the requesting user's id; two different users never share a cache entry even with identical inputs.
+- Q: Does existing LangSmith tracing (already required by the constitution on every LLM call) satisfy FR-010's operator-visibility requirement, or is a separate cost/usage record required? → A: LangSmith tracing suffices — no new storage/dashboard needed, as long as the gateway swap keeps calls traced with cost/usage fields populated.
+- Q: Does FR-009's automatic retry mean same-provider retry only, or does it include falling back to a different configured provider/model? → A: Same-provider retry only, with backoff — no cross-provider fallback; a fully unavailable provider stays out of scope for automatic recovery.
+- Q: Should SC-003's "markedly faster" be pinned to a concrete target? → A: Yes — a cache hit responds in well under a second, versus the multi-second full pipeline; a clear order-of-magnitude difference without pinning an exact fragile number.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Reach the app from anywhere, not just localhost (Priority: P1)
@@ -106,14 +115,16 @@ volume, but the product works correctly without it — an efficiency
 improvement, not a correctness or reachability requirement.
 
 **Independent Test**: Issue the same styling request twice in a row and
-confirm the second response returns markedly faster than the first, with no
-new AI-provider usage recorded for the second call.
+confirm the second response returns in well under a second (versus multiple
+seconds for the first), with no new AI-provider usage recorded for the
+second call.
 
 **Acceptance Scenarios**:
 
 1. **Given** a styling request that has been served once already, **When**
    the same user makes the same request again shortly after, **Then** they
-   receive an equivalent result noticeably faster than the first time.
+   receive an equivalent result in well under a second, versus multiple
+   seconds the first time.
 2. **Given** a styling request that has never been made before, **When** a
    user makes it, **Then** it's processed in full (no incorrect cache
    reuse) and the result becomes reusable for future matching requests.
@@ -182,7 +193,11 @@ visible afterward.
   error.
 - **FR-006**: The system MUST be able to recognize when a new styling
   request is equivalent to (or close enough to) one it has already
-  answered, and reuse that prior result rather than reprocessing.
+  answered, and reuse that prior result rather than reprocessing. Cache
+  reuse is scoped strictly per-user: a cached result is only ever reused
+  for the same user who originally triggered it, never shared across
+  different users even when their requests and closet contents would
+  otherwise match.
 - **FR-007**: The system MUST NOT serve a cached result once it is no
   longer accurate — a cached suggestion becomes invalid the moment the
   requesting user's closet changes (any wardrobe item added, edited, or
@@ -191,12 +206,22 @@ visible afterward.
   consistent code path within the system (not multiple ad hoc call sites),
   enabling uniform retry and usage-tracking behavior.
 - **FR-009**: A transient (non-permanent) AI provider call failure MUST be
-  retried automatically before being surfaced as an error to the caller.
+  retried automatically, against the same provider/model, before being
+  surfaced as an error to the caller. Cross-provider fallback is out of
+  scope — a provider that is fully unavailable (not merely transiently
+  failing) is not automatically recovered from by this requirement.
 - **FR-010**: The system MUST make AI provider call cost/usage visible to
-  whoever operates it, without requiring code changes to inspect.
+  whoever operates it, without requiring code changes to inspect. The
+  existing constitution-mandated LangSmith tracing on every LLM call
+  satisfies this requirement, provided the routing layer required by
+  FR-008 keeps calls traced with their cost/usage fields populated — no
+  separate cost dashboard or persisted usage table is required.
 - **FR-011**: None of the above MAY change what an outfit suggestion
   contains or how it is selected — the existing deterministic
   scoring/retrieval behavior is preserved exactly.
+- **FR-012**: The system MUST expose a health check that reports failure
+  when it cannot reach the database or the vector store, not merely when
+  the process itself is running (Edge Cases).
 
 ### Key Entities *(include if feature involves data)*
 
@@ -204,11 +229,13 @@ visible afterward.
   and frontend, and the durable photo storage location, as opposed to any
   developer's local machine.
 - **Cached suggestion**: a previously computed styling result, keyed by the
-  request's meaningful inputs (occasion/context and the requesting user's
-  closet state), reusable for a matching later request until the user's
-  closet changes.
+  requesting user's id plus the request's meaningful inputs (occasion/
+  context and that user's closet state), reusable only for that same user
+  on a matching later request until their closet changes. Never reused
+  across different users.
 - **Provider call record**: one AI-provider call's cost, usage, and
-  outcome, visible after the fact.
+  outcome, visible after the fact via the existing LangSmith tracing
+  (already required on every LLM call) — not a separate persisted entity.
 
 ## Success Criteria *(mandatory)*
 
@@ -221,7 +248,9 @@ visible afterward.
   that exist in that user's closet or the shared catalog — verified
   automatically on every response, not just by code review.
 - **SC-003**: A repeated, equivalent styling request (same user, unchanged
-  closet) returns markedly faster than the first time it was made.
+  closet) returns in well under a second, versus multiple seconds for the
+  original full-pipeline request — a clear order-of-magnitude improvement,
+  not a fixed millisecond target.
 - **SC-004**: A single transient AI-provider failure never results in a
   visible error to the end user.
 - **SC-005**: Anyone operating the system can answer "what did we spend on
