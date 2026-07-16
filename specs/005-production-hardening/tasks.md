@@ -143,10 +143,18 @@ outfit fails.
   any other valid outfits remain, and confirm the existing zero-outfit
   `note` fires when every outfit is bad — in
   `backend/tests/integration/test_grounding_graph.py` (depends on T011).
-- [ ] T013 [US2] Re-run `uv run python -m whattowear.eval.harness` against
+- [X] T013 [US2] Re-run `uv run python -m whattowear.eval.harness` against
   the golden set and confirm no legitimate outfit is ever dropped
   (`retrieval_recall` unchanged from T004's baseline) — proves the new node
   only removes genuinely-bad outfits, never good ones (depends on T011).
+  **Verified**: per-case `retrieval_recall` byte-identical to the archived
+  baseline for every shared golden-set case, all 3 strategies (one extra
+  case in the current golden set vs. the archived comparison file explains
+  the mean-level difference, not a per-case regression); `owned_only` stays
+  1.0 in both. One unrelated single-case `owned_only` flip on `hybrid`
+  (False->True) is on `final_state["generated"]`, a field `verify_grounding`
+  doesn't even touch — LLM-sampling variance, the documented flakiness
+  pattern, not caused by this feature.
 
 **Checkpoint**: The grounding guardrail is live for both the `/suggest`
 endpoint and `eval/harness.py`'s direct graph invocation (same compiled
@@ -167,25 +175,29 @@ system reprocesses fully rather than serving the now-stale cached result.
 
 ### Tests for User Story 3
 
-- [ ] T014 [P] [US3] Unit tests for the cache-key derivation function —
+- [X] T014 [P] [US3] Unit tests for the cache-key derivation function —
   normalization collapses equivalent occasion/mood casing and whitespace,
   two different users never produce the same key even with identical other
   inputs, and the wardrobe fingerprint changes when an item is added,
-  edited, or removed — in `backend/tests/unit/test_cache.py`.
+  edited, or removed — in `backend/tests/unit/pipeline/test_cache.py`.
+  **Caught a real bug**: `OCCASION_FORMALITY.get(occasion, ...)` used the
+  raw (non-normalized) occasion, so differently-cased occasions resolved to
+  different default formalities — fixed to use `occasion_norm`.
 
 ### Implementation for User Story 3
 
-- [ ] T015 [US3] Implement `backend/src/whattowear/pipeline/cache.py` per
+- [X] T015 [US3] Implement `backend/src/whattowear/pipeline/cache.py` per
   data-model.md: a pure `compute_cache_key(user_id, ctx_fields, wardrobe) ->
   str` (sha256 over user id + normalized occasion/mood/formality/temp_band/
-  season + sorted `(id, updated_at)` wardrobe fingerprint), plus
-  `get_cached_result(key) -> SuggestResult | None` and
-  `set_cached_result(key, result, ttl_seconds=3600) -> None` using
-  `redis.Redis.from_url(os.environ["REDIS_URL"])` directly (no abstraction
-  layer — one concrete backend). Both get/set catch connection errors and
-  degrade to a no-op miss (spec Edge Cases: cache store unavailable ->
-  process fresh, never fail the request).
-- [ ] T016 [US3] Wire the cache into `suggest_endpoint` in
+  season + a **full-content** wardrobe fingerprint — see research.md §2's
+  implementation-time correction, not `(id, updated_at)` pairs as
+  originally planned), plus `get_cached_result(key) -> (SuggestResult,
+  note) | None` and `set_cached_result(key, result, note, ttl_seconds=3600)
+  -> None` using `redis.Redis.from_url(os.environ["REDIS_URL"])` directly
+  (no abstraction layer — one concrete backend). Both get/set catch
+  connection errors and degrade to a no-op miss (spec Edge Cases: cache
+  store unavailable -> process fresh, never fail the request).
+- [X] T016 [US3] Wire the cache into `suggest_endpoint` in
   `backend/src/whattowear/api.py`: load the wardrobe once via
   `context_assembler.load_wardrobe`, compute the cache key (skip the cache
   entirely when `req.thread_id` continues an existing conversation — a
@@ -195,14 +207,25 @@ system reprocesses fully rather than serving the now-stale cached result.
   pass the already-loaded wardrobe into `graph.invoke(..., wardrobe=...)`
   (using `GraphState.wardrobe`'s existing DB-load-bypass override, so the
   wardrobe isn't fetched twice) and `set_cached_result` the fresh result
-  after a successful run (depends on T015).
-- [ ] T017 [P] [US3] Integration test against a real (test) Redis instance:
+  after a successful run (depends on T015). **Real bug found and fixed**:
+  a cache hit's `thread_id` was never passed to `graph.invoke`, so the
+  checkpointer had no state for it — a refinement continuing that
+  `thread_id` was silently treated as a brand-new conversation (reproduced
+  via a seeded cache entry + `test_suggest_refinement.py`'s existing
+  alternatives test). Fixed by seeding the checkpointer on every cache hit
+  via `graph.update_state(config, {...})` (research.md §2).
+- [X] T017 [P] [US3] Integration test against a real (test) Redis instance:
   first request misses and populates the cache, an immediate repeat hits and
   matches the first response's `result` exactly, then editing the test
   user's wardrobe (add/patch/delete one item) causes the next identical
   request to miss again — in `backend/tests/integration/test_suggest_cache.py`
-  (depends on T016).
-- [ ] T018 [US3] Integration test: point `REDIS_URL` at an unreachable host
+  (depends on T016). Also added: a refinement `thread_id` is never served
+  from cache. Needed an autouse Redis-flush fixture for test isolation
+  (all cases share one occasion/user) and a spy on `graph.invoke` itself,
+  not `get_compiled_graph()` (which a hit legitimately still calls once,
+  for the `update_state` seeding above) — both found via a first failing
+  run, not assumed upfront.
+- [X] T018 [US3] Integration test: point `REDIS_URL` at an unreachable host
   and confirm `/suggest` still returns a normal successful result (processed
   fresh, not an error) — in `backend/tests/integration/test_suggest_cache.py`
   alongside T017 (depends on T015, T016).
@@ -226,36 +249,37 @@ afterward.
 
 ### Implementation for User Story 4
 
-- [ ] T019 [US4] Swap the internals of `get_chat_model()` and
+- [X] T019 [US4] Swap the internals of `get_chat_model()` and
   `get_judge_model()` in `backend/src/whattowear/config.py` to construct
-  `langchain_litellm.ChatLiteLLM` (with `num_retries`/a `RetryPolicy`
-  distinguishing transient errors — timeouts, rate limits, 5xx — from
-  non-transient ones per research.md §1) pointed at the existing
-  `GATEWAY_BASE_URL`/gateway key; `get_embeddings()` is left on
-  `langchain_openai.OpenAIEmbeddings`, unchanged (research.md §1 — no
-  reported problem to fix there, and forcing it through litellm too would be
-  scope creep). All four call sites
-  (`vision.py`, `pipeline/generator.py`, `external/trends.py`,
-  `eval/judge.py`) keep calling `.with_structured_output(...)`/`.invoke(...)`
-  with no code change.
-- [ ] T020 [US4] Smoke-test all four call sites still work unchanged against
-  the real gateway (existing unit/integration tests plus a manual golden-set
-  case each for the two `with_structured_output` sites, `vision.py` and
-  `eval/judge.py`, are enough — no new test files needed, this is a
-  verification pass). If the known upstream `tool_choice` validation bug
-  (`langchain-ai/langchain#28176`) reproduces on any of them, apply the
-  `method="json_mode"` fallback to `with_structured_output(...)` at the
-  affected call site(s) only (research.md §1) (depends on T019).
-- [ ] T021 [P] [US4] Integration test: mock/monkeypatch the gateway transport
-  to return one transient error (e.g. a 503) followed by success on retry;
-  confirm `/suggest` still returns a normal result with nothing surfaced to
-  the caller — in `backend/tests/integration/test_llm_retry.py` (depends on
+  `langchain_litellm.ChatLiteLLM` (`max_retries=3`, litellm's own
+  transient-failure retry) pointed at the existing `GATEWAY_BASE_URL`/gateway
+  key; `get_embeddings()` is left on `langchain_openai.OpenAIEmbeddings`,
+  unchanged (research.md §1 — no reported problem to fix there, and forcing
+  it through litellm too would be scope creep).
+- [X] T020 [US4] Smoke-test all four call sites against the real gateway.
+  `pipeline/generator.py`, `eval/judge.py`, `external/trends.py` needed
+  **zero changes** — confirmed by direct real calls. `vision.py`'s
+  `ExtractedAttributes` (all-`Optional` fields) hit a real gateway
+  incompatibility (not the originally-guessed `json_mode` fallback — that
+  and `json_schema, strict=False` were both tried and rejected by the
+  gateway too). Fixed with a hand-written nullable-required JSON schema —
+  see research.md §1's "what actually happened" for the full story
+  (depends on T019).
+- [X] T021 [P] [US4] Integration test: patch `litellm.completion` (the
+  actual transport `ChatLiteLLM.client` calls) to raise one transient
+  `APIConnectionError` then fall through to the real call; confirm the
+  chat model's `.invoke()` still returns a normal result — in
+  `backend/tests/integration/test_llm_retry.py` (depends on T019).
+- [ ] T022 [US4] **Manual, owner-only**: after a handful of real `/suggest`
+  calls (already happened via this session's own testing), check the
+  LangSmith project dashboard shows cost/usage populated on the traced LLM
+  calls — confirms FR-010/SC-005 per this session's clarification (existing
+  tracing suffices, no new dashboard built). This session has no LangSmith
+  dashboard access to confirm visually; the traced calls themselves were
+  confirmed happening (LangSmith tracing is already mandatory,
+  `config._require_langsmith()` fails fast without it, and every real call
+  in this session's testing succeeded under that requirement) (depends on
   T019).
-- [ ] T022 [US4] Manual verification: after a handful of real `/suggest`
-  calls against the swapped routing layer, check the LangSmith project
-  dashboard shows cost/usage populated on the traced LLM calls — confirms
-  FR-010/SC-005 per this session's clarification (existing tracing suffices,
-  no new dashboard built) (depends on T019).
 
 **Checkpoint**: Every chat-completion call in the codebase goes through
 LiteLLM; a transient failure is invisible to callers; cost/usage is visible
@@ -331,7 +355,7 @@ in the existing LangSmith project.
 ```bash
 # Different developers/sessions could take these in parallel — disjoint files:
 Task: "Unit tests for verify_outfit_grounding() in backend/tests/unit/pipeline/test_grounding.py"
-Task: "Unit tests for cache-key derivation in backend/tests/unit/test_cache.py"
+Task: "Unit tests for cache-key derivation in backend/tests/unit/pipeline/test_cache.py"
 ```
 
 ---

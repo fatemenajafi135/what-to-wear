@@ -30,10 +30,14 @@ suggest:v1:{sha256(user_id | occasion_norm | mood_norm | formality | temp_band |
 - `temp_band`/`season`: `context_assembler`'s existing derived bands, not
   the raw `temp_c` float — this is what makes "near-identical" requests
   collapse to the same entry per the spec's Assumptions.
-- `wardrobe_fp`: `sha256` over that user's wardrobe rows' `(id, updated_at)`
-  pairs, sorted by `id`, joined and hashed. Changes on any add/edit/remove —
-  this is the mechanism that satisfies FR-007 (no explicit invalidation
-  call needed; a stale fingerprint just never matches a fresh lookup again).
+- `wardrobe_fp`: `sha256` over that user's wardrobe items' full serialized
+  content (each item's `model_dump_json()`, sorted before joining so load
+  order never matters). Changes on any add/edit/remove — this is the
+  mechanism that satisfies FR-007 (no explicit invalidation call needed; a
+  stale fingerprint just never matches a fresh lookup again). Hashing full
+  content rather than an `(id, updated_at)` pair (research.md §2's
+  implementation-time correction) needs no schema change to the shared
+  `WardrobeItem` model, which doesn't carry `updated_at`.
 
 **Value** (JSON):
 

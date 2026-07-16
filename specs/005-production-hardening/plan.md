@@ -24,8 +24,11 @@ matches — see research.md §2 for why); (4) swap `config.py`'s LangChain
 model factories from `langchain_openai` classes to `langchain-litellm`'s
 `ChatLiteLLM`, still pointed at the existing Vercel AI Gateway, so every
 chat-completion call site gets automatic retry-on-transient-failure and
-LangSmith-visible cost/usage for free, with zero change to any of the four
-call sites that consume it.
+LangSmith-visible cost/usage for free. Three of the four call sites needed
+zero changes; `vision.py`'s all-`Optional`-fields extraction schema hit a
+real gateway incompatibility with `ChatLiteLLM`'s default structured-output
+handling, fixed with a hand-written nullable-required JSON schema
+(research.md §1's "what actually happened").
 
 ## Technical Context
 
@@ -164,7 +167,7 @@ backend/
     │   │   └── test_grounding.py   # NEW: verify_outfit_grounding() cases
     │   │                           #   (tests/unit/pipeline/ already exists
     │   │                           #   for pipeline/graph.py's own tests)
-    │   └── test_cache.py           # NEW: cache key derivation (pure part)
+    │   │   └── test_cache.py       # NEW: cache key derivation (pure part)
     └── integration/
         ├── test_grounding_graph.py # NEW: bad item id dropped via compiled graph
         └── test_suggest_cache.py   # NEW: hit/miss/invalidation-on-edit against test Redis

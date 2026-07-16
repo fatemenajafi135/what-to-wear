@@ -36,20 +36,39 @@ sites' invocation code.
   LangSmith-visible cost/usage the way routing the actual provider call
   through litellm does.
 
-**Risk flagged for implementation**: a known upstream issue
-(`langchain-ai/langchain#28176`) reports `with_structured_output` raising a
-`BadRequestError` on `tool_choice` validation for `ChatLiteLLM` + OpenAI-style
-models in some versions. Mitigation, in order: (a) pin a current
-`langchain-litellm` release and verify empirically against the gateway with
-a smoke test (`vision.py`'s extraction call and `generator.py`'s outfit-gen
-call, both already covered by existing tests/eval cases) before relying on
-it; (b) if the bug reproduces, pass `method="json_mode"` to
-`with_structured_output(...)` at each of the four call sites — litellm
-supports JSON-mode structured output uniformly across OpenAI-style models,
-and every model this project targets is OpenAI-style via the gateway. This
-is a one-line-per-call-site change, not a redesign, so it doesn't need to be
-decided now — a task in tasks.md verifies this and applies the fallback only
-if needed.
+**Risk flagged for implementation, and what actually happened**: a known
+upstream issue (`langchain-ai/langchain#28176`) reports
+`with_structured_output` raising a `BadRequestError` on `tool_choice`
+validation for `ChatLiteLLM` + OpenAI-style models in some versions. Smoke
+testing against the real gateway (not the exact `#28176` symptom, but the
+same root cause) found: `generator.py`'s `GenOutput`/`judge.py`'s
+`_JudgeScore` schemas have no `Optional`/defaulted fields, so their
+auto-derived JSON schemas already list every property in `required` and
+both call sites work completely unchanged. `vision.py`'s
+`ExtractedAttributes` is **all**-`Optional` fields (by design — a failed
+extraction field must not block the others) — Pydantic omits defaulted
+fields from `required`, and the gateway's strict structured-output mode
+rejects that outright: `"'required' is required to be supplied and to be an
+array including every key in properties. Missing 'category'."` Two fallbacks
+were tried and rejected before finding the real fix:
+- `method="json_mode"` (the originally-planned fallback): the gateway
+  rejects `response_format={"type": "json_object"}` entirely for this route
+  — `"Invalid input", 'param': 'response_format'` — confirmed even on a
+  plain text-only call with no image involved, so this isn't a
+  multimodal-specific issue.
+- `method="json_schema", strict=False`: `langchain-litellm`'s `strict` flag
+  doesn't suppress the requirement server-side; same `required`-array error.
+
+**Actual fix**: `vision.py` now passes a hand-written JSON schema dict
+(`_EXTRACTION_SCHEMA`) to `with_structured_output(..., method="json_schema")`
+instead of the `ExtractedAttributes` class directly — every property typed
+nullable (`["string", "null"]` etc.) and *all* listed in `required`,
+matching what OpenAI-style structured outputs actually expect for optional
+fields. Passing a raw dict schema returns a plain `dict` (not a Pydantic
+instance), so `vision.py` parses it into `ExtractedAttributes(**raw)`
+itself afterward. This is confirmed working against the real gateway with
+a real image. `generator.py`/`judge.py`/`trends.py` needed zero changes —
+exactly as planned for those three.
 
 **Embeddings**: `langchain-litellm` does not (as of research) ship a
 dedicated embeddings class; `get_embeddings()` keeps using
@@ -90,13 +109,28 @@ sha256(user_id | normalized_occasion | mood | formality | temp_band | season | w
   logic (already computed today, not a new concept) rather than the raw
   `temp_c` float, so two requests a few degrees apart correctly collapse to
   one cache entry.
-- `wardrobe_fingerprint` is a hash of that user's current wardrobe rows
-  (`id`, `updated_at` pairs, sorted) — any add/edit/remove changes this hash,
-  so a stale entry is never returned (FR-007) as a natural consequence of the
-  key changing, with no separate invalidation-on-write hook needed. A short
-  TTL (e.g. 1 hour) is kept underneath as the safety net the spec's
-  Assumptions explicitly allow, in case a hash collision or clock skew ever
-  produces a false key match.
+- `wardrobe_fingerprint` is a hash of that user's current wardrobe items'
+  full serialized content (sorted, so load order never matters) — any
+  add/edit/remove changes this hash, so a stale entry is never returned
+  (FR-007) as a natural consequence of the key changing, with no separate
+  invalidation-on-write hook needed. A short TTL (e.g. 1 hour) is kept
+  underneath as the safety net the spec's Assumptions explicitly allow, in
+  case a hash collision or clock skew ever produces a false key match.
+  **Implementation-time correction**: the original plan was to hash
+  `(id, updated_at)` pairs, but the shared `WardrobeItem` Pydantic schema
+  (unlike the SQLAlchemy row it's built from) doesn't carry `updated_at` —
+  adding it would ripple into the OpenAPI-generated frontend types for a
+  cache-only concern. Hashing each item's full serialized content instead
+  needs no schema change and catches an in-place attribute edit exactly as
+  well as an add/remove (`pipeline/cache.py::_wardrobe_fingerprint`).
+- When the request supplies `location` instead of `temp_c`,
+  `context_assembler.assemble_context` resolves the actual temp/season via a
+  live weather call — replicating that before every cache check would mean
+  paying for a network call on every request, defeating the cache's own
+  purpose. The key instead uses the normalized `location` string directly in
+  that case (`pipeline/cache.py::compute_cache_key`) — still a meaningful
+  input per the spec's Assumptions, bounded by the safety-net TTL for any
+  weather drift in between.
 - Scope: **only the first turn of a conversation** (no incoming `thread_id`,
   or a `thread_id` the checkpointer has no prior state for) is eligible for
   a cache read/write. A refinement turn ("warmer", "alternatives") always
@@ -117,6 +151,23 @@ already-loaded wardrobe is passed into `graph.invoke(..., wardrobe=...)` —
 `GraphState.wardrobe` already exists as an explicit override precisely for
 this ("bypassing DB load", currently used only by `eval/test_users.py`) — so
 the cache doesn't cause a second wardrobe fetch inside `gather_context`.
+
+**Bug found and fixed during implementation**: a cache hit's `thread_id` was
+initially never passed to `graph.invoke` at all (that's the whole point —
+skip the graph), which meant the checkpointer had no state for it. A client
+that then continued that `thread_id` with a refinement ("warmer") hit
+`parse_request`'s continuation check (`state.get("original_context") is not
+None`), found nothing, and silently treated the refinement utterance as a
+brand-new occasion — reproduced via `tests/integration/test_suggest_refinement.py`'s
+existing alternatives test once a real cache hit happened to occur in the
+same run. Fixed by seeding the checkpointer on every cache hit via the
+compiled graph's `update_state(config, {...})` — writing exactly the
+`ctx`/`original_context`/`last_result`/`refinement_deltas` fields a real
+first turn would have left behind, reconstructed via
+`context_assembler.assemble_context` (one weather call if `location` was
+given, only on the hit path — a cache hit is no longer *zero* network calls,
+only zero *retrieval/generation/LLM* calls, which is what FR-006/US3's
+Independent Test and SC-003 actually require).
 
 **Rationale for not using LiteLLM's semantic cache for this**: LiteLLM's
 Redis semantic cache (`litellm.cache = Cache(type="redis-semantic", ...)`)
