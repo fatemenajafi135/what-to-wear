@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: "/closet", label: "Closet" },
   { href: "/closet/add", label: "Add Item" },
   { href: "/suggest", label: "Suggest" },
+  { href: "/preferences", label: "Preferences" },
 ];
 
 export function AppShell({ user, children }: { user: User; children: React.ReactNode }) {

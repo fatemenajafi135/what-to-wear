@@ -152,6 +152,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/preferences/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Feedback
+         * @description Records or replaces a reaction to a specific outfit (US1). item_ids
+         *     are resolved against the caller's own wardrobe -- an id that doesn't
+         *     exist or belongs to someone else is a 404, never silently accepted.
+         */
+        post: operations["submit_feedback_preferences_feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Preferences
+         * @description A plain-language summary of what's been learned (US3). has_feedback
+         *     distinguishes "no feedback at all" from "feedback exists, no signal has
+         *     crossed threshold yet" -- both have signals=[], only the former is False.
+         */
+        get: operations["get_preferences_preferences_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Clear Preferences
+         * @description Clears the entire derived profile in one action (US4) -- dismisses
+         *     every signal currently present, reusing the exact same per-signal
+         *     mechanism as remove_preference_signal rather than a separate code path
+         *     (research.md #3).
+         */
+        delete: operations["clear_preferences_preferences_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/preferences/signals/{signal_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Preference Signal
+         * @description Removes one derived signal without affecting the rest of the profile
+         *     (US4). Idempotent -- dismissing an already-absent signal is a no-op,
+         *     not a 404 (contracts/preferences.md).
+         */
+        delete: operations["remove_preference_signal_preferences_signals__signal_key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -304,6 +377,26 @@ export interface components {
             /** Extraction Ok */
             extraction_ok: boolean;
         };
+        /**
+         * PreferenceProfile
+         * @description What GET /preferences returns. has_feedback distinguishes "no
+         *     feedback at all" (FR-008's empty state) from "feedback exists but no
+         *     signal has crossed threshold yet" (also signals=[], but has_feedback is
+         *     True).
+         */
+        PreferenceProfile: {
+            /** Has Feedback */
+            has_feedback: boolean;
+            /** Signals */
+            signals?: components["schemas"]["PreferenceSignal"][];
+        };
+        /** PreferenceSignal */
+        PreferenceSignal: {
+            /** Key */
+            key: string;
+            /** Summary */
+            summary: string;
+        };
         /** Rationale */
         Rationale: {
             /** Text */
@@ -334,6 +427,42 @@ export interface components {
             result: components["schemas"]["OutfitResult"];
             /** Rendered */
             rendered: string;
+        };
+        /**
+         * SubmitFeedbackRequest
+         * @description Body of POST /preferences/feedback. item_ids identify the reacted-to
+         *     outfit -- resolved server-side against the caller's own wardrobe_items,
+         *     never trusted as-is (see crud.record_feedback).
+         */
+        SubmitFeedbackRequest: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "liked" | "rejected";
+            /** Reason */
+            reason?: string | null;
+            /** Item Ids */
+            item_ids: string[];
+        };
+        /**
+         * SuggestionFeedback
+         * @description What POST /preferences/feedback returns.
+         */
+        SuggestionFeedback: {
+            /** Id */
+            id: string;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "liked" | "rejected";
+            /** Reason */
+            reason?: string | null;
+            /** Item Ids */
+            item_ids: string[];
+            /** Created At */
+            created_at: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -697,6 +826,106 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WardrobeItem"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_feedback_preferences_feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionFeedback"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_preferences_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceProfile"];
+                };
+            };
+        };
+    };
+    clear_preferences_preferences_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_preference_signal_preferences_signals__signal_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                signal_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

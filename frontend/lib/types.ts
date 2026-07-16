@@ -14,3 +14,7 @@ export type CreateWardrobeItemFromUploadRequest = components["schemas"]["CreateW
 export type Outfit = components["schemas"]["Outfit"];
 export type OutfitResult = components["schemas"]["OutfitResult"];
 export type RecommendResponse = components["schemas"]["RecommendResponse"];
+export type SubmitFeedbackRequest = components["schemas"]["SubmitFeedbackRequest"];
+export type SuggestionFeedback = components["schemas"]["SuggestionFeedback"];
+export type PreferenceSignal = components["schemas"]["PreferenceSignal"];
+export type PreferenceProfile = components["schemas"]["PreferenceProfile"];
