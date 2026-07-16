@@ -65,6 +65,11 @@ _MAX_WARMTH_BY_BAND: dict[str, int] = {"warm": 2, "hot": 1}
 # hard-constraint bounds in wardrobe_retrieval, not to ctx itself.
 _REFINEMENT_WARMTH_STEP = 2  # warmth floor added per "warmer" utterance
 _REFINEMENT_FORMALITY_STEP = 1  # notches shifted down per "less formal" utterance
+# Footwear/accessories don't carry the same warmth signal a core layering
+# piece does (a fixture-data reality: footwear tops out around warmth=3,
+# most accessories sit at 0) — a uniform floor across every category starves
+# those slots and forces the FR-015 fallback far more than intended.
+_WARMTH_FLOOR_EXEMPT_GROUPS = frozenset({"footwear", "accessory"})
 
 _WARMER_KEYWORDS = ("warmer", "warm")
 _LESS_FORMAL_KEYWORDS = ("less formal", "more casual", "casual")
@@ -263,8 +268,9 @@ def _item_fits_hard_constraints(item: WardrobeItem, ctx: Context, deltas: Option
         max_warmth = _MAX_WARMTH_BY_BAND[ctx.temp_band]
         if not weather_appropriate([item.id], {item.id: item}, {"max_warmth": max_warmth}):
             return False
-    if warmer_count and item.warmth < warmer_count * _REFINEMENT_WARMTH_STEP:
-        return False
+    if warmer_count and categories.group_of(item.category) not in _WARMTH_FLOOR_EXEMPT_GROUPS:
+        if item.warmth < warmer_count * _REFINEMENT_WARMTH_STEP:
+            return False
     return True
 
 

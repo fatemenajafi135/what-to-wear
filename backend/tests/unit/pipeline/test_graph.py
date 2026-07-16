@@ -143,6 +143,17 @@ class TestItemFitsHardConstraintsRefinementDeltas:
         cold_item = _item("a", "top", formality="business_casual", warmth=0)
         assert graph._item_fits_hard_constraints(cold_item, ctx, []) is True
 
+    def test_warmer_delta_does_not_gate_footwear_or_accessories(self):
+        # footwear/accessories rarely carry high warmth values in practice
+        # (a fixture-data reality) -- gating them the same way core layers
+        # are gated starves those slots and forces the FR-015 fallback far
+        # more than "warmer" should.
+        ctx = Context(occasion="office", formality="business_casual")
+        cold_shoe = _item("a", "sneakers", formality="business_casual", warmth=0)
+        cold_belt = _item("b", "belt", formality="business_casual", warmth=0)
+        assert graph._item_fits_hard_constraints(cold_shoe, ctx, ["warmer"]) is True
+        assert graph._item_fits_hard_constraints(cold_belt, ctx, ["warmer"]) is True
+
     def test_less_formal_delta_lowers_the_acceptable_band(self):
         ctx = Context(occasion="office", formality="business_casual")  # notch 2
         original_level = _item("a", "top", formality="business_casual")  # notch 2

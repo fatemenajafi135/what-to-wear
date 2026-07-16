@@ -29,6 +29,7 @@ from ..pipeline import cite
 from ..pipeline.generator import GenOutput
 from ..pipeline.graph import get_compiled_graph
 from .golden_set import GoldenCase, load_cases
+from .judge import format_outfit_for_judge, judge_outfit
 from .properties import check_outfit
 
 ARTIFACTS_DIR = REPO_ROOT / "artifacts" / "eval_runs"
@@ -49,7 +50,7 @@ def _rule_text_map() -> dict[str, str]:
     return {c.metadata["rule_id"]: c.page_content for c in get_kb().chunks}
 
 
-def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str]) -> dict:
+def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str], judge: bool = False) -> dict:
     graph = get_compiled_graph()
     thread_id = str(uuid.uuid4())
     final_state = graph.invoke(
@@ -94,6 +95,12 @@ def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str]) -> dict
         (o.rank_score for o in scored), reverse=True
     )
 
+    # optional reported-only LLM judge score (Phase 4, T046, FR-010) — never
+    # computed by default (an extra LLM call per case would slow/flake the
+    # mandatory no-regression gate); opt in with --judge. Attached to the row
+    # for reporting only, never fed back into rank_score/ordering above.
+    judge_score = judge_outfit(_user_input(case), format_outfit_for_judge(scored[0])) if judge and scored else None
+
     return {
         "case_id": case.id,
         "strategy": strategy,
@@ -116,14 +123,17 @@ def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str]) -> dict
         "ungrounded_cites": bad_cites,
         "num_outfits": len(scored),
         "top_rank_score": scored[0].rank_score if scored else None,
+        "judge_score": judge_score,
     }
 
 
-def run_strategy(cases: list[GoldenCase], strategy: str, rule_text: dict[str, str]) -> list[dict]:
+def run_strategy(
+    cases: list[GoldenCase], strategy: str, rule_text: dict[str, str], judge: bool = False
+) -> list[dict]:
     rows = []
     for case in cases:
         try:
-            rows.append(run_case(case, strategy, rule_text))
+            rows.append(run_case(case, strategy, rule_text, judge=judge))
         except Exception as exc:  # noqa: BLE001
             print(f"  [error] {case.id}/{strategy}: {exc}")
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -171,8 +181,15 @@ def summarize(rows_by_strategy: dict[str, list[dict]]) -> None:
         line += f"{sum(scored) / len(scored):>12.2f}" if scored else f"{'-':>12}"
     print(line)
 
+    if any(r.get("judge_score") is not None for rows in rows_by_strategy.values() for r in rows):
+        line = f"{'judge_score':<22}"
+        for rows in rows_by_strategy.values():
+            judged = [r["judge_score"] for r in rows if r["judge_score"] is not None]
+            line += f"{sum(judged) / len(judged):>12.2f}" if judged else f"{'-':>12}"
+        print(line)
 
-def main(strategies: list[str] | None = None, limit: int | None = None) -> None:
+
+def main(strategies: list[str] | None = None, limit: int | None = None, judge: bool = False) -> None:
     strategies = strategies or STRATEGIES
     cases = load_cases()
     if limit:
@@ -181,7 +198,7 @@ def main(strategies: list[str] | None = None, limit: int | None = None) -> None:
     rows_by_strategy: dict[str, list[dict]] = defaultdict(list)
     for strat in strategies:
         print(f"\nRunning strategy: {strat} ({len(cases)} cases)")
-        rows_by_strategy[strat] = run_strategy(cases, strat, rule_text)
+        rows_by_strategy[strat] = run_strategy(cases, strat, rule_text, judge=judge)
     summarize(rows_by_strategy)
 
 
@@ -191,5 +208,10 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--strategies", nargs="*", default=STRATEGIES)
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument(
+        "--judge", action="store_true",
+        help="also compute the optional reported-only LLM judge score (FR-010) — one extra "
+        "LLM call per case, off by default so it doesn't slow/flake the no-regression gate",
+    )
     args = ap.parse_args()
-    main(strategies=args.strategies, limit=args.limit)
+    main(strategies=args.strategies, limit=args.limit, judge=args.judge)
