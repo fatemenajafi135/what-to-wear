@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import type { WardrobeItem } from "@/lib/types";
 import { ClosetItemCard } from "@/components/ClosetItemCard";
+import { CATEGORY_GROUPS } from "@/lib/taxonomy";
+
+const FILTERS = ["all", ...CATEGORY_GROUPS] as const;
 
 export default function ClosetPage() {
   const [items, setItems] = useState<WardrobeItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<(typeof FILTERS)[number]>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -29,6 +33,12 @@ export default function ClosetPage() {
     };
   }, []);
 
+  const visibleItems = useMemo(() => {
+    if (!items) return [];
+    if (activeFilter === "all") return items;
+    return items.filter((item) => item.category === activeFilter);
+  }, [items, activeFilter]);
+
   return (
     <div className="closet-page">
       <h1>Your closet</h1>
@@ -47,11 +57,28 @@ export default function ClosetPage() {
       )}
 
       {items !== null && items.length > 0 && (
-        <div className="closet-grid">
-          {items.map((item) => (
-            <ClosetItemCard key={item.id} item={item} />
-          ))}
-        </div>
+        <>
+          <div className="closet-filters">
+            {FILTERS.map((f) => (
+              <button
+                key={f}
+                type="button"
+                className={f === activeFilter ? "chip chip-selected" : "chip"}
+                onClick={() => setActiveFilter(f)}
+              >
+                {f === "all" ? "All" : f.replace("_", " ")}
+              </button>
+            ))}
+          </div>
+          <div className="closet-grid">
+            {visibleItems.map((item) => (
+              <ClosetItemCard key={item.id} item={item} />
+            ))}
+          </div>
+          <Link href="/closet/add" className="fab" aria-label="Add item">
+            +
+          </Link>
+        </>
       )}
     </div>
   );

@@ -106,87 +106,92 @@ export function ExtractedItemForm({
       )}
 
       <div className="field">
-        <label htmlFor="category">Category</label>
-        <select
-          id="category"
-          className="input"
-          value={value.category}
-          onChange={(e) => update("category", e.target.value)}
-          required
-        >
-          <option value="" disabled>
-            Select a category
-          </option>
+        <label>Category</label>
+        <div className="tag-toggle-group">
           {CATEGORY_GROUPS.map((c) => (
-            <option key={c} value={c}>
+            <button
+              key={c}
+              type="button"
+              className={value.category === c ? "chip chip-selected" : "chip"}
+              aria-pressed={value.category === c}
+              onClick={() => update("category", c)}
+            >
               {c.replace("_", " ")}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
       <div className="field">
         <label>Colors</label>
-        {value.colors.map((hex, i) => (
-          <div key={i} className="color-row">
-            <input
-              type="color"
-              className="swatch-input"
-              value={hex}
-              onChange={(e) => updateColor(i, e.target.value)}
-              aria-label={`Color ${i + 1}`}
-            />
-            <span className="text-muted">{hex}</span>
-            {value.colors.length > 1 && (
-              <button type="button" className="btn btn-ghost" onClick={() => removeColor(i)}>
-                Remove
-              </button>
-            )}
-          </div>
-        ))}
-        <button type="button" className="btn btn-secondary" onClick={addColor}>
-          + Add color
-        </button>
+        <div className="color-row">
+          {value.colors.map((hex, i) => (
+            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+              <input
+                type="color"
+                className="color-swatch-input selected"
+                value={hex}
+                onChange={(e) => updateColor(i, e.target.value)}
+                aria-label={`Color ${i + 1}`}
+              />
+              {value.colors.length > 1 && (
+                <button type="button" className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => removeColor(i)}>
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            className="color-swatch-input"
+            style={{
+              border: "1.5px dashed var(--color-divider)",
+              background: "transparent",
+              color: "var(--color-text)",
+              fontSize: 18,
+              lineHeight: "34px",
+            }}
+            onClick={addColor}
+            aria-label="Add color"
+          >
+            +
+          </button>
+        </div>
       </div>
 
       <div className="field">
-        <label htmlFor="formality">Formality</label>
-        <select
-          id="formality"
-          className="input"
-          value={value.formality}
-          onChange={(e) => update("formality", e.target.value as Formality)}
-          required
-        >
-          <option value="" disabled>
-            Select formality
-          </option>
+        <label>Formality</label>
+        <div className="seg-track">
           {FORMALITY_VALUES.map((f) => (
-            <option key={f} value={f}>
+            <button
+              key={f}
+              type="button"
+              className={value.formality === f ? "seg-item seg-item-selected" : "seg-item"}
+              aria-pressed={value.formality === f}
+              onClick={() => update("formality", f)}
+            >
               {f.replace("_", " ")}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
       <div className="field">
-        <label htmlFor="warmth">Warmth (0 = airy, 5 = heaviest)</label>
-        <select
-          id="warmth"
-          className="input"
-          value={value.warmth}
-          onChange={(e) => update("warmth", e.target.value === "" ? "" : Number(e.target.value))}
-          required
-        >
-          <option value="" disabled>
-            Select warmth
-          </option>
+        <label>Warmth (0 = airy, 5 = heaviest)</label>
+        <div className="tag-toggle-group">
           {[0, 1, 2, 3, 4, 5].map((w) => (
-            <option key={w} value={w}>
+            <button
+              key={w}
+              type="button"
+              className={value.warmth === w ? "chip chip-selected" : "chip"}
+              aria-pressed={value.warmth === w}
+              onClick={() => update("warmth", w)}
+              style={{ minWidth: 36, justifyContent: "center", padding: "9px 0" }}
+            >
               {w}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
       <div className="field">
@@ -196,7 +201,7 @@ export function ExtractedItemForm({
             <button
               key={s}
               type="button"
-              className={value.season.includes(s) ? "tag tag-outline selected" : "tag tag-outline"}
+              className={value.season.includes(s) ? "chip chip-selected" : "chip"}
               aria-pressed={value.season.includes(s)}
               onClick={() => toggleSeason(s)}
             >

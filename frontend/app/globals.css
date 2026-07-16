@@ -212,16 +212,6 @@ textarea.input {
   min-height: 90px;
   resize: vertical;
 }
-input[type="color"].swatch-input {
-  width: 36px;
-  height: 36px;
-  padding: 2px;
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  cursor: pointer;
-}
-
 /* --- cards ------------------------------------------------------------------ */
 
 .card {
@@ -289,6 +279,117 @@ input[type="color"].swatch-input {
   border-color: var(--color-accent);
   color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+/* --- chips (design/What to Wear.dc.html's actual selectable-pill pattern:
+   style tags, mood, occasion, closet filters, category/season options --
+   accent-800/accent-100 when selected, neutral-800/neutral-200 otherwise) - */
+
+.chip {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 9px 16px;
+  border: none;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--color-neutral-800);
+  color: var(--color-neutral-200);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.chip:hover {
+  background: color-mix(in srgb, var(--color-text) 10%, var(--color-neutral-800));
+}
+.chip-selected,
+.chip-selected:hover {
+  background: var(--color-accent-800);
+  color: var(--color-accent-100);
+}
+
+/* — segmented control (formality, in design/What to Wear.dc.html) — */
+
+.seg-track {
+  display: flex;
+  background: var(--color-neutral-800);
+  border-radius: 9999px;
+  padding: 3px;
+  gap: 2px;
+}
+.seg-item {
+  flex: 1;
+  text-align: center;
+  padding: 9px 4px;
+  border: none;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  background: transparent;
+  color: var(--color-neutral-200);
+  cursor: pointer;
+}
+.seg-item-selected {
+  background: var(--color-accent-800);
+  color: var(--color-accent-100);
+}
+
+/* — circular color swatches (real <input type="color">, styled round so it
+   reads as a swatch button, not the native rectangular picker) — */
+
+.color-swatch-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+}
+.color-swatch-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 50%;
+}
+.color-swatch-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+.color-swatch-input::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+.color-swatch-input.selected {
+  box-shadow: 0 0 0 2px var(--color-accent), 0 0 0 4px var(--color-bg);
+}
+
+/* — floating action button (closet's "add item", in design/What to Wear.dc.html) — */
+
+.fab {
+  position: fixed;
+  right: 28px;
+  bottom: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  box-shadow: var(--shadow-md);
+  color: var(--color-accent);
+  text-decoration: none;
+  font-size: 24px;
+  line-height: 1;
+  z-index: 5;
+}
+.fab:hover {
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg));
 }
 
 /* --- navigation --------------------------------------------------------------- */
@@ -384,10 +485,23 @@ input[type="color"].swatch-input {
 
 /* --- closet -------------------------------------------------------------------- */
 
+.closet-filters {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+/* Masonry (design/What to Wear.dc.html's actual closet layout: CSS columns,
+   not a uniform grid) */
 .closet-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--space-4);
+  columns: 3 220px;
+  column-gap: var(--space-4);
+}
+.closet-grid > * {
+  break-inside: avoid;
+  margin-bottom: var(--space-4);
 }
 
 .closet-item-swatches {
@@ -433,9 +547,9 @@ input[type="color"].swatch-input {
 
 .color-row {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .tag-toggle-group {
@@ -482,6 +596,6 @@ input[type="color"].swatch-input {
   }
 
   .closet-grid {
-    grid-template-columns: 1fr 1fr;
+    columns: 2;
   }
 }
