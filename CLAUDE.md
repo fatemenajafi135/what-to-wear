@@ -165,10 +165,11 @@ So:
   surfaced). `.specify/feature.json`, `frontend/lib/api-types.ts`, and
   `frontend/openapi.json` were regenerated/repointed rather than
   hand-merged.
-- **Feature 005 (production-hardening) — code complete, merge-ready; one
-  manual step remains.** Full spec-kit cycle on branch
+- **Feature 005 (production-hardening) — DONE, merged to `main`, and
+  deployed live.** Full spec-kit cycle on branch
   `005-production-hardening` (own worktree,
-  `/home/fateme/Projects/w2w/what-to-wear-005`). `/speckit.clarify` resolved
+  `/home/fateme/Projects/w2w/what-to-wear-005` — can be removed now, the
+  branch is merged). `/speckit.clarify` resolved
   4 ambiguities (per-user-only cache scope; LangSmith tracing satisfies
   FR-010's operator-visibility requirement — no new dashboard built;
   same-provider-only retry, no cross-provider fallback; a concrete
@@ -210,22 +211,37 @@ So:
   - **Deploy (US1)**: Feature 003's three manual steps (Supabase Storage
     bucket, Railway, Vercel) are now all confirmed working by the project
     owner. Railway had a real "builds fine, container stops a few seconds
-    later, no traceback" issue, resolved on the dashboard side
-    (health-check/service-type config) — not a code issue; `psycopg[binary]`
-    and the deploy port were both explicitly ruled out during
-    troubleshooting. **The live backend is still running pre-005 code** —
-    a redeploy of this branch is the one remaining step before this
-    feature's actual changes (cache, guardrail, LiteLLM, the new
-    `/health`) can be validated live.
+    later, no traceback" issue during this feature's own pre-merge testing,
+    resolved on the dashboard side (health-check/service-type config) —
+    not a code issue. A **second, different** Railway issue surfaced
+    during the post-merge redeploy: the public domain's Networking target
+    port didn't match the port the app actually bound to, producing
+    "Application failed to respond" from a perfectly healthy container —
+    fixed by aligning the target port and pinning `PORT=8080` explicitly.
+    `/health`/`/docs` confirmed reachable live afterward — this feature's
+    actual changes (cache, guardrail, LiteLLM, the new `/health`) are
+    validated in production, not just merged.
   - Also shipped, beyond the original task list: `GET /health` now checks
     Postgres + Qdrant reachability (`503` naming the failed dependency)
     instead of always returning a static `200 ok` (FR-012, a
     `/speckit.analyze` finding against the spec's own Edge Case).
-  - One known, unresolved intermittent test failure — documented directly
-    in `tests/integration/test_suggest_cache.py`, see Gotchas below.
-  - Full narrative: `docs/SDD-HANDOFF.md` Step 6.
-- **Next**: redeploy Feature 005 to Railway/Vercel after merge (the one
-  remaining task, T008), then decide the next feature.
+  - The "intermittent" test failure originally flagged here was
+    root-caused during the merge — it wasn't flaky, see Gotchas below.
+  - Full narrative: `docs/SDD-HANDOFF.md` Step 6,
+    `docs/005-production-hardening-merge-report.md`.
+- **Feature 006 (wardrobe-item-photos) — spec + plan + tasks done, not yet
+  implemented.** Direct user request, not part of the original 5-feature
+  plan: closet cards don't show the item's actual photo even though one
+  already exists in Storage for every photo-uploaded item. Kept
+  deliberately minimal — one user story, no new API endpoint (the
+  frontend's existing authenticated Supabase client can generate signed
+  URLs against the already-secured private bucket directly). Own worktree,
+  `/home/fateme/Projects/w2w/what-to-wear-006`, branch
+  `006-wardrobe-item-photos`. Full detail: `docs/SDD-HANDOFF.md` Step 7,
+  `specs/006-wardrobe-item-photos/`.
+- **Next**: implement Feature 006 (ready for `/speckit.implement` in its
+  worktree), then decide what's after that — all 5 originally-planned
+  features are done and live.
 - **Environment gotcha found while finishing Feature 004**: a fresh `git
   worktree add` only copies tracked files — `backend/data/` (gitignored:
   golden set, KB corpus, wardrobe fixture) was entirely absent from this
@@ -350,16 +366,21 @@ the DB vars). Full run/architecture detail: `backend/README.md`.
   `tests/conftest.py` (`_flush_suggest_cache`, mirrors `db_session`'s
   rollback isolation but for Redis) — any new integration test file hitting
   `/suggest` gets this for free, no per-file fixture needed.
-- **One known, unresolved intermittent test failure**:
-  `tests/integration/test_suggest_cache.py::test_closet_edit_invalidates_the_cache`
-  failed twice across ~275-test full-suite runs in the Feature 005 session,
-  but passed in 6 separate narrower reproductions (3x isolation, paired
-  with its preceding test, an 18-test combined-file rerun, a manual script)
-  — the underlying cache/fingerprint mechanism is verified correct.
-  Documented in the test itself; leading hypothesis is Supabase pooler
-  contention under heavy concurrent session activity, not a logic bug. If
-  it recurs in a clean, non-concurrent run, that hypothesis needs
-  revisiting.
+- **`test_suggest_cache.py::test_closet_edit_invalidates_the_cache` looked
+  flaky, wasn't** — resolved during the 005 merge, worth knowing about for
+  any test that mutates data via a `client` fixture: this file's fixture
+  only overrides `get_current_user_id`, not `get_session` (unlike
+  `db_session`-isolated tests elsewhere), so its `PATCH` commits for real,
+  permanently, against the live `EVAL_BASELINE_USER_ID` wardrobe. The
+  original test patched a **hardcoded** literal string and never reset
+  it — so any run after the first was a no-op edit (confirmed by reading
+  the row directly: it already held that exact value from a prior run),
+  making the resulting "cache hit" correct behavior on unchanged data, not
+  a bug. Fixed with a `uuid.uuid4()`-suffixed value per invocation. General
+  lesson: a test that writes real data through a non-isolated session
+  needs either unique-per-run values or the `db_session` rollback fixture
+  — a fixed literal will eventually collide with its own prior run. Full
+  narrative: `docs/005-production-hardening-merge-report.md`.
 
 ## Git
 
