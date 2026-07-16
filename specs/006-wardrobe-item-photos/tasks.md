@@ -13,7 +13,7 @@ independently-valuable slice (see spec.md's "Why this priority").
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm the dev environment already has the Feature 003/005
+- [X] T001 Confirm the dev environment already has the Feature 003/005
       `wardrobe-photos` Storage bucket + RLS policies (no new setup — this
       phase is a pre-flight check, not new infrastructure). If missing,
       stop and do `specs/003-mvp-app/quickstart.md`'s Prerequisites first;
@@ -21,14 +21,14 @@ independently-valuable slice (see spec.md's "Why this priority").
 
 ## Phase 2: Foundational (blocking prerequisites)
 
-- [ ] T002 Additive Alembic migration `backend/alembic/versions/0004_add_photo_path.py`
+- [X] T002 Additive Alembic migration `backend/alembic/versions/0004_add_photo_path.py`
       adding a nullable `photo_path` (String) column to `wardrobe_items` —
       same pattern as `0002_add_pattern_fit.py`. Run `uv run alembic upgrade head`
       to apply it locally.
-- [ ] T003 Add `photo_path: Mapped[str | None] = mapped_column(String, nullable=True)`
+- [X] T003 Add `photo_path: Mapped[str | None] = mapped_column(String, nullable=True)`
       to `WardrobeItemRow` in `backend/src/whattowear/models.py` (alongside
       the existing `pattern`/`fit` columns).
-- [ ] T004 Add `photo_path: Optional[str] = None` to `WardrobeItem` in
+- [X] T004 Add `photo_path: Optional[str] = None` to `WardrobeItem` in
       `backend/src/whattowear/schema.py` (do NOT add it to
       `WardrobeItemPatch` — out of scope per plan.md, it's set once at
       creation, never user-edited).
@@ -49,15 +49,15 @@ catalog item shows only its swatch, exactly as before this feature.
 
 ### Backend
 
-- [ ] T005 [US1] In `backend/src/whattowear/crud.py`,
+- [X] T005 [US1] In `backend/src/whattowear/crud.py`,
       `create_wardrobe_item_from_upload` sets `photo_path=req.photo_path`
       on the new `WardrobeItemRow` (currently received via
       `CreateWardrobeItemFromUploadRequest.photo_path` but discarded —
       just wire it through).
-- [ ] T006 [US1] In `backend/src/whattowear/crud.py`, `_to_wardrobe_item`
+- [X] T006 [US1] In `backend/src/whattowear/crud.py`, `_to_wardrobe_item`
       (the row → `WardrobeItem` mapper used by every read path, including
       `GET /wardrobe/items`) includes `photo_path=row.photo_path`.
-- [ ] T007 [P] [US1] `backend/tests/integration/test_wardrobe_item_photo_path.py`:
+- [X] T007 [P] [US1] `backend/tests/integration/test_wardrobe_item_photo_path.py`:
       create an item via `create_wardrobe_item_from_upload` with a
       non-null `photo_path`, read it back via `list_wardrobe_items`,
       assert the field round-trips. Create a second item via
@@ -70,11 +70,11 @@ catalog item shows only its swatch, exactly as before this feature.
 
 ### Frontend
 
-- [ ] T008 [US1] Regenerate `frontend/lib/api-types.ts`: start the backend
+- [X] T008 [US1] Regenerate `frontend/lib/api-types.ts`: start the backend
       locally (`uv run uvicorn whattowear.api:app --reload`), then from
       `frontend/`, `npm run fetch:openapi && npm run gen:types`. Confirm
       `photo_path` now appears on the generated `WardrobeItem` schema.
-- [ ] T009 [US1] `frontend/components/ClosetItemCard.tsx`: when
+- [X] T009 [US1] `frontend/components/ClosetItemCard.tsx`: when
       `item.photo_path` is present, call
       `supabase.storage.from("wardrobe-photos").createSignedUrl(item.photo_path, 3600)`
       (import the existing `supabase` client from `@/lib/supabase-client`)
@@ -85,7 +85,7 @@ catalog item shows only its swatch, exactly as before this feature.
       today — no broken `<img>`, no thrown error. Color swatches, hex
       title, fabric/pattern/fit tags stay unconditional (plan.md's
       Frontend approach / spec.md FR-005).
-- [ ] T010 [US1] `npm run typecheck && npm run lint && npm run build` in
+- [X] T010 [US1] `npm run typecheck && npm run lint && npm run build` in
       `frontend/` — must be clean (matches how every prior frontend
       change in this repo was verified; no new frontend test framework
       introduced for this one small component).
@@ -95,11 +95,11 @@ against a locally running backend + frontend.
 
 ## Phase 4: Polish
 
-- [ ] T011 [P] `uv run ruff check . && uv run ruff format .` in `backend/`
+- [X] T011 [P] `uv run ruff check . && uv run ruff format .` in `backend/`
       — touched files only need to be clean (this repo has pre-existing,
       unrelated ruff findings in notebooks/`external/trends.py`; don't
       fix those as part of this feature).
-- [ ] T012 Per the handoff contract (root `CLAUDE.md` "Session workflow"):
+- [X] T012 Per the handoff contract (root `CLAUDE.md` "Session workflow"):
       update `docs/SDD-HANDOFF.md`'s Feature 006 entry and `CLAUDE.md`'s
       "Current state" section, mark this file's tasks `[X]`.
 

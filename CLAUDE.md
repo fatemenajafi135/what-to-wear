@@ -229,19 +229,32 @@ So:
     root-caused during the merge — it wasn't flaky, see Gotchas below.
   - Full narrative: `docs/SDD-HANDOFF.md` Step 6,
     `docs/005-production-hardening-merge-report.md`.
-- **Feature 006 (wardrobe-item-photos) — spec + plan + tasks done, not yet
-  implemented.** Direct user request, not part of the original 5-feature
-  plan: closet cards don't show the item's actual photo even though one
-  already exists in Storage for every photo-uploaded item. Kept
-  deliberately minimal — one user story, no new API endpoint (the
-  frontend's existing authenticated Supabase client can generate signed
-  URLs against the already-secured private bucket directly). Own worktree,
-  `/home/fateme/Projects/w2w/what-to-wear-006`, branch
-  `006-wardrobe-item-photos`. Full detail: `docs/SDD-HANDOFF.md` Step 7,
-  `specs/006-wardrobe-item-photos/`.
-- **Next**: implement Feature 006 (ready for `/speckit.implement` in its
-  worktree), then decide what's after that — all 5 originally-planned
-  features are done and live.
+- **Feature 006 (wardrobe-item-photos) — implemented, on branch
+  `006-wardrobe-item-photos`, not yet merged to `main`.** Direct user
+  request, not part of the original 5-feature plan: closet cards didn't
+  show the item's actual photo even though one already existed in Storage
+  for every photo-uploaded item. Kept deliberately minimal — one user
+  story, no new API endpoint (the frontend's existing authenticated
+  Supabase client generates signed URLs against the already-secured
+  private bucket directly). Backend: additive migration `0004` adds
+  nullable `photo_path` on `wardrobe_items`; `create_wardrobe_item_from_upload`
+  now sets it (previously received but silently discarded) and
+  `_to_wardrobe_item` returns it on every read path including `GET
+  /wardrobe/items`. Frontend: `ClosetItemCard.tsx` resolves `photo_path`
+  to a signed URL client-side and renders it above the swatch row, with
+  any failure (absent path, expired object, network error) falling back
+  to today's swatch-only card. `api-types.ts` regenerated from the live
+  schema. Full backend suite green, `ruff` clean, frontend
+  typecheck/lint/build clean. **Not done**: live browser verification
+  against a real signed-in session (quickstart.md steps 2-4) — this
+  worktree's Supabase env vars point at the live production project with
+  no service-role key available to create/clean up a throwaway test
+  account, so that manual check is left to the project owner. Own
+  worktree, `/home/fateme/Projects/w2w/what-to-wear-006`. Full detail:
+  `docs/SDD-HANDOFF.md` Step 7, `specs/006-wardrobe-item-photos/`.
+- **Next**: review and merge Feature 006 to `main`, then decide what's
+  after that — all 5 originally-planned features are done and live, plus
+  this one.
 - **Environment gotcha found while finishing Feature 004**: a fresh `git
   worktree add` only copies tracked files — `backend/data/` (gitignored:
   golden set, KB corpus, wardrobe fixture) was entirely absent from this

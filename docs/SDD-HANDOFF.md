@@ -95,7 +95,7 @@ from drifting.
 | 003 | **mvp-app** *(redefined — was "closet-ingestion")* | ✅ **DONE — deployed and live.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified. The 3 manual deploy steps once tracked here (Supabase Storage bucket + RLS, Railway backend, Vercel frontend) were absorbed into Feature 005's scope and completed there — see Feature 005's row below and `docs/005-production-hardening-merge-report.md`. **Known, explicitly deferred gap: visual polish** didn't fully match `design/What to Wear.dc.html` — see `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
 | 004 | preference-memory | ✅ **DONE and merged to `main`** (finished 2026-07-16, in its own worktree, concurrently with Feature 002's Phases 2-4 above — see the merge callout below the table). Feedback endpoint + derived preference profile + frontend reaction affordance. 29/29 tasks. |
 | 005 | production-hardening | ✅ **DONE, merged to `main`, and deployed live** (2026-07-16). Full spec-kit cycle (spec/clarify/plan/tasks/analyze/implement). Output grounding guardrail, per-user Redis cache, LiteLLM routing all built and eval-no-regression-gate green. Absorbed Feature 003's previously-incomplete deploy steps — Supabase Storage bucket + RLS, Railway backend, Vercel frontend all confirmed working end-to-end this session (including live debugging: a Railway public-domain/target-port mismatch that made a healthy container unreachable). Merge itself was zero-conflict (serial worktree, not parallel this time). Full narrative: `docs/005-production-hardening-merge-report.md`. See Step 6. |
-| 006 | wardrobe-item-photos | Spec + plan + tasks done, not yet implemented — see Step 7. Small, additive: persist the photo path already captured (and currently discarded) at photo-upload time, show it on the closet card, fall back to the existing color-swatch display when absent. No new API endpoint. |
+| 006 | wardrobe-item-photos | **DONE, implemented on branch `006-wardrobe-item-photos`, not yet merged — see Step 7.** Small, additive: persists the photo path already captured (and previously discarded) at photo-upload time, shows it on the closet card, falls back to the existing color-swatch display when absent. No new API endpoint. |
 
 **How 002 and 004's parallel work was reconciled (2026-07-16).** Both
 features were built in separate git worktrees at the same time (see the
@@ -804,7 +804,58 @@ item added via the photo-upload flow (Feature 003).
 > Own worktree, `/home/fateme/Projects/w2w/what-to-wear-006`, branch
 > `006-wardrobe-item-photos` — not developed in parallel with anything
 > else. Full task list: `specs/006-wardrobe-item-photos/tasks.md` (12
-> tasks, T001-T012). Ready for `/speckit.implement`.
+> tasks, T001-T012, all done).
+>
+> **Implemented (2026-07-16), two commits on `006-wardrobe-item-photos`,
+> not yet merged to `main`.** Backend: additive migration `0004` adds
+> nullable `photo_path` on `wardrobe_items`; `WardrobeItemRow`/
+> `WardrobeItem` gain the field; `create_wardrobe_item_from_upload` sets
+> it from the already-received (previously discarded) request field;
+> `_to_wardrobe_item` (used by every read path, including `GET
+> /wardrobe/items`) returns it. New DB round-trip test
+> (`test_wardrobe_item_photo_path.py`) confirms it's set for
+> photo-uploaded items and `None` for catalog-sourced ones. Full backend
+> suite green (280 passed, 0 failed) after also restoring this worktree's still
+> -missing `data/fixtures/wardrobe.json`, `data/books/`, `data/wikipedia/`
+> — a deeper instance of the already-documented "fresh worktree drops
+> gitignored `backend/data/`" gotcha than what this worktree started with
+> (see CLAUDE.md's Gotchas; `data/kb/` and `golden_set.yaml` had been
+> force-added, but the raw KB source corpus and the wardrobe fixture
+> hadn't, so `test_seed.py` and both `test_suggest_cache.py`/
+> `test_suggest_refinement.py` failed for a purely environmental reason
+> unrelated to this feature's own change, until copied from a sibling
+> worktree — not committed, still gitignored, so a future worktree will
+> hit this again). `ruff check`/`format` clean.
+>
+> Frontend: `lib/api-types.ts` regenerated from the running backend
+> (confirms `photo_path` on the generated `WardrobeItem` type);
+> `ClosetItemCard.tsx` resolves `item.photo_path` to a signed URL via
+> `supabase.storage.from("wardrobe-photos").createSignedUrl(...)` in a
+> `useEffect` and renders it above the swatch row when present — any
+> failure (absent path, expired/missing object, network error) leaves
+> the card exactly as it rendered before this feature, no broken `<img>`.
+> `typecheck`/`lint`/`build` all clean; `next build` confirms `/closet`
+> renders with no import-time crash.
+>
+> **What wasn't done: live browser verification against a real signed-in
+> session** (quickstart.md steps 2-4 — seeing an actual photo render,
+> confirming per-user isolation, simulating a signed-URL failure).
+> `SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_URL` in this worktree's env point
+> at the live production Supabase project, not a local/sandboxed
+> instance, and no service-role key is available to create and then
+> clean up a throwaway test account — creating one to drive a Playwright
+> check would leave a permanent stray row in production Auth. Left for
+> the project owner to run manually, same as `quickstart.md` describes.
+> Separately, an in-session slip during this verification attempt:
+> `pkill -f "next dev"` (meant to stop a throwaway dev server this
+> session had started on port 3001) also killed an already-running dev
+> server on port 3000 in this same worktree (PID 2538285, up since
+> before this implementation session started) that this session hadn't
+> started and didn't own — flagged to the user live when it happened;
+> if that server mattered, it needs restarting manually.
+>
+> Not yet merged to `main` — the owner is handling review/merge from the
+> planning session, per this feature's own kickoff instructions.
 
 ## The rule that matters most
 
