@@ -106,7 +106,10 @@ cases:
     temp_c: 14
     formality: semi_formal
     expected: {min_formality: semi_formal}
-    relevant_rule_ids: [L4-dc-semiformal, L4-wx-cool, L3-2025-metallic-evening]
+    # L3-2025-metallic-evening dropped (Feature 007 Task B, research.md D7): L3
+    # is now a live Tavily search at request time, so a static card's rule_id
+    # can never be reproduced — recall for this case now measures L4+L1 only.
+    relevant_rule_ids: [L4-dc-semiformal, L4-wx-cool]
     reference: "An evening party semi-formal look, with a current metallic accent for evening."
 
   - id: g13
@@ -140,7 +143,9 @@ cases:
     temp_c: 17
     formality: smart_casual
     expected: {min_formality: smart_casual}
-    relevant_rule_ids: [L4-dc-smartcasual, L4-wx-mild, L3-2025-tailored-trousers]
+    # L3-2025-tailored-trousers dropped (Feature 007 Task B, research.md D7):
+    # see g12's note -- L3 is now live, so this static id can't recur.
+    relevant_rule_ids: [L4-dc-smartcasual, L4-wx-mild]
     reference: "A creative-office smart-casual look with relaxed tailored trousers and a fitted top."
 
   - id: g17
@@ -200,7 +205,9 @@ cases:
     temp_c: 16
     formality: smart_casual
     expected: {min_formality: smart_casual}
-    relevant_rule_ids: [L4-dc-smartcasual, L4-wx-cool, L3-2025-quiet-luxury]
+    # L3-2025-quiet-luxury dropped (Feature 007 Task B, research.md D7): see
+    # g12's note -- L3 is now live, so this static id can't recur.
+    relevant_rule_ids: [L4-dc-smartcasual, L4-wx-cool]
     reference: "A chic brunch look: understated quality smart-casual basics in neutral tones with a light layer."
 
   - id: g24

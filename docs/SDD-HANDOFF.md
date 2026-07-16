@@ -95,6 +95,7 @@ from drifting.
 | 003 | **mvp-app** *(redefined — was "closet-ingestion")* | ✅ **Code complete and merged to `main`, deploy pending.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access no coding session has): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). **Known, explicitly deferred gap: visual polish** didn't fully match `design/What to Wear.dc.html` — see `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
 | 004 | preference-memory | ✅ **DONE and merged to `main`** (finished 2026-07-16, in its own worktree, concurrently with Feature 002's Phases 2-4 above — see the merge callout below the table). Feedback endpoint + derived preference profile + frontend reaction affordance. 29/29 tasks. |
 | 005 | production-hardening | ✅ **Code complete, merge-ready; one manual step remains.** Full spec-kit cycle (spec/clarify/plan/tasks/analyze/implement). Output grounding guardrail, per-user Redis cache, LiteLLM routing all built, tested against the real gateway/DB/Redis, and eval-no-regression-gate green. Railway/Vercel/Supabase Storage all confirmed working by the owner, but the live backend is still on pre-005 code — needs a redeploy after merge to validate live (T008). See Step 6. |
+| 007 | ai-improvements | ⚠️ **Code complete, live verification NOT done.** Full spec-kit cycle (spec/clarify/plan/tasks/analyze/implement) on branch `007-AI-improvements`. Closes two cert-challenge rubric gaps (a genuine chunked-embedding L1 semantic sub-layer; a live Tavily L3 search replacing a static trend KB) plus a real, previously-diagnosed refinement bug (the "warmer" delta's blanket footwear/accessory exemption replaced with a per-category-relative floor). All three land as pure code changes, fully unit-tested (38 new/updated tests, 193/193 existing `tests/unit` green) — but this session's sandbox had **no `.env` credentials and none of the gitignored `backend/data/` source files** (Wikipedia pages, EPUBs, wardrobe fixture), so the eval no-regression gate, integration tests, the before/after warmth-floor evidence capture, and a LangSmith trace check could not be run. **T032 (the eval gate) is the mandatory next step before merge** — see Step 7 and `specs/007-ai-improvements/tasks.md`'s environment note. |
 
 **How 002 and 004's parallel work was reconciled (2026-07-16).** Both
 features were built in separate git worktrees at the same time (see the
@@ -737,6 +738,88 @@ per-call semantic cache can't reach retrieval at all (see below).
 >   archived baseline (T013); ruff clean on every file this feature
 >   touches. `tasks.md`: 24/25 tasks done — only T008 (live-URL validation)
 >   remains, blocked on the pending redeploy above.
+
+## Step 7: Feature 007, ai-improvements
+
+A cert-challenge handoff (not planner-originated) — pasted directly into a fresh worker session as
+three build tasks (A/B/C) with acceptance criteria already decided. Full spec-kit cycle run anyway on
+branch `007-AI-improvements` (the handoff was decision-complete enough that `/speckit.clarify` needed no
+questions — `spec.md`'s checklist passed 16/16 on the first pass), since CLAUDE.md requires it for all
+feature work regardless of how the work originated. `/speckit.analyze` found 2 MEDIUM findings (plan.md's
+file tree missing two new test files; a new test directory missing its `__init__.py`), both fixed before
+implementing.
+
+**What Feature 007 does** (closes two cert rubric gaps plus a real bug, all independent, all in
+`backend/`, no frontend/API-contract changes):
+- **US1 (L1 semantic sub-layer, P1)**: `retrieve_l1()` (`retrieval/hybrid.py`) already had access to a
+  fully embedded pool of long-form section chunks (Wikipedia color theory/harmony/complementary-colors,
+  the Chevreul and Munsell PD books — `chunker: section` in `data/kb/manifest.yaml`, embedded by
+  `build_kb.py` all along) that retrieval simply never queried; it only ever loaded the small
+  hand-written atomic card set. Added a `similarity_search` branch (`_l1_semantic_filter()`, filtering
+  `layer==L1 AND granularity==section`) unioned with the existing load-all — genuinely new retrieval
+  behavior over data that was already there, zero new ingestion/chunking/embedding code. One real gap
+  found reading the existing `build_vectorstore()`: the compound filter needs a payload index on
+  `metadata.granularity`, not just the pre-existing `metadata.layer` one (same failure mode
+  `build_kb.py`'s own comment already documents for `layer` alone) — added.
+- **US2 (live Tavily L3, P2)**: `retrieve_l3()` used to run `kb.vectorstore.similarity_search` against a
+  static, pre-ingested `l3_trend_cards.jsonl` collection. It now calls the project's own already-existing
+  `external/trends.search_trends()` (a working Tavily wrapper previously only used by an offline
+  distillation script) live, at request time, mapping each result into a citable `Document` with a
+  synthetic `rule_id` derived from the result's URL. Degrades to `[]` on any exception, mirroring
+  `context_assembler`'s weather-lookup fallback pattern. **Deliberately left the static
+  `l3_trend_cards.jsonl` ingested in the manifest, unchanged** — `baseline.retrieve()` queries the whole
+  Qdrant collection directly and never calls `retrieve_l3`, so removing that source would have silently
+  shrunk baseline's corpus, violating the explicit "don't change what baseline returns" constraint;
+  `retrieve_l3`'s old static-search code path is what's retired, not the underlying data. Golden set
+  fallout: 3 cases (`g12`, `g16`, `g23`) pinned a specific static L3 `rule_id` as "relevant" for
+  `retrieval_recall` — a live search can never reproduce a fixed id by construction, so those 3 cases'
+  `relevant_rule_ids` were trimmed to their L4/L1 expectations only (commented inline in
+  `data/golden_set.yaml`), an intentional, documented test-data update, not a silent regression.
+- **US3 (warmth-floor fix, P1)**: the "warmer" refinement's existing bug (documented back in Feature 002
+  Phase 4 and again in this handoff) — a flat, absolute warmth floor silently excluded nearly all
+  footwear/accessories in this closet — had already been "fixed" with a blanket exemption
+  (`_WARMTH_FLOOR_EXEMPT_GROUPS`, footwear/accessory fully skip any floor at all). This feature replaces
+  that exemption with the more literal fix: `_category_warmth_ceiling()` computes each category's own
+  max achievable warmth from the actual closet, and the floor scales proportionally to that ceiling
+  (against the schema's fixed 0-5 range) instead of either a flat absolute number or a full pass-through
+  — capped at the ceiling itself so a category's own warmest item always still qualifies, no matter how
+  many "warmer" turns accumulate. A zero-ceiling category (e.g. a closet with literally no warmth
+  variation in accessories) still degenerates correctly to "never gates," but now as the natural output
+  of one formula instead of a hardcoded group list.
+
+**What's verified vs. not — read this before merging.** This session ran in a fresh remote sandbox
+clone, not an existing checkout or a `git worktree add` off one. It had **zero `.env` credentials** and
+**none of the gitignored `backend/data/` source files** the KB build needs (`data/wikipedia/*.md`,
+`data/books/*.epub`, `data/fixtures/wardrobe.json` — only `golden_set.yaml`, `manifest.yaml`, and the 3
+`kb/*.jsonl` card files are actually tracked in git). This is the same class of gap the "Gotchas" section
+below already documents for a fresh `git worktree add`; it just showed up in a fresh container clone
+instead this time. Confirmed two independent ways: `get_kb()` fails on a missing `.epub` before ever
+reaching a network call, and the new warmth-floor evidence script fails on `psycopg` connection-string
+parsing against a placeholder `DATABASE_URL` before reaching the graph at all.
+- **Fully verified this session**: all three tasks' actual logic, via 38 new/updated unit tests
+  (`tests/unit/retrieval/test_hybrid.py`, `test_advanced.py` — both new files — plus updates to
+  `tests/unit/pipeline/test_graph.py`) that mock the KB/Tavily/DB boundary and exercise the real pure
+  functions. The full pre-existing `tests/unit/` suite: 193/193 passing (the only errors, 33, are in
+  pre-existing, untouched `test_crud.py`/`test_seed.py`, which need a live DB connection — an
+  environment gap, not a regression). `ruff check`/`format` clean on every file this feature touches.
+- **NOT verified this session, and this is the real gap**: the eval no-regression gate
+  (`eval/harness.py` across all three strategies — the constitution's mandatory check for any
+  retrieval-touching change), any integration test hitting the real `/suggest` endpoint
+  (`tests/integration/test_suggest_refinement.py`), a live Tavily call actually happening, a LangSmith
+  trace confirming it as its own visible step, and — the one the original handoff most wanted —
+  **before/after fallback-rate evidence for the warmth-floor fix**. The evidence script
+  (`backend/scripts/warmth_floor_evidence.py`) is written and confirmed structurally correct (fails only
+  at the DB-connection step, not from a code bug), but neither a "before" nor "after" number was
+  captured — the fix (US3's code) was necessarily implemented in the same credential-less session the
+  script had to be written in, so the research plan's "one and only chance to get a real baseline
+  number" was missed here. A future session should decide whether to revert US3 temporarily to capture a
+  true "before," or accept an after-only capture and lean on the unit tests' worked examples instead.
+- **The single most important next step before merging this branch**: run
+  `uv run python -m whattowear.eval.harness` (all three strategies) in a session with real credentials
+  and a full `backend/data/`, and confirm `baseline`'s `retrieval_recall` is byte-identical to the
+  archived run while `hybrid`/`advanced` deltas are limited to the 3 intentionally-edited golden cases
+  plus any genuine L1-recall improvement. Full task-by-task status, including which of the 35 tasks are
+  done vs. blocked and why: `specs/007-ai-improvements/tasks.md`'s environment note near the top.
 
 ## The rule that matters most
 

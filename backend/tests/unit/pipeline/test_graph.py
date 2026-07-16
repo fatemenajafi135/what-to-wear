@@ -142,6 +142,20 @@ class TestParseRequestRefinementDetection:
         assert result["refinement_deltas"] == ["warmer", "less_formal"]
 
 
+class TestCategoryWarmthCeiling:
+    def test_computes_max_warmth_per_group_from_the_wardrobe(self):
+        wardrobe = [
+            _item("a", "sneakers", warmth=3),
+            _item("b", "boots", warmth=1),
+            _item("c", "coat", warmth=5),
+        ]
+        ceilings = graph._category_warmth_ceiling(wardrobe)
+        assert ceilings == {"footwear": 3, "outerwear": 5}
+
+    def test_empty_wardrobe_yields_an_empty_ceiling_map(self):
+        assert graph._category_warmth_ceiling([]) == {}
+
+
 class TestItemFitsHardConstraintsRefinementDeltas:
     def test_warmer_delta_raises_the_warmth_floor(self):
         ctx = Context(occasion="office", formality="business_casual")
@@ -155,16 +169,37 @@ class TestItemFitsHardConstraintsRefinementDeltas:
         cold_item = _item("a", "top", formality="business_casual", warmth=0)
         assert graph._item_fits_hard_constraints(cold_item, ctx, []) is True
 
-    def test_warmer_delta_does_not_gate_footwear_or_accessories(self):
-        # footwear/accessories rarely carry high warmth values in practice
-        # (a fixture-data reality) -- gating them the same way core layers
-        # are gated starves those slots and forces the FR-015 fallback far
-        # more than "warmer" should.
+    def test_warmer_floor_scales_to_a_low_ceiling_category_instead_of_exempting_it(self):
+        # footwear/accessories rarely carry high warmth values in practice (a
+        # fixture-data reality) -- Feature 007 Task C replaces the old
+        # blanket exemption with a floor scaled to what THIS category can
+        # actually offer (its own max warmth in the closet), not a flat
+        # absolute number and not a full pass-through.
         ctx = Context(occasion="office", formality="business_casual")
+        ceilings = {"footwear": 3}
         cold_shoe = _item("a", "sneakers", formality="business_casual", warmth=0)
-        cold_belt = _item("b", "belt", formality="business_casual", warmth=0)
-        assert graph._item_fits_hard_constraints(cold_shoe, ctx, ["warmer"]) is True
-        assert graph._item_fits_hard_constraints(cold_belt, ctx, ["warmer"]) is True
+        warm_enough_shoe = _item("b", "sneakers", formality="business_casual", warmth=1)
+        assert graph._item_fits_hard_constraints(cold_shoe, ctx, ["warmer"], ceilings) is False
+        assert graph._item_fits_hard_constraints(warm_enough_shoe, ctx, ["warmer"], ceilings) is True
+
+    def test_warmer_floor_never_exceeds_the_category_s_own_ceiling(self):
+        # repeated "warmer" requests keep climbing elsewhere but never demand
+        # more than a low-ceiling category can actually supply (FR-011) --
+        # its own warmest item always still passes.
+        ctx = Context(occasion="office", formality="business_casual")
+        ceilings = {"footwear": 3}
+        warmest_available_shoe = _item("a", "sneakers", formality="business_casual", warmth=3)
+        assert graph._item_fits_hard_constraints(warmest_available_shoe, ctx, ["warmer"] * 3, ceilings) is True
+
+    def test_zero_ceiling_category_is_never_gated(self):
+        # a category with genuinely no warmth range (e.g. accessories in a
+        # closet with none rated above 0) computes a floor of 0 and never
+        # excludes anything -- the correct degenerate case of the same
+        # formula, not a hardcoded exemption list.
+        ctx = Context(occasion="office", formality="business_casual")
+        ceilings = {"accessory": 0}
+        cold_belt = _item("a", "belt", formality="business_casual", warmth=0)
+        assert graph._item_fits_hard_constraints(cold_belt, ctx, ["warmer"], ceilings) is True
 
     def test_less_formal_delta_lowers_the_acceptable_band(self):
         ctx = Context(occasion="office", formality="business_casual")  # notch 2

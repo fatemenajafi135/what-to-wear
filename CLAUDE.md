@@ -224,8 +224,47 @@ So:
   - One known, unresolved intermittent test failure — documented directly
     in `tests/integration/test_suggest_cache.py`, see Gotchas below.
   - Full narrative: `docs/SDD-HANDOFF.md` Step 6.
-- **Next**: redeploy Feature 005 to Railway/Vercel after merge (the one
-  remaining task, T008), then decide the next feature.
+- **Feature 007 (ai-improvements) — code complete, live verification NOT
+  done, branch `007-AI-improvements`.** A cert-challenge handoff (three build
+  tasks with acceptance criteria already decided, not planner-originated), run
+  through the full spec-kit cycle anyway per this file's own requirement.
+  Closes two cert-rubric gaps plus a real bug, all independent, backend-only:
+  - **L1 semantic sub-layer**: `retrieval/hybrid.py`'s `retrieve_l1()` now
+    unions the existing hand-written atomic rule cards with a
+    `similarity_search` over long-form section chunks (Wikipedia color
+    theory/harmony/complementary-colors, Chevreul, Munsell) that
+    `build_kb.py` already embedded into the same L1 layer but retrieval never
+    queried — a genuinely new capability over data that was already there.
+  - **Live Tavily L3**: `retrieve_l3()` now calls the project's existing
+    `external/trends.search_trends()` live at request time instead of
+    querying a static pre-ingested trend collection, mapping results into
+    citable `Document`s with a synthetic per-result `rule_id`; degrades to
+    `[]` on failure (weather-fallback pattern). The static
+    `l3_trend_cards.jsonl` stays ingested for `baseline`'s sake (it queries
+    the whole corpus directly and never calls `retrieve_l3`) — only the
+    hybrid/advanced code path is retired, not the underlying data. 3 golden
+    cases' `relevant_rule_ids` trimmed of a now-unreproducible static L3 pin.
+  - **Warmth-floor fix**: the "warmer" refinement's prior fix (a blanket
+    `_WARMTH_FLOOR_EXEMPT_GROUPS` exemption for footwear/accessory, Feature
+    002 Phase 4) is replaced with a per-category-relative floor
+    (`_category_warmth_ceiling()`) scaled to each category's own achievable
+    warmth in the actual closet, capped at that ceiling — a low-ceiling
+    category now gets a real, small push instead of either an impossible
+    flat bar or a full pass-through.
+  - All three verified via 38 new/updated unit tests + the full pre-existing
+    `tests/unit` suite (193/193 green); ruff clean. **NOT verified**: the eval
+    no-regression gate, any integration test hitting `/suggest`, a live
+    Tavily call, a LangSmith trace, or before/after warmth-floor fallback-rate
+    evidence — this session's sandbox had no `.env` credentials and none of
+    the gitignored `backend/data/` source files (see Gotchas below). Full
+    narrative and exact task-by-task status: `docs/SDD-HANDOFF.md` Step 7,
+    `specs/007-ai-improvements/tasks.md`.
+- **Next**: run Feature 007's eval no-regression gate (`uv run python -m
+  whattowear.eval.harness`) in a session with real credentials + full
+  `backend/data/` before merging `007-AI-improvements` — the mandatory check
+  this session couldn't perform. Separately: redeploy Feature 005 to
+  Railway/Vercel after merge (the one remaining task, T008), then decide the
+  next feature.
 - **Environment gotcha found while finishing Feature 004**: a fresh `git
   worktree add` only copies tracked files — `backend/data/` (gitignored:
   golden set, KB corpus, wardrobe fixture) was entirely absent from this
@@ -301,6 +340,20 @@ the DB vars). Full run/architecture detail: `backend/README.md`.
   existing checkout (`rsync -a` from the main worktree's `backend/data/` and
   `backend/artifacts/eval_runs/`) — confirmed necessary setting up this
   worktree for Feature 002 Phases 2-4.
+- **The same gitignored-files gap hits a fresh remote-sandbox clone too, not
+  just `git worktree add`** (confirmed in the Feature 007 session). A plain
+  fresh clone (no prior checkout to copy from, no `.env` either) is missing
+  `data/wikipedia/*.md`, `data/books/*.epub`, and `data/fixtures/wardrobe.json`
+  — only `golden_set.yaml`, `data/kb/manifest.yaml`, and the 3 `data/kb/*.jsonl`
+  card files are actually tracked in git. `get_kb()` fails on the missing
+  `.epub` before ever making a network call, so this bites even a KB read that
+  doesn't need real credentials. Combined with no `.env` (no DB/gateway/Tavily/
+  Qdrant/LangSmith credentials at all in a fresh sandbox), a session in this
+  situation can implement and unit-test any pure-Python change but cannot run
+  the eval harness, any integration test hitting `/suggest`, or anything else
+  touching the real KB/DB/gateway — there is no local workaround, only
+  documenting exactly what couldn't be verified and flagging the eval gate as
+  the mandatory next step for a session that does have real credentials.
 - **LangGraph checkpoint deserialization warns on the project's own Pydantic/
   dataclass types** (`Context`, `ScoredOutfit`, `SuggestResult`, `GenOutput`,
   `RetrievalResult`, `WardrobeItem`) — `Deserializing unregistered type ...
