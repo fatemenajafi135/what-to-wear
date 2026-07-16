@@ -35,4 +35,7 @@
   resolved with a concrete default (30, documented in Assumptions) rather
   than left as a [NEEDS CLARIFICATION] marker — a reasonable default exists
   and the user's own stated real-world case (20+ items) bounds it naturally.
-- All items pass on first pass; no revision iterations needed.
+- Expanded from 2 to 4 user stories per explicit user direction (all four
+  original photo ideas are in scope for this spec, prioritized P1-P4) —
+  re-validated against this checklist after the expansion, still passes.
+- All items pass; no revision iterations needed.
