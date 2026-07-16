@@ -144,6 +144,9 @@ def summarize(rows_by_strategy: dict[str, list[dict]]) -> None:
         "weather_appropriate",
         "occasion_fit",
         "respects_exclusions",
+        "outfit_count_in_range",
+        "all_have_four_scores",
+        "ranked_descending",
     ]
     print("\n=== Baseline vs advanced (verifiable metrics, mean over golden set) ===")
     header = f"{'metric':<22}" + "".join(f"{s:>12}" for s in rows_by_strategy)

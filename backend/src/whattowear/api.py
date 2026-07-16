@@ -30,6 +30,7 @@ from .schema import (
     OutfitResult,
     PhotoExtractionResponse,
     SuggestRequest,
+    SuggestResult,
     WardrobeItem,
     WardrobeItemPatch,
 )
@@ -85,7 +86,7 @@ def recommend_endpoint(
     return RecommendResponse(result=run.result, rendered=cite.render_text(run.result))
 
 
-@app.post("/suggest")
+@app.post("/suggest", response_model=SuggestResult)
 def suggest_endpoint(
     req: SuggestRequest,
     user_id: str = Depends(get_current_user_id),
@@ -94,7 +95,11 @@ def suggest_endpoint(
     requester's identity always comes from the verified JWT `sub`, never the
     body. SSE: an `outfit` event per ranked outfit, then a `done` event
     carrying the full response shape (a client that only reads `done` gets
-    the exact non-streaming payload)."""
+    the exact non-streaming payload). `response_model` is for OpenAPI docs
+    only — returning a Response subclass directly makes FastAPI skip
+    response_model serialization, but it's still what generates the
+    SuggestResult/ScoredOutfit/DimensionScore schemas the frontend needs
+    (T036b) since a raw StreamingResponse alone wouldn't."""
     graph = get_compiled_graph()
     thread_id = req.thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
