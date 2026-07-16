@@ -105,9 +105,15 @@ export function ExtractedItemForm({
         </p>
       )}
 
-      <label>
-        Category
-        <select value={value.category} onChange={(e) => update("category", e.target.value)} required>
+      <div className="field">
+        <label htmlFor="category">Category</label>
+        <select
+          id="category"
+          className="input"
+          value={value.category}
+          onChange={(e) => update("category", e.target.value)}
+          required
+        >
           <option value="" disabled>
             Select a category
           </option>
@@ -117,29 +123,41 @@ export function ExtractedItemForm({
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
-      <fieldset>
-        <legend>Colors</legend>
+      <div className="field">
+        <label>Colors</label>
         {value.colors.map((hex, i) => (
           <div key={i} className="color-row">
-            <input type="color" value={hex} onChange={(e) => updateColor(i, e.target.value)} />
-            <span>{hex}</span>
+            <input
+              type="color"
+              className="swatch-input"
+              value={hex}
+              onChange={(e) => updateColor(i, e.target.value)}
+              aria-label={`Color ${i + 1}`}
+            />
+            <span className="text-muted">{hex}</span>
             {value.colors.length > 1 && (
-              <button type="button" onClick={() => removeColor(i)}>
+              <button type="button" className="btn btn-ghost" onClick={() => removeColor(i)}>
                 Remove
               </button>
             )}
           </div>
         ))}
-        <button type="button" onClick={addColor}>
+        <button type="button" className="btn btn-secondary" onClick={addColor}>
           + Add color
         </button>
-      </fieldset>
+      </div>
 
-      <label>
-        Formality
-        <select value={value.formality} onChange={(e) => update("formality", e.target.value as Formality)} required>
+      <div className="field">
+        <label htmlFor="formality">Formality</label>
+        <select
+          id="formality"
+          className="input"
+          value={value.formality}
+          onChange={(e) => update("formality", e.target.value as Formality)}
+          required
+        >
           <option value="" disabled>
             Select formality
           </option>
@@ -149,11 +167,13 @@ export function ExtractedItemForm({
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
-      <label>
-        Warmth (0 = airy, 5 = heaviest)
+      <div className="field">
+        <label htmlFor="warmth">Warmth (0 = airy, 5 = heaviest)</label>
         <select
+          id="warmth"
+          className="input"
           value={value.warmth}
           onChange={(e) => update("warmth", e.target.value === "" ? "" : Number(e.target.value))}
           required
@@ -167,34 +187,62 @@ export function ExtractedItemForm({
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
-      <fieldset>
-        <legend>Season (at least one)</legend>
-        {SEASON_VALUES.map((s) => (
-          <label key={s} className="checkbox-label">
-            <input type="checkbox" checked={value.season.includes(s)} onChange={() => toggleSeason(s)} />
-            {s}
-          </label>
-        ))}
-      </fieldset>
+      <div className="field">
+        <label>Season (at least one)</label>
+        <div className="tag-toggle-group">
+          {SEASON_VALUES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={value.season.includes(s) ? "tag tag-outline selected" : "tag tag-outline"}
+              aria-pressed={value.season.includes(s)}
+              onClick={() => toggleSeason(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <label>
-        Fabric
-        <input type="text" value={value.fabric} onChange={(e) => update("fabric", e.target.value)} required />
-      </label>
+      <div className="field">
+        <label htmlFor="fabric">Fabric</label>
+        <input
+          id="fabric"
+          className="input"
+          type="text"
+          value={value.fabric}
+          onChange={(e) => update("fabric", e.target.value)}
+          required
+        />
+      </div>
 
-      <label>
-        Pattern
-        <input type="text" value={value.pattern} onChange={(e) => update("pattern", e.target.value)} required />
-      </label>
+      <div className="field">
+        <label htmlFor="pattern">Pattern</label>
+        <input
+          id="pattern"
+          className="input"
+          type="text"
+          value={value.pattern}
+          onChange={(e) => update("pattern", e.target.value)}
+          required
+        />
+      </div>
 
-      <label>
-        Fit
-        <input type="text" value={value.fit} onChange={(e) => update("fit", e.target.value)} required />
-      </label>
+      <div className="field">
+        <label htmlFor="fit">Fit</label>
+        <input
+          id="fit"
+          className="input"
+          type="text"
+          value={value.fit}
+          onChange={(e) => update("fit", e.target.value)}
+          required
+        />
+      </div>
 
-      <button type="submit" disabled={!isComplete(value) || saving}>
+      <button type="submit" className="btn btn-primary btn-block" disabled={!isComplete(value) || saving}>
         {saving ? "Saving…" : "Save to closet"}
       </button>
     </form>

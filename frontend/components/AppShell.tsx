@@ -22,22 +22,18 @@ export function AppShell({ user, children }: { user: User; children: React.React
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <span className="app-brand">What to Wear</span>
+      <header className="nav">
+        <span className="nav-brand">What to Wear</span>
         <nav className="app-nav">
           {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={pathname === link.href ? "app-nav-link active" : "app-nav-link"}
-            >
+            <Link key={link.href} href={link.href} aria-current={pathname === link.href ? "page" : undefined}>
               {link.label}
             </Link>
           ))}
         </nav>
         <div className="app-user">
           <span className="app-user-email">{user.email}</span>
-          <button type="button" onClick={handleSignOut} className="app-signout-btn">
+          <button type="button" onClick={handleSignOut} className="btn btn-secondary">
             Sign out
           </button>
         </div>

@@ -112,10 +112,22 @@ export default function AddItemPage() {
       <h1>Add an item</h1>
 
       {step === "capture" && (
-        <div className="add-item-capture">
-          <p>Take a photo, or choose one from your gallery, of a single garment or accessory.</p>
-          <input type="file" accept="image/*" capture="environment" onChange={handleFileSelected} disabled={extracting} />
-          {extracting && <p>Analyzing photo…</p>}
+        <div className="card" style={{ maxWidth: 460 }}>
+          <p className="text-muted">
+            Take a photo, or choose one from your gallery, of a single garment or accessory.
+          </p>
+          <label htmlFor="photo-input" className="btn btn-primary btn-block">
+            {extracting ? "Analyzing photo…" : "Choose or take a photo"}
+          </label>
+          <input
+            id="photo-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileSelected}
+            disabled={extracting}
+            style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", opacity: 0 }}
+          />
           {extractError && <p className="page-error">{extractError}</p>}
         </div>
       )}

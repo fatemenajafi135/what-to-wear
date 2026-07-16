@@ -42,7 +42,9 @@ export default function SignUpPage() {
         <div className="auth-form">
           <h1>Check your email</h1>
           <p>We sent a confirmation link to {email}. Follow it, then sign in.</p>
-          <Link href="/sign-in">Go to sign in</Link>
+          <Link href="/sign-in" className="btn btn-primary btn-block">
+            Go to sign in
+          </Link>
         </div>
       </div>
     );
@@ -52,25 +54,35 @@ export default function SignUpPage() {
     <div className="auth-page">
       <form className="auth-form" onSubmit={handleSubmit}>
         <h1>Create your account</h1>
-        <label>
-          Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
-        </label>
-        <label>
-          Password
+        <div className="field">
+          <label htmlFor="email">Email</label>
           <input
+            id="email"
+            className="input"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoFocus
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            className="input"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={6}
           />
-        </label>
+        </div>
         {error && <p className="auth-error">{error}</p>}
-        <button type="submit" disabled={submitting}>
+        <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
           {submitting ? "Creating account…" : "Create account"}
         </button>
-        <p>
+        <p className="text-muted" style={{ marginTop: "var(--space-4)" }}>
           Already have an account? <Link href="/sign-in">Sign in</Link>
         </p>
       </form>

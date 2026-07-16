@@ -46,17 +46,19 @@ export default function SuggestPage() {
     <div className="suggest-page">
       <h1>What should I wear?</h1>
       <form className="suggest-form" onSubmit={handleSubmit}>
-        <label>
-          Describe what you need
+        <div className="field">
+          <label htmlFor="occasion">Describe what you need</label>
           <textarea
+            id="occasion"
+            className="input"
             value={occasion}
             onChange={(e) => setOccasion(e.target.value)}
             placeholder="e.g. something for a casual dinner tonight, it's cold out"
             rows={3}
             required
           />
-        </label>
-        <button type="submit" disabled={submitting}>
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={submitting}>
           {submitting ? "Thinking…" : "Get a suggestion"}
         </button>
       </form>

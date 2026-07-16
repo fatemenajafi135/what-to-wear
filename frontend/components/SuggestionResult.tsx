@@ -12,9 +12,9 @@ export function SuggestionResult({
   if (result.outfits.length === 0) {
     // SC-006: a clear explanation, never a raw error or a fabricated outfit.
     return (
-      <div className="suggestion-empty">
+      <div className="card">
         <p>Your closet doesn&apos;t have enough to put together an outfit for that request yet.</p>
-        <p>Try adding a few more items, or describe a different occasion.</p>
+        <p className="text-muted">Try adding a few more items, or describe a different occasion.</p>
       </div>
     );
   }
@@ -22,19 +22,26 @@ export function SuggestionResult({
   return (
     <div className="suggestion-results">
       {result.outfits.map((outfit, i) => (
-        <div className="outfit-card" key={i}>
-          <h3>Outfit {i + 1}</h3>
+        <div className="outfit-card card" key={i}>
+          <div className="card-kicker">Outfit {i + 1}</div>
           <ul className="outfit-items">
             {outfit.items.map((itemId) => {
               const item = closetById.get(itemId);
               return (
                 <li key={itemId}>
-                  {item ? `${item.category.replace("_", " ")} (${(item.colors ?? []).join(", ")})` : itemId}
+                  {item ? (
+                    <>
+                      <span className="tag tag-accent">{item.category.replace("_", " ")}</span>{" "}
+                      <span className="text-muted">({(item.colors ?? []).join(", ")})</span>
+                    </>
+                  ) : (
+                    itemId
+                  )}
                 </li>
               );
             })}
           </ul>
-          <div className="outfit-rationale">
+          <div className="card-body">
             {outfit.rationale.map((r, j) => (
               <p key={j}>{r.text}</p>
             ))}
@@ -42,7 +49,7 @@ export function SuggestionResult({
         </div>
       ))}
       <details className="suggestion-raw">
-        <summary>Full details</summary>
+        <summary className="text-muted">Full details</summary>
         <pre>{rendered}</pre>
       </details>
     </div>

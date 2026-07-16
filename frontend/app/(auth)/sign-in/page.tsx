@@ -37,25 +37,35 @@ export default function SignInPage() {
     <div className="auth-page">
       <form className="auth-form" onSubmit={handleSubmit}>
         <h1>Sign in</h1>
-        <label>
-          Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
-        </label>
-        <label>
-          Password
+        <div className="field">
+          <label htmlFor="email">Email</label>
           <input
+            id="email"
+            className="input"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoFocus
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            className="input"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={6}
           />
-        </label>
+        </div>
         {error && <p className="auth-error">{error}</p>}
-        <button type="submit" disabled={submitting}>
+        <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
           {submitting ? "Signing in…" : "Sign in"}
         </button>
-        <p>
+        <p className="text-muted" style={{ marginTop: "var(--space-4)" }}>
           No account yet? <Link href="/sign-up">Create one</Link>
         </p>
       </form>

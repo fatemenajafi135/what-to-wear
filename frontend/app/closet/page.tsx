@@ -35,12 +35,14 @@ export default function ClosetPage() {
 
       {error && <p className="page-error">{error}</p>}
 
-      {items === null && !error && <p>Loading your closet…</p>}
+      {items === null && !error && <p className="text-muted">Loading your closet…</p>}
 
       {items !== null && items.length === 0 && (
         <div className="closet-empty-state">
-          <p>Your closet is empty — nothing here yet.</p>
-          <Link href="/closet/add">Add your first item by photo</Link>
+          <p className="text-muted">Your closet is empty — nothing here yet.</p>
+          <Link href="/closet/add" className="btn btn-primary">
+            Add your first item by photo
+          </Link>
         </div>
       )}
 
