@@ -14,3 +14,15 @@ export type CreateWardrobeItemFromUploadRequest = components["schemas"]["CreateW
 export type Outfit = components["schemas"]["Outfit"];
 export type OutfitResult = components["schemas"]["OutfitResult"];
 export type RecommendResponse = components["schemas"]["RecommendResponse"];
+export type DimensionScore = components["schemas"]["DimensionScore"];
+export type ScoredOutfit = components["schemas"]["ScoredOutfit"];
+export type SuggestResult = components["schemas"]["SuggestResult"];
+
+// The `done` SSE event's payload (contracts/suggest.md) -- constructed as a
+// plain dict in api.py, not a Pydantic response_model (the endpoint's actual
+// return is a stream), so it has no generated schema of its own to import.
+export interface SuggestDonePayload {
+  thread_id: string;
+  result: SuggestResult;
+  note: string | null;
+}

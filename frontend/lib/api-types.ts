@@ -38,6 +38,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Endpoint
+         * @description Supersedes /recommend (contracts/suggest.md). Same auth model — the
+         *     requester's identity always comes from the verified JWT `sub`, never the
+         *     body. SSE: an `outfit` event per ranked outfit, then a `done` event
+         *     carrying the full response shape (a client that only reads `done` gets
+         *     the exact non-streaming payload). `response_model` is for OpenAPI docs
+         *     only — returning a Response subclass directly makes FastAPI skip
+         *     response_model serialization, but it's still what generates the
+         *     SuggestResult/ScoredOutfit/DimensionScore schemas the frontend needs
+         *     (T036b) since a raw StreamingResponse alone wouldn't.
+         */
+        post: operations["suggest_endpoint_suggest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wardrobe/items": {
         parameters: {
             query?: never;
@@ -247,6 +275,21 @@ export interface components {
             fit: string;
         };
         /**
+         * DimensionScore
+         * @description One deterministic scorer's output for one outfit (data-model.md).
+         */
+        DimensionScore: {
+            /**
+             * Dimension
+             * @enum {string}
+             */
+            dimension: "color_harmony" | "formality_coherence" | "weather_fitness" | "silhouette_balance";
+            /** Value */
+            value: number;
+            /** Reason */
+            reason: string;
+        };
+        /**
          * ExtractedAttributes
          * @description Draft output of one VLM extraction call over a single item photo.
          *     Every field optional — extraction failing on any/all of them must not
@@ -334,6 +377,64 @@ export interface components {
             result: components["schemas"]["OutfitResult"];
             /** Rendered */
             rendered: string;
+        };
+        /**
+         * ScoredOutfit
+         * @description An `Outfit` extended with per-dimension scores and a combined rank
+         *     score (data-model.md). `scores` always carries exactly one entry per
+         *     `SCORE_DIMENSIONS` value (FR-008).
+         */
+        ScoredOutfit: {
+            /** Items */
+            items: string[];
+            /** Rationale */
+            rationale: components["schemas"]["Rationale"][];
+            /** Scores */
+            scores: components["schemas"]["DimensionScore"][];
+            /** Rank Score */
+            rank_score: number;
+        };
+        /**
+         * SuggestRequest
+         * @description Body of POST /suggest (contracts/suggest.md). No `user_id` field —
+         *     same fix as RecommendRequest post-Phase-1: identity always comes from
+         *     the verified JWT `sub` (FR-001).
+         */
+        SuggestRequest: {
+            /** Occasion */
+            occasion: string;
+            /** Mood */
+            mood?: string | null;
+            /** Formality */
+            formality?: ("casual" | "smart_casual" | "business_casual" | "semi_formal" | "formal" | "black_tie") | null;
+            /** Location */
+            location?: string | null;
+            /** Temp C */
+            temp_c?: number | null;
+            /**
+             * Strategy
+             * @default advanced
+             */
+            strategy: string;
+            /** Thread Id */
+            thread_id?: string | null;
+        };
+        /**
+         * SuggestResult
+         * @description What POST /suggest's `result` field carries (contracts/suggest.md) —
+         *     OutfitResult's shape, but with ScoredOutfit entries. A separate type
+         *     from OutfitResult (not a field-type change on it) because /recommend is
+         *     still live and its old code path can't populate scores; data-model.md
+         *     calls for OutfitResult.outfits to become list[ScoredOutfit] only once
+         *     /recommend is retired (tasks.md T037a), at which point this type merges
+         *     into OutfitResult rather than the two coexisting indefinitely.
+         */
+        SuggestResult: {
+            /** Outfits */
+            outfits: components["schemas"]["ScoredOutfit"][];
+            /** Sources */
+            sources?: components["schemas"]["CitedSource"][];
+            context?: components["schemas"]["Context"] | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -460,6 +561,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecommendResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_endpoint_suggest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuggestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestResult"];
                 };
             };
             /** @description Validation Error */
