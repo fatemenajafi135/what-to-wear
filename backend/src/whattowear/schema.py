@@ -69,6 +69,8 @@ class WardrobeItem(BaseModel):
     season: list[Season] = Field(default_factory=list)
     fabric: Optional[str] = None
     source: Optional[Literal["catalog", "upload"]] = None
+    pattern: Optional[str] = None  # free-text, matches fabric's shape (Feature 003)
+    fit: Optional[str] = None  # free-text, matches fabric's shape (Feature 003)
 
     @field_validator("colors")
     @classmethod
@@ -90,6 +92,8 @@ class WardrobeItemPatch(BaseModel):
     warmth: Optional[int] = Field(default=None, ge=0, le=5)
     season: Optional[list[Season]] = None
     fabric: Optional[str] = None
+    pattern: Optional[str] = None  # free-text, matches fabric's shape (Feature 003)
+    fit: Optional[str] = None  # free-text, matches fabric's shape (Feature 003)
 
     @field_validator("colors")
     @classmethod
@@ -109,6 +113,60 @@ class Context(BaseModel):
     season: Optional[Season] = None
     wardrobe: list[WardrobeItem] = Field(default_factory=list)
     user_id: Optional[str] = None
+
+
+# --- photo-based item ingestion (Feature 003: mvp-app) -----------------------
+
+
+class ExtractedAttributes(BaseModel):
+    """Draft output of one VLM extraction call over a single item photo.
+    Every field optional — extraction failing on any/all of them must not
+    block adding the item (FR-006); the user fills in whatever's missing."""
+
+    category: Optional[str] = None
+    colors: Optional[list[str]] = None
+    fabric: Optional[str] = None
+    warmth: Optional[int] = Field(default=None, ge=0, le=5)
+    formality: Optional[Formality] = None
+    season: Optional[list[Season]] = None
+    pattern: Optional[str] = None
+    fit: Optional[str] = None
+
+    @field_validator("colors")
+    @classmethod
+    def _colors_must_be_hex(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        return v if v is None else [normalize_hex(c) for c in v]
+
+
+class PhotoExtractionResponse(BaseModel):
+    """What POST /wardrobe/items/extract returns — an unsaved draft."""
+
+    photo_path: str
+    extracted: ExtractedAttributes
+    extraction_ok: bool
+
+
+class CreateWardrobeItemFromUploadRequest(BaseModel):
+    """Body of POST /wardrobe/items/upload — the user-confirmed (possibly
+    corrected) attributes. fabric/pattern/fit are required HERE ONLY: SC-003
+    requires 100% of items saved through the photo flow to have every
+    attribute populated, none blank. WardrobeItem/WardrobeItemPatch (the
+    correction path) keep all three optional, unchanged."""
+
+    photo_path: str
+    category: str
+    colors: list[str] = Field(min_length=1)
+    formality: Formality
+    warmth: int = Field(ge=0, le=5)
+    season: list[Season] = Field(min_length=1)
+    fabric: str
+    pattern: str
+    fit: str
+
+    @field_validator("colors")
+    @classmethod
+    def _colors_must_be_hex(cls, v: list[str]) -> list[str]:
+        return [normalize_hex(c) for c in v]
 
 
 # --- outputs -----------------------------------------------------------------

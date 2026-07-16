@@ -27,10 +27,10 @@ Step 4). Baseline is committed to `main`. Spec Kit is initialized.
 1. LangGraph agent graph. Pipeline is currently a linear run.
 2. Deterministic scoring (color harmony, formality coherence, weather fitness, silhouette balance).
 3. Combinatorial outfit generation engine.
-4. Vision ingestion (photo to item metadata) — **in progress, minimal slice, see Feature 003 below.**
+4. Vision ingestion (photo to item metadata) — **DONE, see Feature 003 below.** `vision.py` + `storage.py` + the two new endpoints.
 5. Preference memory from feedback.
-6. Production hardening and deployment — **the "deploy publicly" slice pulled forward into Feature 003; full hardening (LiteLLM gateway, semantic cache, guardrails) still deferred to 005.**
-7. Frontend — **in progress, see Feature 003 below.** `/design` (committed) has an interactive HTML prototype; `docs/design-backend-conflict-report.md` (local, untracked) has the full design↔backend conflict audit that drove Feature 003's scope.
+6. Production hardening and deployment — **code side of the "deploy publicly" slice done (Feature 003); the actual Railway/Vercel/Supabase-Storage-bucket account setup is a manual step not yet performed (needs dashboard access this session didn't have) — see Feature 003's status below. Full hardening (LiteLLM gateway, semantic cache, guardrails) still deferred to 005.**
+7. Frontend — **DONE (code), see Feature 003 below.** `frontend/` now has a working Next.js app covering all 4 required user stories. `/design` (committed) was the visual/component reference, not a pixel port; `docs/design-backend-conflict-report.md` (local, untracked) has the full design↔backend conflict audit that drove Feature 003's scope.
 
 **Known debt — CLEARED by Feature 002, Phase 1 (see Step 3):**
 - ~~**`/recommend` is unauthenticated.**~~ **Fixed.** `/recommend` now depends on
@@ -81,7 +81,7 @@ from drifting.
 |---|---|---|
 | 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
 | 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **Phase 1 ✅ done and merged**; Phases 2–4 paused — deliberately reordered behind Feature 003 (see below), resume after. |
-| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | **Next up.** A milestone-driven, minimal, end-to-end vertical slice: sign-in → add-item-by-photo (VLM) → view closet → get suggestions (via the existing `/recommend`, not `/suggest`) → deployed publicly. Absorbs the original 003's core (photo→VLM, narrowed to one item per photo) and a thin slice of 005 (deploy only). See Step 4. |
+| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | **Code complete, not yet deployed.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access this session didn't have): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). **Known, explicitly deferred gap: visual polish.** Three styling passes this session still didn't match `design/What to Wear.dc.html` to your satisfaction — you said to stop and pick it up later rather than keep iterating blind (no browser/screenshot tool was available to verify visually). Full narrative, including exactly what each pass got wrong and what to do differently next time: `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
 | 004 | preference-memory | Feedback capture, preference derivation. Unchanged, still after 003. |
 | 005 | production-hardening | Gateway, cache, guardrails, **full** deploy hardening (bare deploy pulled into 003; this is everything beyond that). |
 
@@ -340,6 +340,87 @@ Branch: `003-mvp-app`, off `main`. Full spec-kit cycle
 (`/speckit.specify` → `/speckit.clarify` → `/speckit.plan` → `/speckit.tasks`
 → `/speckit.analyze` → `/speckit.implement`) — this is real feature work, not
 small/mechanical. Artifacts land in `specs/003-mvp-app/`.
+
+> **Full spec-kit cycle run — code complete, deploy pending.** `spec.md` has
+> 4 required P1 user stories (sign in, add-by-photo, view closet, get
+> suggestion); quality checklist 16/16, zero `[NEEDS CLARIFICATION]` markers.
+> `/speckit.plan` → `research.md`/`data-model.md`/`contracts/`/`quickstart.md`;
+> `/speckit.tasks` → 39-task `tasks.md`; `/speckit.analyze` found 7 findings
+> (1 HIGH: SC-003 vs. an optional-field contract mismatch; rest MEDIUM/LOW),
+> all fixed before implementing. `/speckit.implement` built:
+> - **Backend**: additive `pattern`/`fit` migration (0002), CORS middleware,
+>   `vision.py` (VLM structured-output extraction, reuses `generator.py`'s
+>   pattern), `storage.py` (Supabase Storage upload via the caller's own
+>   bearer token, existing `requests` dep, no service-role key), two new
+>   endpoints (`POST /wardrobe/items/extract`, `POST /wardrobe/items/upload`).
+>   149 existing + 11 new tests pass; ruff clean. `/recommend`,
+>   `/wardrobe/items` CRUD, JWT auth all reused unchanged.
+> - **Frontend**: first code in `frontend/` — Next.js 16 (App Router,
+>   TypeScript), consuming the backend's OpenAPI schema for types
+>   (`lib/api-types.ts`, generated and verified against a locally running
+>   backend — Principle VII satisfied, not a hand-maintained duplicate).
+>   Supabase Auth JS client-side, no new backend auth code. All 4 user
+>   stories built: sign-in/up + auth guard, add-by-photo (capture → review/
+>   correct → save, with a session-expiry draft-preservation path), closet
+>   grid + empty state, free-text suggestion + "closet can't fulfill this"
+>   state. typecheck/lint/build clean; dev-server smoke-tested (all routes
+>   200) against the local backend.
+> - **Not done — 3 manual, owner-only steps** (need external dashboard
+>   access no coding session has): create the Supabase Storage
+>   `wardrobe-photos` bucket + per-user RLS policy; deploy backend to
+>   Railway; deploy frontend to Vercel; then re-run `quickstart.md` against
+>   the live URLs. Tracked as `tasks.md` T010/T037/T038/T039.
+> - **Not done — visual polish, explicitly deferred.** Three styling passes
+>   this session (ad hoc CSS → the Nocturne design *system*'s token/component
+>   classes → tracing the actual selected/unselected chip colors out of
+>   `design/What to Wear.dc.html`'s own render logic) still didn't match your
+>   expectation. You said to stop iterating blind (no browser/screenshot tool
+>   was available to verify) and pick it up in a later session — this is a
+>   deliberate pause, not a resolved issue. Full narrative of what each pass
+>   got wrong and what to try differently: `docs/003-mvp-app-implementation-report.md`
+>   (local, untracked).
+>
+> Full narrative: `docs/003-mvp-app-planning-report.md` (local, untracked).
+
+/speckit.plan, add:
+
+    Frontend: Next.js on Vercel (already the locked stack). Consume the
+    backend's OpenAPI schema for types (constitution Principle VII -- no
+    hand-maintained duplicate types). Use /design's interactive prototype and
+    design-system bundle (_ds/nocturne-.../styles.css) as the visual/component
+    reference, not a pixel-perfect port -- the taxonomy corrections from
+    docs/design-backend-conflict-report.md override the mock's narrower
+    values (full 6-value formality, full 6 category groups, no occasion-
+    picker buttons this phase).
+
+    Auth: Supabase Auth JS client directly in the frontend (email/password
+    sign-up/sign-in), issuing the same Supabase JWT the backend already
+    verifies (ES256/JWKS, unchanged from Feature 001) -- no new backend auth
+    code.
+
+    Add-item-by-photo: one new backend flow -- accept an uploaded photo,
+    upload it to Supabase Storage (already the locked stack), call the
+    existing gateway LLM client (config.py) with a vision-capable model for
+    one structured-output extraction call (category/colors/fabric/warmth/
+    formality/season/pattern/fit), return the extraction as an unsaved draft
+    for the frontend to render editable. A separate new endpoint creates the
+    wardrobe item directly from the (possibly user-corrected) attributes --
+    source='upload', no catalog_item_id -- parallel to, not replacing, the
+    existing catalog-based POST /wardrobe/items. Correcting an already-saved
+    item reuses the existing PATCH /wardrobe/items/{id} unchanged.
+
+    Schema: additive Alembic migration adding nullable pattern and fit
+    (free-text, matching fabric's shape) to WardrobeItemRow/WardrobeItem/
+    WardrobeItemPatch, mirroring exactly how fabric/source were added in
+    Feature 001.
+
+    Suggestions: frontend calls the existing /recommend (already JWT-gated
+    post-002-Phase-1) as-is -- no backend change. Free-text request field, no
+    occasion picker.
+
+    Deploy: backend to Railway, frontend to Vercel (both already the locked
+    stack) -- bare public reachability only, not the full 005 hardening
+    (LiteLLM gateway, semantic cache, guardrails stay deferred).
 
 ## Step 5: Features 004 to 005
 

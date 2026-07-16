@@ -6,21 +6,40 @@ HTTP. No UI/frontend (that's a parallel track). Run:
 
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from . import crud
-from .auth import get_current_user_id
+from . import crud, storage, vision
+from .auth import get_bearer_token, get_current_user_id
 from .db import get_session
 from .pipeline import cite
 from .pipeline.run import run_pipeline
-from .schema import Formality, OutfitResult, WardrobeItem, WardrobeItemPatch
+from .schema import (
+    CreateWardrobeItemFromUploadRequest,
+    ExtractedAttributes,
+    Formality,
+    OutfitResult,
+    PhotoExtractionResponse,
+    WardrobeItem,
+    WardrobeItemPatch,
+)
 
 app = FastAPI(title="What to Wear — RAG styling engine (test API)")
+
+_cors_origins = [o.strip() for o in os.environ.get("WTW_CORS_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class RecommendRequest(BaseModel):
@@ -132,3 +151,42 @@ def delete_wardrobe_item(
     deleted = crud.delete_wardrobe_item(session, user_id, item_id)
     if not deleted:
         raise HTTPException(404, f"wardrobe item not found: {item_id}")
+
+
+@app.post("/wardrobe/items/extract", response_model=PhotoExtractionResponse)
+def extract_wardrobe_item(
+    photo: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+    access_token: str = Depends(get_bearer_token),
+) -> PhotoExtractionResponse:
+    """Draft extraction only — nothing is persisted to wardrobe_items here
+    (US2). A photo that can't be confidently interpreted is still a 200 with
+    extraction_ok=False, never a 5xx (FR-006)."""
+    file_bytes = photo.file.read()
+    content_type = photo.content_type or "image/jpeg"
+    photo_path = storage.upload_wardrobe_photo(
+        user_id, file_bytes, photo.filename or "photo", content_type, access_token
+    )
+
+    try:
+        extracted = vision.extract_attributes_from_image(file_bytes, content_type)
+    except Exception:
+        extracted = ExtractedAttributes()
+
+    return PhotoExtractionResponse(
+        photo_path=photo_path,
+        extracted=extracted,
+        extraction_ok=extracted.category is not None,
+    )
+
+
+@app.post("/wardrobe/items/upload", response_model=WardrobeItem, status_code=201)
+def upload_wardrobe_item(
+    req: CreateWardrobeItemFromUploadRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> WardrobeItem:
+    """Persists a wardrobe item from user-confirmed (possibly corrected)
+    attributes -- source='upload', parallel to, not replacing, the
+    catalog-based POST /wardrobe/items (US2)."""
+    return crud.create_wardrobe_item_from_upload(session, user_id, req)
