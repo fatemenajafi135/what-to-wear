@@ -13,6 +13,21 @@ Deterministic pruning (`wardrobe_retrieval`) narrows what the LLM in
 `generate_outfits` can even see; deterministic scoring/ranking
 (`score_and_rank`, `scoring/combine.rank_outfits`) is the only thing that
 orders the final result — the LLM never ranks (constitution Principle II).
+
+Phase 4 (refinement, US4): `RefinementTurn` (data-model.md) isn't a separate
+stored object — it's exactly the checkpointer-persisted `GraphState` fields
+`original_context`/`last_result`/`refinement_deltas`, which LangGraph already
+carries across invokes on the same `thread_id` for any key a node doesn't
+return a fresh value for. `parse_request` detects a continuing thread by
+`original_context` already being present (set once, on the first turn, by
+`gather_context`) and keyword-parses the incoming `occasion` string (which
+carries the refinement utterance, not a fresh occasion, per
+contracts/suggest.md) into deltas instead. `gather_context` then rebuilds
+`ctx` from `original_context`'s fields, never the refinement utterance
+(FR-013). `wardrobe_retrieval` shifts its pruning bounds per delta (FR-013);
+`generate_outfits` drops outfits repeated from `last_result` for an
+"alternatives" request (FR-012); `explain` falls back to `last_result` with
+a `note` if a refinement's tightened bounds leave nothing (FR-015).
 """
 
 from __future__ import annotations
@@ -46,6 +61,30 @@ _CANDIDATES_PER_SLOT = 8
 # per-band expectations — not a second, divergent threshold set).
 _MAX_WARMTH_BY_BAND: dict[str, int] = {"warm": 2, "hot": 1}
 
+# Phase 4 refinement deltas (FR-013) — per-occurrence adjustment to the
+# hard-constraint bounds in wardrobe_retrieval, not to ctx itself.
+_REFINEMENT_WARMTH_STEP = 2  # warmth floor added per "warmer" utterance
+_REFINEMENT_FORMALITY_STEP = 1  # notches shifted down per "less formal" utterance
+
+_WARMER_KEYWORDS = ("warmer", "warm")
+_LESS_FORMAL_KEYWORDS = ("less formal", "more casual", "casual")
+_ALTERNATIVES_KEYWORDS = ("alternative", "different", "something else", "another option")
+
+
+def _parse_refinement_intent(utterance: str) -> list[str]:
+    """Deterministic keyword parsing (constitution Principle II — no LLM in
+    the selection/ranking path, and refinement intent gates that path the
+    same way an occasion does, so it stays deterministic too)."""
+    text = utterance.lower()
+    deltas = []
+    if any(k in text for k in _WARMER_KEYWORDS):
+        deltas.append("warmer")
+    if any(k in text for k in _LESS_FORMAL_KEYWORDS):
+        deltas.append("less_formal")
+    if any(k in text for k in _ALTERNATIVES_KEYWORDS):
+        deltas.append("alternatives")
+    return deltas
+
 
 class GraphState(TypedDict, total=False):
     # parse_request output — normalized request fields
@@ -57,6 +96,15 @@ class GraphState(TypedDict, total=False):
     strategy: Strategy
     thread_id: str
     user_id: Optional[str]
+    wardrobe: Optional[list[WardrobeItem]]  # explicit override, bypassing DB load (eval/test_users.py)
+
+    # Phase 4 refinement state (RefinementTurn, data-model.md) — persisted
+    # across invokes on the same thread_id by the checkpointer; original_context
+    # is set once (turn 1) and never overwritten, refinement_deltas accumulates,
+    # last_result is the most recently returned SuggestResult.
+    original_context: Optional[Context]
+    refinement_deltas: list[str]
+    last_result: Optional[SuggestResult]
 
     # gather_context output
     ctx: Context
@@ -95,24 +143,48 @@ def _is_slot_complete(items: list[str], wardrobe_by_id: dict[str, WardrobeItem])
 
 
 def parse_request(state: GraphState) -> dict:
-    """New-request parsing (Phase 3). When `thread_id` is present this is
-    where Phase 4 will branch into refinement-intent parsing instead — not
-    this phase's concern."""
+    """A continuing thread is detected by `original_context` already being
+    present (set on turn 1 by `gather_context`, restored by the checkpointer
+    on every later invoke of the same thread_id) — not a request-body flag.
+    On a continuing thread, `occasion` carries the refinement utterance
+    (contracts/suggest.md), keyword-parsed into deltas here rather than
+    treated as a fresh occasion."""
     thread_id = state.get("thread_id") or str(uuid.uuid4())
-    return {"thread_id": thread_id}
+    if state.get("original_context") is not None:
+        new_deltas = _parse_refinement_intent(state["occasion"])
+        deltas = [*state.get("refinement_deltas", []), *new_deltas]
+        return {"thread_id": thread_id, "refinement_deltas": deltas}
+    return {"thread_id": thread_id, "refinement_deltas": []}
 
 
 @traceable(name="node.gather_context", run_type="chain")
 def gather_context(state: GraphState) -> dict:
+    """On a refinement turn, rebuilds `ctx` from `original_context`'s own
+    fields — never from the incoming request body, which carries the
+    refinement utterance in `occasion` and leaves the rest unset
+    (FR-013: unstated constraints must be preserved, not dropped)."""
+    original = state.get("original_context")
+    if original is not None:
+        ctx = context_assembler.assemble_context(
+            original.occasion,
+            mood=original.mood,
+            formality=original.formality,
+            temp_c=original.temp_c,
+            wardrobe=state.get("wardrobe"),
+            user_id=state.get("user_id"),
+        )
+        return {"ctx": ctx}
+
     ctx = context_assembler.assemble_context(
         state["occasion"],
         mood=state.get("mood"),
         formality=state.get("formality"),
         location=state.get("location"),
         temp_c=state.get("temp_c"),
+        wardrobe=state.get("wardrobe"),
         user_id=state.get("user_id"),
     )
-    return {"ctx": ctx}
+    return {"ctx": ctx, "original_context": ctx}
 
 
 @traceable(name="stage.retrieve", run_type="chain")
@@ -151,11 +223,14 @@ def wardrobe_retrieval(state: GraphState) -> dict:
     """Hard-constraint pruning (formality band, per-band warmth ceiling,
     season) before any combination step, capped at k=8 per slot (FR-014).
     Reuses eval/properties.py's weather_appropriate predicate rather than a
-    second, forked warmth check."""
+    second, forked warmth check. `refinement_deltas` (Phase 4) shift these
+    same bounds — a "warmer"/"less formal" request never touches `ctx`
+    itself (FR-013), only what counts as fitting here."""
     ctx = state["ctx"]
+    deltas = state.get("refinement_deltas", [])
     candidates: dict[str, list[WardrobeItem]] = {}
     for item in ctx.wardrobe:
-        if not _item_fits_hard_constraints(item, ctx):
+        if not _item_fits_hard_constraints(item, ctx, deltas):
             continue
         slot = categories.group_of(item.category)
         candidates.setdefault(slot, []).append(item)
@@ -164,15 +239,32 @@ def wardrobe_retrieval(state: GraphState) -> dict:
     return {"candidates": candidates}
 
 
-def _item_fits_hard_constraints(item: WardrobeItem, ctx: Context) -> bool:
-    if ctx.formality and FORMALITY_ORDER[item.formality] < FORMALITY_ORDER[ctx.formality] - 1:
-        return False
+def _item_fits_hard_constraints(item: WardrobeItem, ctx: Context, deltas: Optional[list[str]] = None) -> bool:
+    deltas = deltas or []
+    less_formal_count = deltas.count("less_formal")
+    warmer_count = deltas.count("warmer")
+
+    if ctx.formality:
+        base_notch = FORMALITY_ORDER[ctx.formality]
+        item_notch = FORMALITY_ORDER[item.formality]
+        if less_formal_count:
+            # shift the whole acceptable window down, don't just raise the
+            # ceiling — a bare ceiling bump would still admit items at the
+            # original level, which wouldn't reliably lower the mean (SC-007).
+            min_notch = base_notch - 1 - less_formal_count
+            max_notch = base_notch - less_formal_count
+            if item_notch < min_notch or item_notch > max_notch:
+                return False
+        elif item_notch < base_notch - 1:
+            return False
     if ctx.season and item.season and ctx.season not in item.season:
         return False
     if ctx.temp_band and ctx.temp_band in _MAX_WARMTH_BY_BAND:
         max_warmth = _MAX_WARMTH_BY_BAND[ctx.temp_band]
         if not weather_appropriate([item.id], {item.id: item}, {"max_warmth": max_warmth}):
             return False
+    if warmer_count and item.warmth < warmer_count * _REFINEMENT_WARMTH_STEP:
+        return False
     return True
 
 
@@ -189,6 +281,14 @@ def generate_outfits(state: GraphState) -> dict:
 
     wardrobe_by_id = {it.id: it for it in ctx.wardrobe}
     complete: list[GenOutfit] = [o for o in gen.outfits if _is_slot_complete(o.items, wardrobe_by_id)]
+
+    last_result = state.get("last_result")
+    if "alternatives" in state.get("refinement_deltas", []) and last_result is not None:
+        # FR-012: a different set than what was already shown, not a fresh
+        # generation that happens to repeat it.
+        used_sets = {frozenset(o.items) for o in last_result.outfits}
+        complete = [o for o in complete if frozenset(o.items) not in used_sets]
+
     return {"generated": GenOutput(outfits=complete)}
 
 
@@ -203,6 +303,8 @@ def score_and_rank(state: GraphState) -> dict:
 def explain(state: GraphState) -> dict:
     ctx = state["ctx"]
     scored = state["scored_outfits"]
+    deltas = state.get("refinement_deltas", [])
+    last_result = state.get("last_result")
 
     base = cite.build_result(ctx, state["generated"], state["retrieval"])
     result = SuggestResult(outfits=scored, sources=base.sources, context=ctx)
@@ -213,12 +315,17 @@ def explain(state: GraphState) -> dict:
     )
 
     note = None
-    if not scored:
+    if not scored and deltas and last_result is not None:
+        # FR-015: the refinement's tightened bounds left nothing — return
+        # the best available (prior) result rather than an empty one.
+        result = last_result
+        note = "Couldn't fully satisfy that request from your closet — showing your previous suggestions instead."
+    elif not scored:
         note = "Your closet doesn't have enough items to assemble an outfit for this request."
     elif len(scored) < 3:
         note = f"Only found {len(scored)} outfit option(s) — add more items to your closet for more variety."
 
-    return {"result": result, "note": note}
+    return {"result": result, "note": note, "last_result": result}
 
 
 def build_graph() -> StateGraph:
