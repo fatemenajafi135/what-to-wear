@@ -160,7 +160,10 @@ backend/
 ├── .env.example                   # + REDIS_URL
 └── tests/
     ├── unit/
-    │   ├── test_grounding.py       # NEW: verify_outfit_grounding() cases
+    │   ├── pipeline/
+    │   │   └── test_grounding.py   # NEW: verify_outfit_grounding() cases
+    │   │                           #   (tests/unit/pipeline/ already exists
+    │   │                           #   for pipeline/graph.py's own tests)
     │   └── test_cache.py           # NEW: cache key derivation (pure part)
     └── integration/
         ├── test_grounding_graph.py # NEW: bad item id dropped via compiled graph

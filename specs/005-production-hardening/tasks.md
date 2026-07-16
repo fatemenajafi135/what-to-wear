@@ -30,22 +30,22 @@ directories (plan.md's Structure Decision).
 
 ## Phase 1: Setup
 
-- [ ] T001 Copy gitignored `backend/data/` and `backend/artifacts/eval_runs/`
+- [X] T001 Copy gitignored `backend/data/` and `backend/artifacts/eval_runs/`
   from the main worktree (`/home/fateme/Projects/w2w/what-to-wear/backend/`)
   into this worktree via `rsync -a` — the known "fresh worktree doesn't carry
   gitignored data" gotcha (CLAUDE.md); confirmed missing here already.
   Required before T004 and before the eval harness can run at all.
-- [ ] T002 Add `litellm`, `langchain-litellm`, `redis` to `backend/pyproject.toml`
+- [X] T002 Add `litellm`, `langchain-litellm`, `redis` to `backend/pyproject.toml`
   dependencies (research.md §5); run `uv sync --group dev`.
-- [ ] T003 [P] Add `REDIS_URL` to `backend/.env.example` (Railway Redis addon
+- [X] T003 [P] Add `REDIS_URL` to `backend/.env.example` (Railway Redis addon
   connection string placeholder, plus a comment showing the local dev
   fallback `redis://localhost:6379/0` and `docker run -d -p 6379:6379
   redis:7-alpine`).
-- [ ] T004 Establish the pre-change baseline: run `uv run pytest tests/ -q`
+- [X] T004 Establish the pre-change baseline: run `uv run pytest tests/ -q`
   and `uv run python -m whattowear.eval.harness`, confirm both green and note
   the `retrieval_recall` figures against `backend/artifacts/eval_runs/` —
   this is what T024's post-change gate re-run diffs against (constitution
-  Principle I).
+  Principle I). **249/249 tests pass.**
 
 ---
 
@@ -117,27 +117,27 @@ outfit fails.
 
 ### Tests for User Story 2
 
-- [ ] T009 [P] [US2] Unit tests for `verify_outfit_grounding()` — all-owned
+- [X] T009 [P] [US2] Unit tests for `verify_outfit_grounding()` — all-owned
   outfit passes, one unknown id fails, empty item list, an item id that's
   catalog-only (not in the wardrobe) still passes — in
-  `backend/tests/unit/test_grounding.py`.
+  `backend/tests/unit/pipeline/test_grounding.py`.
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] Implement `verify_outfit_grounding(item_ids, wardrobe_by_id,
+- [X] T010 [US2] Implement `verify_outfit_grounding(item_ids, wardrobe_by_id,
   catalog_ids) -> bool` in new `backend/src/whattowear/pipeline/grounding.py`
   per research.md §3 — every item id must be in the wardrobe or the shared
   catalog (Principle IV, checked literally; no outfit can contain a
   catalog-only item today, but the check costs one cheap query and removes
   any ambiguity about matching the constitution's stated grounding
   definition).
-- [ ] T011 [US2] Add a `verify_grounding` node to
+- [X] T011 [US2] Add a `verify_grounding` node to
   `backend/src/whattowear/pipeline/graph.py`: fetches catalog ids via
   `crud.list_catalog_items` (own short-lived `SessionLocal()` session, same
   pattern as `memory.store.get_profile`), filters `scored_outfits` via
   T010's predicate, wired between `score_and_rank` and `explain` in
   `build_graph()`'s edges (depends on T010).
-- [ ] T012 [US2] Integration test: monkeypatch/construct a `GraphState` so
+- [X] T012 [US2] Integration test: monkeypatch/construct a `GraphState` so
   one candidate outfit contains an id absent from `ctx.wardrobe`, invoke the
   compiled graph, confirm that outfit is absent from `result.outfits` while
   any other valid outfits remain, and confirm the existing zero-outfit
@@ -330,7 +330,7 @@ in the existing LangSmith project.
 
 ```bash
 # Different developers/sessions could take these in parallel — disjoint files:
-Task: "Unit tests for verify_outfit_grounding() in backend/tests/unit/test_grounding.py"
+Task: "Unit tests for verify_outfit_grounding() in backend/tests/unit/pipeline/test_grounding.py"
 Task: "Unit tests for cache-key derivation in backend/tests/unit/test_cache.py"
 ```
 

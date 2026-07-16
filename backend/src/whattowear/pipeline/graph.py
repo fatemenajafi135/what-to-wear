@@ -2,7 +2,11 @@
 
 Node order (research.md §1): `parse_request -> gather_context ->
 style_retrieval -> build_query -> wardrobe_retrieval -> generate_outfits ->
-score_and_rank -> explain`, linear edges, no branching. Every node is a thin
+score_and_rank -> verify_grounding -> explain`, linear edges, no branching.
+`verify_grounding` (Feature 005 US2/FR-003-005) is a post-generation safety
+net — see `grounding.py` — dropping any outfit whose items aren't genuinely
+in the requester's wardrobe or the shared catalog, before `explain` ever
+builds the response. Every node is a thin
 wrapper around an existing, unchanged pure function (constitution Principle
 I) — `context_assembler.py`, `query_builder.py`, `generator.py`, `cite.py`
 are not rewritten here, just orchestrated. `style_retrieval` runs before
@@ -38,7 +42,8 @@ from typing import Optional, TypedDict
 from langgraph.graph import StateGraph
 from langsmith import traceable
 
-from .. import categories
+from .. import categories, crud
+from ..db import SessionLocal
 from ..eval.properties import weather_appropriate
 from ..kb import get_kb
 from ..memory import store as memory
@@ -48,6 +53,7 @@ from ..schema import FORMALITY_ORDER, Context, Formality, SuggestResult, Wardrob
 from ..scoring import score_outfits
 from . import cite, context_assembler, query_builder
 from .generator import GenOutfit, GenOutput, generate
+from .grounding import verify_outfit_grounding
 
 Strategy = str  # "baseline" | "hybrid" | "advanced"
 
@@ -305,6 +311,25 @@ def score_and_rank(state: GraphState) -> dict:
     return {"scored_outfits": ranked}
 
 
+@traceable(name="node.verify_grounding", run_type="chain")
+def verify_grounding(state: GraphState) -> dict:
+    """Feature 005 US2/FR-003-005: drop any outfit referencing an item id
+    that doesn't genuinely exist in the requester's wardrobe or the shared
+    catalog, before the response is ever built (`explain`). A safety net on
+    top of, not instead of, the existing deterministic selection guarantee —
+    see pipeline/grounding.py."""
+    ctx = state["ctx"]
+    wardrobe_by_id = {it.id: it for it in ctx.wardrobe}
+    with SessionLocal() as session:
+        catalog_ids = {it.id for it in crud.list_catalog_items(session)}
+    verified = [
+        outfit
+        for outfit in state["scored_outfits"]
+        if verify_outfit_grounding(outfit.items, wardrobe_by_id, catalog_ids)
+    ]
+    return {"scored_outfits": verified}
+
+
 @traceable(name="node.explain", run_type="chain")
 def explain(state: GraphState) -> dict:
     ctx = state["ctx"]
@@ -344,6 +369,7 @@ def build_graph() -> StateGraph:
     graph.add_node("wardrobe_retrieval", wardrobe_retrieval)
     graph.add_node("generate_outfits", generate_outfits)
     graph.add_node("score_and_rank", score_and_rank)
+    graph.add_node("verify_grounding", verify_grounding)
     graph.add_node("explain", explain)
 
     graph.set_entry_point("parse_request")
@@ -353,7 +379,8 @@ def build_graph() -> StateGraph:
     graph.add_edge("build_query", "wardrobe_retrieval")
     graph.add_edge("wardrobe_retrieval", "generate_outfits")
     graph.add_edge("generate_outfits", "score_and_rank")
-    graph.add_edge("score_and_rank", "explain")
+    graph.add_edge("score_and_rank", "verify_grounding")
+    graph.add_edge("verify_grounding", "explain")
     return graph
 
 
