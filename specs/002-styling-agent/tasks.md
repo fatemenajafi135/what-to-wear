@@ -161,7 +161,7 @@ still the original occasion.
 - [X] T044 [P] [US4] Unit tests for refinement-intent parsing ("warmer" → raised warmth floor, "less formal" → lowered formality band, "alternatives" → exclusion set, unsatisfiable case → note) in `backend/tests/unit/pipeline/test_graph.py` (depends on T040-T043)
 - [X] T045 [US4] Integration test: start a thread, refine with "warmer", confirm preserved occasion + measurably higher average warmth (US4 Acceptance Scenario 1, SC-007); repeat for "less formal" and "alternatives" — in `backend/tests/integration/test_suggest_refinement.py` (depends on T041-T043)
 - [X] T046 [FR-010, optional — "MAY"] Reported-only LLM judge score: compute and attach to the response for evaluation purposes, verify it never influences `rank_score` or ordering — in `backend/src/whattowear/eval/` (depends on T037)
-- [ ] T047 Re-run the eval no-regression gate for Phase 4 (constitution Principle I) (depends on T045)
+- [X] T047 Re-run the eval no-regression gate for Phase 4 (constitution Principle I) (depends on T045)
 
 **Checkpoint**: All four user stories independently functional; feature
 complete per spec.md.
@@ -170,10 +170,10 @@ complete per spec.md.
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [ ] T048 [P] `uv run ruff check` / format all new and modified files in `backend/`
-- [ ] T049 Walk through `quickstart.md` end-to-end by hand for whichever phases have landed at merge time
-- [ ] T050 [P] Per the handoff contract (root `CLAUDE.md` "Session workflow"): update `docs/SDD-HANDOFF.md`'s Feature 002 row/Step 3 and `CLAUDE.md`'s "Current state" section for the phase(s) just merged; mark this phase's tasks `[X]` in this file
-- [ ] T050a [P] Backfill unit tests for `pipeline/context_assembler.py` (`assemble_context`'s weather-fallback chain: location resolves → weather lookup fails → falls back to `temp_c` → falls back to season-only; `OCCASION_FORMALITY` default lookup) in `backend/tests/unit/test_context_assembler.py` — closes a pre-existing gap (Feature 001's Known Debt list named `colors.py`/`cite.py`/`categories.py`/`query_builder.py`/`eval/properties.py` only) that FR-006 leans on but nothing in this feature previously covered
+- [X] T048 [P] `uv run ruff check` / format all new and modified files in `backend/`
+- [X] T049 Walk through `quickstart.md` end-to-end by hand for whichever phases have landed at merge time
+- [X] T050 [P] Per the handoff contract (root `CLAUDE.md` "Session workflow"): update `docs/SDD-HANDOFF.md`'s Feature 002 row/Step 3 and `CLAUDE.md`'s "Current state" section for the phase(s) just merged; mark this phase's tasks `[X]` in this file
+- [X] T050a [P] Backfill unit tests for `pipeline/context_assembler.py` (`assemble_context`'s weather-fallback chain: location resolves → weather lookup fails → falls back to `temp_c` → falls back to season-only; `OCCASION_FORMALITY` default lookup) in `backend/tests/unit/test_context_assembler.py` — closes a pre-existing gap (Feature 001's Known Debt list named `colors.py`/`cite.py`/`categories.py`/`query_builder.py`/`eval/properties.py` only) that FR-006 leans on but nothing in this feature previously covered
 
 ---
 
