@@ -17,7 +17,9 @@ from sqlalchemy.orm import Session
 
 from . import crud, storage, vision
 from .auth import get_bearer_token, get_current_user_id
+from .colors import nearest_name
 from .db import get_session
+from .memory.preferences import DerivedSignal, derive_signals
 from .pipeline import cite
 from .pipeline.run import run_pipeline
 from .schema import (
@@ -26,6 +28,10 @@ from .schema import (
     Formality,
     OutfitResult,
     PhotoExtractionResponse,
+    PreferenceProfile,
+    PreferenceSignal,
+    SubmitFeedbackRequest,
+    SuggestionFeedback,
     WardrobeItem,
     WardrobeItemPatch,
 )
@@ -190,3 +196,77 @@ def upload_wardrobe_item(
     attributes -- source='upload', parallel to, not replacing, the
     catalog-based POST /wardrobe/items (US2)."""
     return crud.create_wardrobe_item_from_upload(session, user_id, req)
+
+
+def _signal_summary(signal: DerivedSignal) -> str:
+    """Plain-language projection of a DerivedSignal (FR-007 -- no raw
+    hex/internal ids in what the user sees)."""
+    if signal.kind == "color":
+        return f"You tend to reject {nearest_name(signal.detail)} items."
+    if signal.kind == "category":
+        return f"You tend to avoid {signal.detail} items."
+    if signal.detail == "less_formal":
+        return "You usually want suggestions less formal than what's given."
+    return "You usually want suggestions more formal than what's given."
+
+
+def _current_profile(session: Session, user_id: str) -> tuple[bool, list[DerivedSignal]]:
+    feedback, dismissals = crud.get_derivation_inputs(session, user_id)
+    has_feedback = crud.has_any_feedback(session, user_id)
+    return has_feedback, derive_signals(feedback, dismissals)
+
+
+@app.post("/preferences/feedback", response_model=SuggestionFeedback, status_code=201)
+def submit_feedback(
+    req: SubmitFeedbackRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> SuggestionFeedback:
+    """Records or replaces a reaction to a specific outfit (US1). item_ids
+    are resolved against the caller's own wardrobe -- an id that doesn't
+    exist or belongs to someone else is a 404, never silently accepted."""
+    try:
+        return crud.record_feedback(session, user_id, req)
+    except crud.UnknownWardrobeItemIds as e:
+        raise HTTPException(404, f"unknown wardrobe item_id(s): {[str(i) for i in e.missing_ids]}") from e
+
+
+@app.get("/preferences", response_model=PreferenceProfile)
+def get_preferences(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> PreferenceProfile:
+    """A plain-language summary of what's been learned (US3). has_feedback
+    distinguishes "no feedback at all" from "feedback exists, no signal has
+    crossed threshold yet" -- both have signals=[], only the former is False."""
+    has_feedback, signals = _current_profile(session, user_id)
+    return PreferenceProfile(
+        has_feedback=has_feedback,
+        signals=[PreferenceSignal(key=s.key, summary=_signal_summary(s)) for s in signals],
+    )
+
+
+@app.delete("/preferences/signals/{signal_key}", status_code=204)
+def remove_preference_signal(
+    signal_key: str,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> None:
+    """Removes one derived signal without affecting the rest of the profile
+    (US4). Idempotent -- dismissing an already-absent signal is a no-op,
+    not a 404 (contracts/preferences.md)."""
+    crud.dismiss_signal(session, user_id, signal_key)
+
+
+@app.delete("/preferences", status_code=204)
+def clear_preferences(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+) -> None:
+    """Clears the entire derived profile in one action (US4) -- dismisses
+    every signal currently present, reusing the exact same per-signal
+    mechanism as remove_preference_signal rather than a separate code path
+    (research.md #3)."""
+    _, signals = _current_profile(session, user_id)
+    for signal in signals:
+        crud.dismiss_signal(session, user_id, signal.key)

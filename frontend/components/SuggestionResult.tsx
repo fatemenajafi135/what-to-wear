@@ -1,4 +1,5 @@
 import type { OutfitResult, WardrobeItem } from "@/lib/types";
+import { OutfitReaction } from "@/components/OutfitReaction";
 
 export function SuggestionResult({
   result,
@@ -46,6 +47,7 @@ export function SuggestionResult({
               <p key={j}>{r.text}</p>
             ))}
           </div>
+          <OutfitReaction itemIds={outfit.items} />
         </div>
       ))}
       <details className="suggestion-raw">

@@ -6,13 +6,21 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .ingest.loaders import REPO_ROOT
-from .models import CatalogItemRow, WardrobeItemRow
-from .schema import CreateWardrobeItemFromUploadRequest, WardrobeItem, WardrobeItemPatch
+from .memory import preferences
+from .models import CatalogItemRow, PreferenceSignalDismissalRow, SuggestionFeedbackRow, WardrobeItemRow
+from .schema import (
+    CreateWardrobeItemFromUploadRequest,
+    SubmitFeedbackRequest,
+    SuggestionFeedback,
+    WardrobeItem,
+    WardrobeItemPatch,
+)
 
 WARDROBE_FIXTURE = REPO_ROOT / "data" / "fixtures" / "wardrobe.json"
 
@@ -35,6 +43,29 @@ class UnknownCatalogItemIds(Exception):
     def __init__(self, missing_ids: list[uuid.UUID]) -> None:
         self.missing_ids = missing_ids
         super().__init__(f"unknown catalog_item_id(s): {[str(i) for i in missing_ids]}")
+
+
+class UnknownWardrobeItemIds(Exception):
+    """Raised by record_feedback when one or more item_ids don't exist in
+    the caller's own wardrobe_items -- either the id doesn't exist at all,
+    or it belongs to a different user (never distinguished in the error,
+    same as the rest of this codebase's not-found-vs-forbidden convention).
+    Carries the offending ids for the caller (the API layer) to report back
+    in a 404 (constitution Principle IV: a reaction can't be grounded in
+    items the caller doesn't own)."""
+
+    def __init__(self, missing_ids: list[uuid.UUID]) -> None:
+        self.missing_ids = missing_ids
+        super().__init__(f"unknown wardrobe item_id(s): {[str(i) for i in missing_ids]}")
+
+
+def _utcnow() -> datetime:
+    # Naive, UTC-by-convention -- matches how the rest of this codebase
+    # reads back Postgres TIMESTAMP (no tz) columns (see WardrobeItemRow's
+    # created_at/updated_at). Stripping tzinfo keeps comparisons against
+    # those columns from raising "can't compare offset-naive and
+    # offset-aware datetimes".
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _to_wardrobe_item(row: WardrobeItemRow | CatalogItemRow) -> WardrobeItem:
@@ -187,6 +218,137 @@ def create_wardrobe_item_from_upload(
     session.add(row)
     session.commit()
     return _to_wardrobe_item(row)
+
+
+def _item_ids_key(item_ids: list[str]) -> str:
+    return ",".join(sorted(item_ids))
+
+
+def _to_suggestion_feedback(row: SuggestionFeedbackRow) -> SuggestionFeedback:
+    return SuggestionFeedback(
+        id=str(row.id),
+        verdict=row.verdict,
+        reason=row.reason,
+        item_ids=row.item_ids,
+        created_at=row.created_at.isoformat(),
+    )
+
+
+def record_feedback(session: Session, user_id: str | uuid.UUID, req: SubmitFeedbackRequest) -> SuggestionFeedback:
+    """Records (or replaces) a reaction to a specific outfit, identified by
+    its item set (specs/004-preference-memory/research.md #1). item_ids are
+    resolved against the caller's own wardrobe_items -- never trusted as-is
+    (constitution Principle IV, grounded output) -- and snapshotted at their
+    current attributes, since a later edit/delete of the item must not
+    retroactively change historical feedback. Upserts on (user_id,
+    item_ids_key): a later reaction to the same outfit replaces the earlier
+    one rather than accumulating (spec.md Edge Cases)."""
+    user_uuid = uuid.UUID(str(user_id))
+    item_uuids = [uuid.UUID(str(i)) for i in req.item_ids]
+    rows = {
+        row.id: row
+        for row in session.scalars(
+            select(WardrobeItemRow).where(WardrobeItemRow.id.in_(item_uuids), WardrobeItemRow.user_id == user_uuid)
+        )
+    }
+    missing = [i for i in item_uuids if i not in rows]
+    if missing:
+        raise UnknownWardrobeItemIds(missing)
+
+    item_ids_key = _item_ids_key(req.item_ids)
+    snapshot = [
+        {
+            "item_id": str(rows[i].id),
+            "category": rows[i].category,
+            "colors": rows[i].colors,
+            "formality": rows[i].formality,
+        }
+        for i in item_uuids
+    ]
+
+    existing = session.scalar(
+        select(SuggestionFeedbackRow).where(
+            SuggestionFeedbackRow.user_id == user_uuid, SuggestionFeedbackRow.item_ids_key == item_ids_key
+        )
+    )
+    if existing is not None:
+        existing.verdict = req.verdict
+        existing.reason = req.reason
+        existing.item_snapshot = snapshot
+        # created_at's onupdate=func.now() fires automatically on this
+        # UPDATE -- an updated reaction is "created now" for dedup/recency
+        # purposes (data-model.md).
+        session.commit()
+        return _to_suggestion_feedback(existing)
+
+    row = SuggestionFeedbackRow(
+        user_id=user_uuid,
+        verdict=req.verdict,
+        reason=req.reason,
+        item_ids=sorted(req.item_ids),
+        item_ids_key=item_ids_key,
+        item_snapshot=snapshot,
+    )
+    session.add(row)
+    session.commit()
+    return _to_suggestion_feedback(row)
+
+
+def _to_feedback_record(row: SuggestionFeedbackRow) -> preferences.FeedbackRecord:
+    return preferences.FeedbackRecord(
+        verdict=row.verdict,
+        item_snapshot=[preferences.ItemSnapshot(**item) for item in row.item_snapshot],
+        created_at=row.created_at,
+    )
+
+
+def get_derivation_inputs(
+    session: Session, user_id: str | uuid.UUID
+) -> tuple[list[preferences.FeedbackRecord], dict[str, datetime]]:
+    """Raw materials for preferences.derive_signals(), converted from ORM
+    rows to that module's plain dataclasses. Both memory.store.get_profile()
+    (feeds profile_note()) and the /preferences endpoints call this, so
+    every surface derives from the exact same data (data-model.md)."""
+    user_uuid = uuid.UUID(str(user_id))
+    feedback_rows = session.scalars(
+        select(SuggestionFeedbackRow).where(SuggestionFeedbackRow.user_id == user_uuid)
+    ).all()
+    dismissal_rows = session.scalars(
+        select(PreferenceSignalDismissalRow).where(PreferenceSignalDismissalRow.user_id == user_uuid)
+    ).all()
+    feedback = [_to_feedback_record(row) for row in feedback_rows]
+    dismissals = {row.signal_key: row.dismissed_at for row in dismissal_rows}
+    return feedback, dismissals
+
+
+def has_any_feedback(session: Session, user_id: str | uuid.UUID) -> bool:
+    """Distinguishes "no feedback at all" (FR-008's empty state) from
+    "feedback exists but no signal has crossed threshold yet" -- both
+    project to an empty signals list, but only the former is has_feedback=False."""
+    user_uuid = uuid.UUID(str(user_id))
+    return (
+        session.scalar(select(SuggestionFeedbackRow.id).where(SuggestionFeedbackRow.user_id == user_uuid).limit(1))
+        is not None
+    )
+
+
+def dismiss_signal(session: Session, user_id: str | uuid.UUID, signal_key: str) -> None:
+    """Upserts a dismissal cutoff for one signal_key. "Remove a signal" and
+    "clear the whole profile" (which calls this once per currently-present
+    key) share this one mechanism -- research.md #3."""
+    user_uuid = uuid.UUID(str(user_id))
+    existing = session.scalar(
+        select(PreferenceSignalDismissalRow).where(
+            PreferenceSignalDismissalRow.user_id == user_uuid,
+            PreferenceSignalDismissalRow.signal_key == signal_key,
+        )
+    )
+    now = _utcnow()
+    if existing is not None:
+        existing.dismissed_at = now
+    else:
+        session.add(PreferenceSignalDismissalRow(user_id=user_uuid, signal_key=signal_key, dismissed_at=now))
+    session.commit()
 
 
 def seed_catalog(session: Session) -> int:

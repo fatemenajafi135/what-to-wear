@@ -28,7 +28,7 @@ Step 4). Baseline is committed to `main`. Spec Kit is initialized.
 2. Deterministic scoring (color harmony, formality coherence, weather fitness, silhouette balance).
 3. Combinatorial outfit generation engine.
 4. Vision ingestion (photo to item metadata) — **DONE, see Feature 003 below.** `vision.py` + `storage.py` + the two new endpoints.
-5. Preference memory from feedback.
+5. Preference memory from feedback — **DONE, see Feature 004 (Step 5).**
 6. Production hardening and deployment — **code side of the "deploy publicly" slice done (Feature 003); the actual Railway/Vercel/Supabase-Storage-bucket account setup is a manual step not yet performed (needs dashboard access this session didn't have) — see Feature 003's status below. Full hardening (LiteLLM gateway, semantic cache, guardrails) still deferred to 005.**
 7. Frontend — **DONE (code), see Feature 003 below.** `frontend/` now has a working Next.js app covering all 4 required user stories. `/design` (committed) was the visual/component reference, not a pixel port; `docs/design-backend-conflict-report.md` (local, untracked) has the full design↔backend conflict audit that drove Feature 003's scope.
 
@@ -80,10 +80,32 @@ from drifting.
 | # | Feature | Notes |
 |---|---|---|
 | 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
-| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **Phase 1 ✅ done and merged**; Phases 2–4 paused — deliberately reordered behind Feature 003 (see below), resume after. |
-| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | **Code complete, not yet deployed.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access this session didn't have): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). **Known, explicitly deferred gap: visual polish.** Three styling passes this session still didn't match `design/What to Wear.dc.html` to your satisfaction — you said to stop and pick it up later rather than keep iterating blind (no browser/screenshot tool was available to verify visually). Full narrative, including exactly what each pass got wrong and what to do differently next time: `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
-| 004 | preference-memory | Feedback capture, preference derivation. Unchanged, still after 003. |
+| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **Phase 1 ✅ done and merged.** Phases 2–4 were paused behind Feature 003; **now resuming in parallel with Feature 004** (see "Working in parallel" note below) — this is the real agent work (deterministic scoring, LangGraph, replacing the LLM directly picking items) and nothing since Phase 1 has done it; 003/004 both deliberately routed around it rather than fixing it. |
+| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | ✅ **Code complete and merged to `main`, deploy pending.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access no coding session has): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). **Known, explicitly deferred gap: visual polish** didn't fully match `design/What to Wear.dc.html` — see `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
+| 004 | preference-memory | ✅ **DONE.** Full spec-kit cycle (spec/clarify/plan/tasks/analyze/implement). `set_preference()` was defined but never called and everything was in-memory (lost on restart) — now Postgres-backed: reactions persist, a derived preference profile (rejected colors, avoided categories, formality drift) softly shapes future `/recommend` suggestions via the unchanged `profile_note()` seam, and a user can view/remove/clear what's been learned. See Step 5. |
 | 005 | production-hardening | Gateway, cache, guardrails, **full** deploy hardening (bare deploy pulled into 003; this is everything beyond that). |
+
+**Working in parallel (002 + 004, from 2026-07-16):** both are being developed
+at once, each in its own **git worktree** (`git worktree add`, attached to the
+existing `002-styling-agent`/`004-preference-memory` branches) so two sessions
+can work simultaneously without one checking out a branch out from under the
+other — this project got burned once already by two sessions sharing one
+working directory mid-command. Conflict risk between them was checked before
+starting: 002 touches `pipeline/run.py`, `pipeline/generator.py`, and a new
+`scoring/` package; 004 hooks into the existing `profile_note()` contract and
+is expected to leave those files alone, touching mostly `api.py` (new
+endpoints, low-conflict pattern) and its own new persistence. The
+`002-styling-agent` branch was merged with `main` before resuming work on it
+(it predated Feature 003 entirely — had no `frontend/`, stale docs).
+
+**Update: Feature 004 finished (2026-07-16).** The conflict-risk assessment
+held — 004 never touched `pipeline/run.py`, `pipeline/generator.py`, or any
+`scoring/` package; it only touched `api.py`, `crud.py`, `models.py`,
+`schema.py`, `memory/store.py` (a new backing, same public signatures), the
+new `memory/preferences.py`, a new migration, and its own tests. **Merge
+004 to `main` whenever convenient** (no coordination needed with 002's
+remaining phases) — check whether the 002 worktree session is still
+active/has uncommitted work before touching its branch.
 
 **Branch strategy note (002 only):** Feature 002 is large enough to run as a
 multi-phase effort rather than one merge. Each phase merges to `main` on its
@@ -422,17 +444,118 @@ small/mechanical. Artifacts land in `specs/003-mvp-app/`.
     stack) -- bare public reachability only, not the full 005 hardening
     (LiteLLM gateway, semantic cache, guardrails stay deferred).
 
-## Step 5: Features 004 to 005
+## Step 5: Feature 004, preference-memory
 
-Same loop each time. Run /speckit.converge before 004, since memory/store.py may
-already cover part of it.
+> **`/speckit.specify` + `/speckit.clarify` done.** Grounded in an actual read
+> of `memory/store.py` first (this step's own note, below, said to run
+> `/speckit.converge` first — done by direct inspection instead). Finding:
+> the *consumption* side already exists and is already wired into
+> `/recommend` (`profile_note()` → `generator.py`), but nothing ever *writes*
+> a preference (`set_preference()` is defined but never called), there's no
+> feedback endpoint, and everything is in-memory (lost on restart/redeploy).
+> This feature targets exactly that gap — **it does not require Feature 002's
+> `/suggest`/graph work**, so the original scope note below ("feed into
+> parse_request") is corrected: `parse_request` is a Phase-3 graph node that
+> doesn't exist yet. This hooks into the currently-live `/recommend` path's
+> existing `profile_note` mechanism instead. `spec.md` has 4 user stories (2×P1:
+> react to a suggestion, suggestions reflect learned taste; 2×P2: view/clear
+> preferences); quality checklist 16/16, zero `[NEEDS CLARIFICATION]`
+> markers — two real design forks resolved via documented Assumptions
+> (deterministic derivation from structured outfit data, not NLP-parsed
+> reasons; no separate persisted Suggestion entity needed). Full narrative:
+> `docs/004-preference-memory-planning-report.md` (local, untracked).
 
-- 004 preference-memory: feedback endpoint, derive a preference profile from
-  rejections (rejected colors, avoided categories, formality drift), feed into
-  parse_request and as a soft re-ranking weight.
-- 005 production-hardening: LiteLLM gateway, semantic cache on KB retrieval, output
-  guardrail asserting every item_id exists, `uv run langgraph dockerfile Dockerfile`,
-  deploy to Railway (beyond the bare deploy already done in 003).
+Original scope note (feedback endpoint, derive a preference profile from
+rejections — rejected colors, avoided categories, formality drift): confirmed
+accurate and unchanged by `/speckit.specify`; only the "feed into
+parse_request" integration point was corrected, per the banner above.
+
+/speckit.plan, add:
+
+    Persistence: new Postgres tables via SQLAlchemy + an additive Alembic
+    migration, matching Feature 001's pattern -- a SuggestionFeedback table
+    (user_id, verdict, reason, the reacted-to outfit's item_ids + a snapshot
+    of their category/colors/formality at feedback time, created_at). No
+    separate materialized "preference profile" table -- compute the derived
+    profile on read by aggregating SuggestionFeedback rows, same shape as
+    memory/store.py's existing get_profile() but Postgres-backed instead of
+    in-memory. Simplicity over abstraction: no cache-invalidation machinery
+    for a solo-scale read pattern.
+
+    Swap memory/store.py's set_preference/get_profile (currently
+    InMemoryStore-backed) for the Postgres-backed equivalents, keeping
+    profile_note(user_id)'s signature and behavior unchanged so
+    pipeline/run.py and pipeline/generator.py need zero changes -- the
+    consumption side already works, only the storage backing changes.
+    remember_interaction/recent_interactions (short-term history) are out of
+    scope for this feature -- leave them in-memory, untouched.
+
+    New endpoints: one to record a reaction (verdict + optional reason + the
+    outfit's item_ids -- looked up against the user's own wardrobe_items,
+    already scoped by the existing auth dependency, to get real attributes;
+    no new Suggestion entity), one to view the derived profile, one to clear
+    it entirely, one to remove a single derived signal. All reuse the
+    existing get_current_user_id JWT dependency, unchanged.
+
+    Frontend: add a reaction affordance (like/reject + optional reason) to
+    the existing frontend/components/SuggestionResult.tsx from Feature 003,
+    and a new preferences view. Regenerate the OpenAPI-derived types
+    (constitution Principle VII) after the new endpoints land, matching how
+    Feature 003 did it.
+
+> **Full spec-kit cycle run — code complete, merged.** `/speckit.plan` →
+> `research.md`/`data-model.md`/`contracts/preferences.md`/`quickstart.md`;
+> `/speckit.tasks` → 29-task `tasks.md` across the 4 user stories;
+> `/speckit.analyze` found 2 MEDIUM (soft-influence and explicit-override
+> wiring untested) + 2 LOW (a doc gap and a missing manual persistence
+> check) findings, all fixed before implementing — spec.md's Key Entities
+> now documents the signal-dismissal mechanism, quickstart.md adds a
+> restart check, and T014 became a deterministic wiring test. `/speckit.implement` built:
+> - **Backend**: additive migration `0003_add_suggestion_feedback.py`
+>   (`suggestion_feedback` + `preference_signal_dismissal`, both additive
+>   only); `memory/preferences.py`'s `derive_signals()` — a pure,
+>   unit-tested function implementing the net-count-threshold + formality-
+>   drift + dismissal-filtering algorithm from `research.md`; `crud.py`'s
+>   `record_feedback()` (snapshots item attributes at feedback time, upserts
+>   on the outfit's item set) and `dismiss_signal()`; four endpoints under
+>   `/preferences`. `memory/store.py`'s `get_profile()` now derives from
+>   Postgres instead of an `InMemoryStore` — `profile_note(user_id)`'s
+>   signature and behavior are byte-for-byte unchanged, so `pipeline/run.py`
+>   and `pipeline/generator.py` needed **zero changes**, exactly as planned.
+>   **One design gap the plan didn't anticipate**: `set_preference()`
+>   (free-form key/value writes) has no equivalent under the derive-only
+>   model — removed, and its one caller (`eval/test_users.py`'s manual
+>   debug tool) updated to match, since profile seeding there is now
+>   superseded by recording real feedback through the actual mechanism.
+>   181 backend tests pass (162 pre-existing + 19 new: 13 unit + 16
+>   integration across all 4 stories + 3 wiring tests for the
+>   `/speckit.analyze` remediation, one folded together), ruff clean, eval
+>   no-regression gate passed (retrieval_recall/grounding scores unaffected
+>   — this feature touches no retrieval/generation code, only what
+>   `profile_note()` is backed by).
+> - **Frontend**: `OutfitReaction.tsx` (like/reject + optional reason) added
+>   to each outfit card in `SuggestionResult.tsx`; `PreferencesView.tsx` +
+>   `app/preferences/page.tsx` (plain-language signal list, remove-one/
+>   clear-all, the "nothing learned yet" empty state) — reuses `AuthGuard`
+>   automatically via the root layout. `lib/api-types.ts` regenerated
+>   against the four new endpoints. typecheck/lint/build clean; dev-server
+>   smoke-tested (all routes 200, including the new `/preferences`) — no
+>   browser/screenshot tool available in this environment to verify
+>   rendering visually, same constraint noted in Feature 003.
+> - **Environment note for future sessions in this worktree**:
+>   `backend/data/` (gitignored — golden set, KB corpus, wardrobe fixture)
+>   was missing entirely from this worktree (a `git worktree add` only
+>   copies tracked files) and had to be copied over from the main repo
+>   directory before `test_seed.py` or the eval harness could run at all.
+>   If a fresh worktree hits `FileNotFoundError` on `data/golden_set.yaml`
+>   or `data/fixtures/wardrobe.json`, this is why — copy `backend/data/`
+>   from a sibling checkout that has it.
+
+## Step 6: Feature 005, production-hardening
+
+- LiteLLM gateway, semantic cache on KB retrieval, output guardrail asserting
+  every item_id exists, `uv run langgraph dockerfile Dockerfile`, full deploy
+  hardening on Railway (beyond the bare deploy already done in 003).
 
 ## The rule that matters most
 

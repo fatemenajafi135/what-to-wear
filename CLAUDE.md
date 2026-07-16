@@ -68,8 +68,10 @@ So:
   body) and backfilled unit tests for the deterministic pipeline (`colors.py`,
   `cite.py`, `categories.py`, `pipeline/query_builder.py`, `eval/properties.py`)
   + a `/recommend` auth test. **Phases 2–4 (deterministic scoring → LangGraph
-  + `/suggest` → refinement) are paused**, deliberately reordered behind
-  Feature 003 — see below. Full spec/plan/tasks in `specs/002-styling-agent/`.
+  + `/suggest` → refinement) — resuming now** (were paused behind Feature 003,
+  now the highest-priority remaining work: this is the actual agent/selection
+  logic, and neither 003 nor 004 build it). Full spec/plan/tasks in
+  `specs/002-styling-agent/`; resume at task T008 (Phase 2).
   See SDD-HANDOFF Step 3.
 - **Feature 003 (mvp-app), redefined from "closet-ingestion" — code complete,
   not yet deployed.** Full spec-kit cycle run on branch `003-mvp-app`.
@@ -96,8 +98,49 @@ So:
   actually see it rendered. Full narrative:
   `docs/003-mvp-app-implementation-report.md` (local, untracked). See
   SDD-HANDOFF Step 4.
-- **Next: those 3 deploy steps, then resume Feature 002 Phases 2–4** (paused
-  behind 003 — see SDD-HANDOFF Step 3), or start Feature 004.
+- **Feature 004 (preference-memory) — DONE, code complete on branch
+  `004-preference-memory`, not yet merged to `main`.** Full spec-kit cycle
+  run. Closed the gap `set_preference()`/`get_profile()` were defined but
+  never called/backed by anything durable: reactions (`POST
+  /preferences/feedback`) now persist to Postgres (`suggestion_feedback` +
+  `preference_signal_dismissal`, migration `0003`), a pure `derive_signals()`
+  function (`memory/preferences.py`) computes rejected colors/avoided
+  categories/formality drift with a net-count threshold, and
+  `memory/store.py`'s `get_profile()` derives from that instead of an
+  `InMemoryStore` — `profile_note(user_id)`'s signature/behavior are
+  unchanged, so `pipeline/run.py`/`pipeline/generator.py` needed **zero**
+  changes, exactly as planned. Three more endpoints (`GET /preferences`,
+  `DELETE /preferences/signals/{signal_key}`, `DELETE /preferences`) plus a
+  frontend reaction affordance and a `/preferences` view. **One thing the
+  plan didn't anticipate**: `set_preference()`'s free-form key/value API had
+  no equivalent under the new derive-only model, so it was removed outright
+  (its one caller, `eval/test_users.py`'s manual debug tool, was updated to
+  match). 181 backend tests pass (162 pre-existing + 19 new), ruff clean,
+  eval no-regression gate passed (this feature touches no retrieval/
+  generation code). Full detail: SDD-HANDOFF Step 5.
+- **Working in parallel, in separate git worktrees (from 2026-07-16):**
+  Feature 002 (resuming Phases 2–4) and Feature 004 are being developed at
+  the same time, each in its own worktree
+  (`/home/fateme/Projects/w2w/what-to-wear-002`,
+  `/home/fateme/Projects/w2w/what-to-wear-004`) attached to their existing
+  branches — not the same shared directory. See SDD-HANDOFF's "Working in
+  parallel" note for the conflict-risk assessment. **If you're a fresh
+  session reading this from one of those worktree directories: you're
+  already in the right place, don't `cd` back to the main repo directory or
+  switch branches out from under the other session.** **Update: Feature 004
+  finished (2026-07-16)** — the conflict-risk assessment held, it never
+  touched `pipeline/run.py`/`pipeline/generator.py`/`scoring/`. Merge
+  `004-preference-memory` to `main` whenever convenient; check whether the
+  002 worktree session is still active before touching its branch.
+- **Next after these two land**: the 3 manual deploy steps for Feature 003
+  (Supabase Storage bucket, Railway, Vercel — still not done, see Feature
+  003 above), then Feature 005.
+- **Environment gotcha found while finishing Feature 004**: a fresh `git
+  worktree add` only copies tracked files — `backend/data/` (gitignored:
+  golden set, KB corpus, wardrobe fixture) was entirely absent from this
+  worktree, breaking `test_seed.py` and the eval harness with
+  `FileNotFoundError` until copied over from a sibling checkout that has
+  it. If a fresh worktree session hits that error, this is why.
 
 ## The rules that bite hardest (full text in the constitution)
 
