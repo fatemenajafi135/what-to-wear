@@ -95,8 +95,9 @@ from drifting.
 | 003 | **mvp-app** *(redefined — was "closet-ingestion")* | ✅ **DONE — deployed and live.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified. The 3 manual deploy steps once tracked here (Supabase Storage bucket + RLS, Railway backend, Vercel frontend) were absorbed into Feature 005's scope and completed there — see Feature 005's row below and `docs/005-production-hardening-merge-report.md`. **Known, explicitly deferred gap: visual polish** didn't fully match `design/What to Wear.dc.html` — see `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
 | 004 | preference-memory | ✅ **DONE and merged to `main`** (finished 2026-07-16, in its own worktree, concurrently with Feature 002's Phases 2-4 above — see the merge callout below the table). Feedback endpoint + derived preference profile + frontend reaction affordance. 29/29 tasks. |
 | 005 | production-hardening | ✅ **DONE, merged to `main`, and deployed live** (2026-07-16). Full spec-kit cycle (spec/clarify/plan/tasks/analyze/implement). Output grounding guardrail, per-user Redis cache, LiteLLM routing all built and eval-no-regression-gate green. Absorbed Feature 003's previously-incomplete deploy steps — Supabase Storage bucket + RLS, Railway backend, Vercel frontend all confirmed working end-to-end this session (including live debugging: a Railway public-domain/target-port mismatch that made a healthy container unreachable). Merge itself was zero-conflict (serial worktree, not parallel this time). Full narrative: `docs/005-production-hardening-merge-report.md`. See Step 6. |
-| 006 | wardrobe-item-photos | ✅ **DONE, merged to `main`** (2026-07-16). Small, additive: persists the photo path already captured (and previously discarded) at photo-upload time, shows it on the closet card, falls back to the existing color-swatch display when absent. No new API endpoint. See Step 7. |
+| 006 | wardrobe-item-photos | ✅ **DONE, merged to `main`, deployed (confirmed live on Vercel)** (2026-07-16). Small, additive: persists the photo path already captured (and previously discarded) at photo-upload time, shows it on the closet card, falls back to the existing color-swatch display when absent. No new API endpoint. See Step 7. |
 | 007 | ai-improvements | ✅ **DONE, merged to `main`** (2026-07-16). Built entirely in a separate, credential-less sandbox, so only unit tests ran there — verified for real in this session: found and fixed a missing Qdrant payload index the new L1 filter needs (cheap, no re-embed), then 226/226 unit tests, the modified `test_suggest_refinement.py` (3/3, real graph calls, directly exercises the warmth-floor fix), and a deliberately reduced eval-gate subset (7 of 24 golden cases × all 3 strategies — g01/g08/g12/g15/g17/g20/g23, chosen to include 2 of the 3 cases whose ground truth changed for the live-L3 design, g12 and g23; g16, the third, wasn't in this subset — same mechanical correction as the other two, not independently re-verified) all green — `retrieval_recall` 0.81/0.93/0.93 (baseline/hybrid/advanced), consistent ordering and magnitude with prior full runs. One isolated LLM citation artifact (a plausible-sounding but nonexistent rule id cited in one hybrid-strategy response) — zero hallucinated *items*, so the actual grounding guarantee held; this is generation-sampling noise, not a 007 regression. See Step 8. |
+| 008 | bulk-upload-outfit-photos | Continued forward on the `006-wardrobe-item-photos` branch after 006 already merged (per explicit user instruction, not a fresh branch). Four more photo capabilities on top of 006, direct user request: bulk photo upload (P1), item photos in outfit suggestions (P2), photo preview during single-item review (P3), edit/remove photo on a saved item (P4). Numbered 008 (not 007) to avoid clashing with the unrelated `007-AI-improvements` branch. See Step 9. |
 
 **How 002 and 004's parallel work was reconciled (2026-07-16).** Both
 features were built in separate git worktrees at the same time (see the
@@ -858,6 +859,10 @@ item added via the photo-upload flow (Feature 003).
 > Not yet merged to `main` — the owner is handling review/merge from the
 > planning session, per this feature's own kickoff instructions.
 
+**Update**: merged to `main` and confirmed deployed live on Vercel by the
+project owner. The `006-wardrobe-item-photos` worktree/branch continued
+forward from there for Feature 008 rather than being retired — see Step 9.
+
 ## Step 8: Feature 007, ai-improvements
 
 A cert-challenge handoff (not planner-originated) — pasted directly into a fresh worker session as
@@ -959,6 +964,97 @@ parsing against a placeholder `DATABASE_URL` before reaching the graph at all.
 > Full task-by-task status from the original session: `specs/007-ai-improvements/tasks.md`'s environment
 > note near the top (historical — describes what that session could and couldn't do, not what's still
 > outstanding now).
+
+## Step 9: Feature 008, bulk-upload-outfit-photos
+
+Direct user request, immediately following Feature 006's implementation in
+the same session/worktree. The user asked for four more photo-related
+capabilities they had in mind, all building on what 006 had just shipped:
+
+1. Bulk photo upload (a large existing wardrobe is prohibitively tedious to
+   digitize one item at a time).
+2. Item photos shown in outfit suggestions (currently text-only, despite
+   `photo_path` already being available client-side since 006).
+3. Photo preview during the single-item add/review step (today only the
+   attribute form shows, not the photo itself).
+4. Editing/removing a photo on an already-saved item (no item-editing
+   surface existed in the frontend at all before this).
+
+> User explicitly ranked (1) and (2) above (3) and (4) — "I want 3 and 4
+> first then the two others" in the user's own original numbering, which
+> became US1/US2 (P1/P2) vs US3/US4 (P3/P4) here. Initially scoped as a
+> 2-story spec covering only the top two; the user then asked for all four
+> in one spec, prioritized in that order — spec.md, plan.md, tasks.md, and
+> quickstart.md were all revised to 4 stories before implementation started.
+>
+> **Numbered 008, not 007** — deliberately, on the user's explicit
+> correction. The spec was first drafted as 007, but a *different*,
+> unrelated branch already in this repo (`007-AI-improvements`, a
+> recommender-improvements track the user planned to merge separately) made
+> that number confusing even though it wouldn't have been a real git
+> collision (different branch, this work stayed on
+> `006-wardrobe-item-photos` throughout). Renumbered to 008 to avoid the
+> confusion outright.
+>
+> **Developed on the existing `006-wardrobe-item-photos` branch, not a
+> fresh one** — also an explicit user instruction. 006 was confirmed
+> already merged to `main` (and live on Vercel) before this work started,
+> so continuing on its branch is ordinary incremental feature work, not
+> parallel development against a moving target.
+>
+> Full spec-kit cycle: `/speckit.specify` → (expanded to 4 stories mid-flow
+> per user direction) → `/speckit.plan` → `/speckit.tasks` →
+> `/speckit.analyze` → `/speckit.implement`. `/speckit.analyze` found 0
+> critical/high findings across 14 FRs / 6 SCs (100% task coverage) — one
+> real medium finding (a missing explicit task dependency, US4's frontend
+> task on its own backend task) fixed directly before implementing; two
+> cosmetic lows left as-is.
+>
+> **Almost entirely frontend** — three of the four stories (bulk upload,
+> outfit photo display, single-item preview) touch zero backend code,
+> confirmed by an explicit endpoint/schema audit in plan.md before
+> implementing, not assumed. The one exception is US4 (edit/remove photo):
+> `photo_path` becomes patchable (`WardrobeItemPatch` gains the field —
+> `crud.update_wardrobe_item`'s existing generic patch-apply loop needed no
+> change at all to support it, including clearing it via an explicit
+> `null`) plus one new endpoint, `POST /wardrobe/items/{id}/photo`, that
+> composes two already-existing functions
+> (`storage.upload_wardrobe_photo` + `crud.update_wardrobe_item`) rather
+> than introducing new persistence logic. That endpoint deliberately never
+> calls `vision.extract_attributes_from_image` — replacing a photo isn't a
+> re-classification (FR-014), confirmed by a test asserting the item's
+> other attributes are unchanged after a replace.
+>
+> Shared infrastructure: `ClosetItemCard`'s inline signed-URL
+> `useEffect`/`useState` (from Feature 006) was extracted into a reusable
+> `useSignedPhotoUrl` hook, then reused by the new `OutfitItemPhoto`
+> component (US2), `ExtractedItemForm` (US3), and `ClosetItemCard` itself
+> post-refactor (US4's replace/remove controls) — one signed-URL
+> implementation, not four.
+>
+> 5 new backend tests (`test_wardrobe_item_photo_edit.py` — replace, remove,
+> both cross-user-rejected, add-photo-to-item-with-none), all passing. Full
+> suite: 285 passed on a clean isolated rerun of everything that failed the
+> first pass. The first full-suite run showed 278 passed / 7 failed, all 7
+> in `test_suggest_cache.py`/`test_suggest_refinement.py` — the same
+> documented network-load flakiness pattern hit during Feature 006's own
+> implementation (see CLAUDE.md Gotchas), not a regression: none of them
+> touch anything Feature 008 changed (schema.py, api.py, and frontend
+> only — confirmed by plan.md's Constitution Check), and a targeted rerun
+> of both files in isolation immediately afterward passed 7/7 clean.
+> `ruff` clean. Frontend `typecheck`/`lint`/`build` clean after every
+> story. No eval-harness run needed (this feature touches no
+> retrieval/generation/scoring code).
+>
+> **What wasn't done**: live browser verification against a real signed-in
+> session, same reasoning and same gap as Feature 006 left open (this
+> worktree's Supabase env points at the live production project, no
+> service-role key available to safely create/clean up a throwaway test
+> account). Left for the project owner via `quickstart.md`.
+>
+> Own worktree, `/home/fateme/Projects/w2w/what-to-wear-006`, branch
+> `006-wardrobe-item-photos`. Full task list: `specs/008-bulk-upload-outfit-photos/tasks.md`
+> (25 tasks, T001-T025, all done).
 
 ## The rule that matters most
 

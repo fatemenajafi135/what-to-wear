@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CATEGORY_GROUPS, FORMALITY_VALUES, SEASON_VALUES, type Formality, type Season } from "@/lib/taxonomy";
 import type { CreateWardrobeItemFromUploadRequest, ExtractedAttributes } from "@/lib/types";
+import { useSignedPhotoUrl } from "@/lib/use-signed-photo-url";
 
 export interface ExtractedItemFormValue {
   category: string;
@@ -57,6 +58,7 @@ export function ExtractedItemForm({
   saving: boolean;
 }) {
   const [value, setValue] = useState<ExtractedItemFormValue>(initial);
+  const photoUrl = useSignedPhotoUrl(photoPath);
 
   function update<K extends keyof ExtractedItemFormValue>(key: K, next: ExtractedItemFormValue[K]) {
     setValue((v) => ({ ...v, [key]: next }));
@@ -99,6 +101,10 @@ export function ExtractedItemForm({
 
   return (
     <form className="extracted-item-form" onSubmit={handleSubmit}>
+      {photoUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photoUrl} alt="The item you're adding" className="extracted-item-photo" />
+      )}
       {!extractionOk && (
         <p className="extraction-warning">
           Couldn&apos;t confidently read this photo — fill in (or correct) the details below.

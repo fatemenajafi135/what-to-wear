@@ -229,10 +229,10 @@ So:
     root-caused during the merge — it wasn't flaky, see Gotchas below.
   - Full narrative: `docs/SDD-HANDOFF.md` Step 6,
     `docs/005-production-hardening-merge-report.md`.
-- **Feature 006 (wardrobe-item-photos) — DONE, merged to `main`
-  (2026-07-16).** Direct user request, not part of the original
-  5-feature plan: closet cards didn't show the item's actual photo even
-  though one already existed in Storage for every photo-uploaded item.
+- **Feature 006 (wardrobe-item-photos) — DONE, merged to `main`, deployed
+  live (confirmed on Vercel).** Direct user request, not part of the
+  original 5-feature plan: closet cards didn't show the item's actual photo
+  even though one already existed in Storage for every photo-uploaded item.
   Kept deliberately minimal — one user story, no new API endpoint (the
   frontend's existing authenticated Supabase client generates signed URLs
   against the already-secured private bucket directly). Backend: additive
@@ -282,8 +282,35 @@ So:
   - Verified this session: eval no-regression gate + integration tests
     against real credentials (this session's sandbox had none). Full
     narrative and exact outcome: `docs/SDD-HANDOFF.md` Step 8.
-- **Next**: all 5 originally-planned features plus 006 and 007 are done
-  and merged — worth a planning conversation about what's after that.
+- **Feature 008 (bulk-upload-outfit-photos) — continued forward on the
+  `006-wardrobe-item-photos` branch after 006 already merged (per explicit
+  user instruction, not a fresh branch); numbered 008 since 007 was already
+  taken by the unrelated ai-improvements branch.** Four more photo
+  capabilities, direct user request, all building on Feature 006: **US1/P1
+  bulk photo upload** (new `/closet/add-bulk` page — select up to 30
+  photos, sequential extraction with per-item progress, per-item review
+  reusing `ExtractedItemForm`, per-item save with independent
+  retry-on-failure so one bad photo/save never costs the rest of the
+  batch — no new backend logic, reuses the existing single-item
+  extract/upload endpoints in a loop); **US2/P2 outfit-suggestion photo
+  display** (`SuggestionResult.tsx` now renders each outfit's items as a
+  horizontal row of real photos via a new `OutfitItemPhoto` component,
+  replacing the old text-only list — the underlying data, `closetById`'s
+  `WardrobeItem` objects, already carried `photo_path`, this was purely a
+  rendering change); **US3/P3 photo preview during single-item review**
+  (`ExtractedItemForm` now shows the captured photo); **US4/P4 edit/remove
+  photo on a saved item** (`WardrobeItemPatch` gains `photo_path` — enables
+  removal via the existing generic `PATCH` endpoint, zero `crud.py` change
+  needed — plus one new endpoint, `POST /wardrobe/items/{id}/photo`,
+  composing `storage.upload_wardrobe_photo` + `crud.update_wardrobe_item`;
+  deliberately never calls `vision.extract_attributes_from_image` — a photo
+  swap isn't a re-classification, FR-014). Shared infra: `ClosetItemCard`'s
+  Feature-006 signed-URL logic extracted into a reusable
+  `useSignedPhotoUrl` hook, reused by US2/US3/US4 rather than duplicated
+  three times. Full detail: `docs/SDD-HANDOFF.md` Step 9,
+  `specs/008-bulk-upload-outfit-photos/`.
+- **Next**: all 5 originally-planned features plus 006, 007, and 008 are
+  done and merged — worth a planning conversation about what's after that.
 - **Environment gotcha found while finishing Feature 004**: a fresh `git
   worktree add` only copies tracked files — `backend/data/` (gitignored:
   golden set, KB corpus, wardrobe fixture) was entirely absent from this

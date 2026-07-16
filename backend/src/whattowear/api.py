@@ -271,6 +271,33 @@ def update_wardrobe_item(
     return item
 
 
+@app.post("/wardrobe/items/{item_id}/photo", response_model=WardrobeItem)
+def replace_wardrobe_item_photo(
+    item_id: uuid.UUID,
+    photo: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+    access_token: str = Depends(get_bearer_token),
+) -> WardrobeItem:
+    """Replaces an already-saved item's photo (Feature 008 US4). Uploads via
+    the same storage.upload_wardrobe_photo extract_wardrobe_item already
+    uses, but deliberately never calls vision.extract_attributes_from_image
+    -- a photo swap isn't a re-classification (FR-014), so the item's other
+    attributes are untouched. Composes the existing update_wardrobe_item for
+    ownership enforcement (404 on a mismatched/unknown item_id), same as
+    every other per-item wardrobe operation."""
+    file_bytes = photo.file.read()
+    content_type = photo.content_type or "image/jpeg"
+    photo_path = storage.upload_wardrobe_photo(
+        user_id, file_bytes, photo.filename or "photo", content_type, access_token
+    )
+
+    item = crud.update_wardrobe_item(session, user_id, item_id, WardrobeItemPatch(photo_path=photo_path))
+    if item is None:
+        raise HTTPException(404, f"wardrobe item not found: {item_id}")
+    return item
+
+
 @app.delete("/wardrobe/items/{item_id}", status_code=204)
 def delete_wardrobe_item(
     item_id: uuid.UUID,
