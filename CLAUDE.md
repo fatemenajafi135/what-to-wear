@@ -8,8 +8,9 @@ Guidance for Claude Code (and any fresh session) working in this repo.
 user's wardrobe + a context (occasion, mood, weather), it assembles an outfit
 **from items they already own**, obeying rules retrieved from a fashion
 knowledge base, and cites those rules. Solo project; course capstone that may
-become a product. Backend only so far (`backend/`); `frontend/` is empty until
-design lands.
+become a product. Backend in `backend/`; `frontend/` has a working Next.js app
+(Feature 003) covering sign-in, add-by-photo, closet view, and get-a-suggestion
+(now against `/suggest`, Feature 002 Phase 3) — not yet deployed publicly.
 
 ## Read these first (in this order)
 
@@ -62,26 +63,41 @@ So:
 - **Feature 001 (closet-persistence): DONE, merged to `main`.** Per-user closet
   + shared catalog in Postgres (Supabase), JWT auth (ES256/JWKS), full CRUD.
   `context_assembler.load_wardrobe()` reads Postgres now, not the JSON fixture.
-- **Feature 002 (styling-agent), broadened + phased — Phase 1 DONE and merged
-  to `main`. Resuming now (2026-07-16), in this worktree, in parallel with
-  Feature 004 (its own worktree).** Auth-gated `/recommend` behind the JWT
-  dependency (closing the cross-user leak — `user_id` now comes from the
-  verified `sub`, not the body) and backfilled unit tests for the
-  deterministic pipeline (`colors.py`, `cite.py`, `categories.py`,
-  `pipeline/query_builder.py`, `eval/properties.py`) + a `/recommend` auth
-  test. **Before resuming, `/speckit.analyze` was re-run on this branch** (a
-  lot changed since it was originally planned — Feature 003's whole frontend
-  now exists) and found one CRITICAL gap: the plan's "no frontend work this
-  feature" premise was true when written, false now, and Phase 3's original
-  `/recommend`-retirement task had zero dependency on the frontend that
-  actually calls it — retiring it as originally scoped would have broken the
-  live product. Fixed: `specs/002-styling-agent/tasks.md` now has T036a-d
-  (SSE-consumption helper, regenerated OpenAPI types, cutting the frontend
-  over to `/suggest`, manual verification) gating `/recommend`'s retirement
-  (T037a). `plan.md` corrected to match. **Phases 2–4 (deterministic scoring
-  → LangGraph + `/suggest` → refinement) — resuming now**, starting at task
-  T008. Full spec/plan/tasks in `specs/002-styling-agent/`. See SDD-HANDOFF
-  Step 3.
+- **Feature 002 (styling-agent), broadened + phased — ALL PHASES DONE
+  (2026-07-16), not yet merged to `main`.** Phase 1 (auth-gate `/recommend`,
+  unit-test backfill) was already merged. Phases 2–4 built in this worktree:
+  - **Phase 2 — `scoring/` package**: four deterministic dimension scorers
+    (color harmony, formality coherence, weather fitness, silhouette
+    balance) + a swappable combination strategy (FR-009a), imported
+    unchanged into both the graph and `eval/harness.py` via one shared
+    `scoring.score_outfits()` call (Principle V — never forked).
+  - **Phase 3 — `pipeline/graph.py` + `POST /suggest`**: the linear pipeline
+    became an 8-node LangGraph `StateGraph`; `wardrobe_retrieval` prunes on
+    hard constraints before generation ever sees the closet (k=8/slot);
+    `score_and_rank` is the only ranking step. `/recommend` and
+    `pipeline/run.py` are **deleted** — `/suggest` (SSE) is the sole
+    suggestion entrypoint, and the frontend (`app/suggest/page.tsx`,
+    `components/SuggestionResult.tsx`) is cut over to it (a hand-rolled SSE
+    parser in `lib/api-client.ts`, since `EventSource` doesn't support
+    POST). `eval/harness.py` now runs the golden set through the compiled
+    graph, not the retired `run_pipeline`.
+  - **Phase 4 — refinement**: `memory/store.py`'s checkpointer is now
+    Postgres-backed (see Gotchas below for a real prepared-statement issue
+    hit here). "Warmer"/"less formal"/"alternatives" are deterministic
+    keyword-parsed deltas that shift `wardrobe_retrieval`'s pruning bounds
+    or exclude prior item-sets — never touching `ctx` itself, so unstated
+    constraints survive a refinement turn (FR-013). An optional
+    reported-only LLM judge score (`eval/judge.py`, FR-010) is opt-in via
+    `harness.py --judge`, off by default.
+  - Full eval no-regression gate green after every phase touching
+    retrieval/generation (per-case `retrieval_recall` byte-identical to the
+    archived baseline throughout). Full narrative, including two real bugs
+    found via live end-to-end testing (not just unit tests) and fixed:
+    SDD-HANDOFF Step 3.
+  - **Not done**: merging to `main` — all commits are on `002-styling-agent`
+    in this worktree; worth deciding whether to PR each phase separately
+    (the original branch-strategy note) or as one PR now that everything's
+    done.
 - **Feature 003 (mvp-app), redefined from "closet-ingestion" — code complete,
   not yet deployed.** Full spec-kit cycle run on branch `003-mvp-app`.
   Backend: additive `pattern`/`fit` migration, CORS middleware, `vision.py`
@@ -108,14 +124,15 @@ So:
   `docs/003-mvp-app-implementation-report.md` (local, untracked). See
   SDD-HANDOFF Step 4.
 - **Working in parallel, in separate git worktrees (from 2026-07-16):**
-  Feature 002 (this worktree, resuming Phases 2-4 at task T008) and Feature
-  004 (`/home/fateme/Projects/w2w/what-to-wear-004`) are being developed at
-  the same time on their own branches — not the same shared directory.
-  **If you're a fresh session reading this from this worktree: you're
-  already in the right place, don't `cd` back to the main repo directory or
-  switch branches out from under the other session.** The 3 manual deploy
-  steps for Feature 003 (Supabase Storage bucket, Railway, Vercel) are still
-  outstanding too, but need dashboard access no coding session has.
+  Feature 002 (this worktree — all phases now done, see above) and Feature
+  004 (`/home/fateme/Projects/w2w/what-to-wear-004`) were developed at the
+  same time on their own branches — not the same shared directory. **If
+  you're a fresh session reading this from this worktree: you're already in
+  the right place, don't `cd` back to the main repo directory or switch
+  branches out from under another session working in a sibling worktree.**
+  The 3 manual deploy steps for Feature 003 (Supabase Storage bucket,
+  Railway, Vercel) are still outstanding too, but need dashboard access no
+  coding session has.
 
 ## The rules that bite hardest (full text in the constitution)
 
@@ -164,13 +181,34 @@ the DB vars). Full run/architecture detail: `backend/README.md`.
   deterministic metric to compare across runs; the generation-dependent checks
   drift run-to-run from LLM sampling — that's not a regression. Don't declare a
   regression from a single failed or partial run.
-- **`/recommend` is now auth-gated** (Feature 002 Phase 1): it depends on
-  `get_current_user_id` and derives `user_id` from the verified JWT `sub` — the
-  request body no longer carries a `user_id`. A call without a bearer token gets
-  401. (It's still slated to give way to `/suggest` in Phase 3.)
+- **`/recommend` no longer exists** (Feature 002 Phase 3, T037a) — deleted along
+  with `pipeline/run.py` once `/suggest` was verified equivalent and the
+  frontend confirmed cut over. `POST /suggest` (SSE, auth-gated the same way
+  `/recommend` used to be — `get_current_user_id`, `user_id` from the verified
+  JWT `sub`, never the body) is the sole suggestion entrypoint now.
 - **Supabase pooler (port 6543)** doesn't support server-side prepared
   statements — the engine disables them; migrations prefer the direct 5432 URL
-  when reachable. See `specs/001-closet-persistence/research.md`.
+  when reachable. See `specs/001-closet-persistence/research.md`. **This bit a
+  second component in Feature 002 Phase 4**: `langgraph-checkpoint-postgres`'s
+  `PostgresSaver.from_conn_string` hardcodes `prepare_threshold=0` (prepare on
+  first use) and reproduced the same "prepared statement does not exist"
+  failure — even against `DATABASE_URL_DIRECT`, not just the pooler. Fixed in
+  `memory/store.py` by connecting manually with `prepare_threshold=None`
+  instead of using `from_conn_string`.
+- **A fresh `git worktree add` does NOT carry over gitignored files** —
+  `backend/data/` (KB source + `golden_set.yaml`) and `backend/artifacts/
+  eval_runs/` are both gitignored, so a new worktree starts with neither and
+  the eval harness can't run at all until they exist. Copy them from an
+  existing checkout (`rsync -a` from the main worktree's `backend/data/` and
+  `backend/artifacts/eval_runs/`) — confirmed necessary setting up this
+  worktree for Feature 002 Phases 2-4.
+- **LangGraph checkpoint deserialization warns on the project's own Pydantic/
+  dataclass types** (`Context`, `ScoredOutfit`, `SuggestResult`, `GenOutput`,
+  `RetrievalResult`, `WardrobeItem`) — `Deserializing unregistered type ...
+  This will be blocked in a future version`. Still works today (Feature 002
+  Phase 4's refinement checkpointing); a future `langgraph-checkpoint-postgres`
+  upgrade may require registering these via `allowed_msgpack_modules`. Not
+  done — flagged for whoever upgrades that dependency next.
 - **Node.js isn't preinstalled in a fresh sandbox** (confirmed in the Feature
   003 session). No passwordless sudo either. Install via nvm (user-level, no
   root): `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh
