@@ -141,6 +141,32 @@ export interface paths {
         patch: operations["update_wardrobe_item_wardrobe_items__item_id__patch"];
         trace?: never;
     };
+    "/wardrobe/items/{item_id}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace Wardrobe Item Photo
+         * @description Replaces an already-saved item's photo (Feature 008 US4). Uploads via
+         *     the same storage.upload_wardrobe_photo extract_wardrobe_item already
+         *     uses, but deliberately never calls vision.extract_attributes_from_image
+         *     -- a photo swap isn't a re-classification (FR-014), so the item's other
+         *     attributes are untouched. Composes the existing update_wardrobe_item for
+         *     ownership enforcement (404 on a mismatched/unknown item_id), same as
+         *     every other per-item wardrobe operation.
+         */
+        post: operations["replace_wardrobe_item_photo_wardrobe_items__item_id__photo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wardrobe/items/extract": {
         parameters: {
             query?: never;
@@ -277,6 +303,11 @@ export interface components {
         };
         /** Body_extract_wardrobe_item_wardrobe_items_extract_post */
         Body_extract_wardrobe_item_wardrobe_items_extract_post: {
+            /** Photo */
+            photo: string;
+        };
+        /** Body_replace_wardrobe_item_photo_wardrobe_items__item_id__photo_post */
+        Body_replace_wardrobe_item_photo_wardrobe_items__item_id__photo_post: {
             /** Photo */
             photo: string;
         };
@@ -601,6 +632,8 @@ export interface components {
             pattern?: string | null;
             /** Fit */
             fit?: string | null;
+            /** Photo Path */
+            photo_path?: string | null;
         };
     };
     responses: never;
@@ -813,6 +846,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["WardrobeItemPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WardrobeItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_wardrobe_item_photo_wardrobe_items__item_id__photo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_wardrobe_item_photo_wardrobe_items__item_id__photo_post"];
             };
         };
         responses: {

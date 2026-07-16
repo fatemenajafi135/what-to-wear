@@ -16,7 +16,7 @@ explicitly requested (US1, US2 first; US3, US4 after).
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm the dev environment already has everything this feature
+- [X] T001 Confirm the dev environment already has everything this feature
       needs (Feature 003/005/006's Storage bucket + RLS, `backend/.env`,
       `frontend/.env.local`) — no new env vars, no new migration, no new
       bucket/policy in this feature. Pre-flight check only, nothing to
@@ -41,29 +41,29 @@ photo's failure blocking the rest of the batch.
 **Independent Test**: select 5+ photos in one action, review/correct each,
 save, and verify all appear in the closet afterward.
 
-- [ ] T002 [US1] New page `frontend/app/closet/add-bulk/page.tsx`: file input
+- [X] T002 [US1] New page `frontend/app/closet/add-bulk/page.tsx`: file input
       with `multiple`, client-side cap at 30 files (FR-006) with a clear
       message when exceeded, not a silent truncation.
-- [ ] T003 [US1] In the same page: sequential (not concurrent — see plan.md
+- [X] T003 [US1] In the same page: sequential (not concurrent — see plan.md
       Research) `for` loop calling the existing `POST /wardrobe/items/extract`
       once per selected file, building a per-item state array
       (`pending` → `ready-for-review` | `extraction-failed`) with visible
       per-item progress (FR-002).
-- [ ] T004 [US1] Per-item review step: loop through the batch one item at a
+- [X] T004 [US1] Per-item review step: loop through the batch one item at a
       time reusing `ExtractedItemForm` (`frontend/components/ExtractedItemForm.tsx`,
       unmodified by this task — US3 adds photo preview to it later, which
       this flow inherits for free) — items with `extraction-failed` still
       enter review via the same manual-entry fallback the single-item flow
       already uses (`extraction_ok: false`) (FR-003, FR-004).
-- [ ] T005 [US1] On confirming each item in review, call the existing
+- [X] T005 [US1] On confirming each item in review, call the existing
       `POST /wardrobe/items/upload` immediately for that item (not batched
       at the end); track per-item save success/failure and offer a retry
       action for failed items only — items that already saved are
       untouched by a later item's failure (FR-005).
-- [ ] T006 [US1] Add a link to `/closet/add-bulk` from
+- [X] T006 [US1] Add a link to `/closet/add-bulk` from
       `frontend/app/closet/page.tsx` (near the existing single-item add
       entry point).
-- [ ] T007 [US1] `npm run typecheck && npm run lint && npm run build` in
+- [X] T007 [US1] `npm run typecheck && npm run lint && npm run build` in
       `frontend/` — clean.
 
 **Checkpoint**: quickstart.md's US1 validation steps all pass manually.
@@ -76,25 +76,25 @@ grouped per outfit, instead of today's plain text.
 **Independent Test**: request a suggestion for a closet with at least one
 photo-added item; verify its real photo renders, grouped with its outfit.
 
-- [ ] T008 [P] [US2] Extract the signed-URL fetch/state logic currently
+- [X] T008 [P] [US2] Extract the signed-URL fetch/state logic currently
       inline in `frontend/components/ClosetItemCard.tsx` (the `useEffect` +
       `useState` added in Feature 006) into a new reusable hook
       `frontend/lib/use-signed-photo-url.ts` — same fallback contract
       (absent path / expired object / network error → `null`, never throws).
-- [ ] T009 [US2] Refactor `ClosetItemCard.tsx` to call the extracted hook
+- [X] T009 [US2] Refactor `ClosetItemCard.tsx` to call the extracted hook
       instead of its own inline effect — behavior-preserving, verify the
       closet view still renders identically.
-- [ ] T010 [P] [US2] New `frontend/components/OutfitItemPhoto.tsx`: takes a
+- [X] T010 [P] [US2] New `frontend/components/OutfitItemPhoto.tsx`: takes a
       `WardrobeItem`, uses `useSignedPhotoUrl`, renders the photo when
       resolved, falling back to today's compact text/color presentation
       otherwise — never a broken `<img>` (FR-008).
-- [ ] T011 [US2] `frontend/components/SuggestionResult.tsx`: replace the
+- [X] T011 [US2] `frontend/components/SuggestionResult.tsx`: replace the
       `<ul className="outfit-items">` text list with a horizontal row of
       `OutfitItemPhoto`, one per item, within each outfit's existing card
       (FR-007, FR-009).
-- [ ] T012 [US2] Add CSS for the horizontal outfit-item photo row in
+- [X] T012 [US2] Add CSS for the horizontal outfit-item photo row in
       `frontend/app/globals.css` (new class, e.g. `.outfit-item-photos`).
-- [ ] T013 [US2] `npm run typecheck && npm run lint && npm run build` in
+- [X] T013 [US2] `npm run typecheck && npm run lint && npm run build` in
       `frontend/` — clean.
 
 **Checkpoint**: quickstart.md's US2 validation steps all pass manually.
@@ -107,16 +107,16 @@ actual captured photo, not just the attribute form.
 **Independent Test**: add a single item by photo; verify the captured photo
 is visible throughout the review step, before saving.
 
-- [ ] T014 [US3] `frontend/components/ExtractedItemForm.tsx`: render the
+- [X] T014 [US3] `frontend/components/ExtractedItemForm.tsx`: render the
       photo via `useSignedPhotoUrl(photoPath)` (from US2/T008) above or
       alongside the form fields — `photoPath` is already a prop, currently
       only used to build the save payload (FR-010).
-- [ ] T015 [US3] Verify the resumed-draft path (`app/closet/add/page.tsx`'s
+- [X] T015 [US3] Verify the resumed-draft path (`app/closet/add/page.tsx`'s
       session-storage `Draft`, which only ever carries `photoPath` as a
       string, never a local file object) also renders the photo via the
       same hook — no separate local-blob-URL case needed, confirm by code
       read plus quickstart.md's manual resume check.
-- [ ] T016 [US3] `npm run typecheck && npm run lint && npm run build` in
+- [X] T016 [US3] `npm run typecheck && npm run lint && npm run build` in
       `frontend/` — clean.
 
 **Checkpoint**: quickstart.md's US3 validation steps all pass manually.
@@ -131,14 +131,14 @@ displays; separately, remove a photo and verify swatch-only fallback.
 
 ### Backend
 
-- [ ] T017 [US4] In `backend/src/whattowear/schema.py`, add
+- [X] T017 [US4] In `backend/src/whattowear/schema.py`, add
       `photo_path: Optional[str] = None` to `WardrobeItemPatch` — this alone
       enables **remove** via the existing, unchanged
       `PATCH /wardrobe/items/{id}` endpoint: `crud.update_wardrobe_item`'s
       generic `model_dump(exclude_unset=True)` + `setattr` loop already
       applies any present field, including an explicit `null`. No
       `crud.py` change needed for this part.
-- [ ] T018 [US4] In `backend/src/whattowear/api.py`, add
+- [X] T018 [US4] In `backend/src/whattowear/api.py`, add
       `POST /wardrobe/items/{item_id}/photo` (multipart `photo: UploadFile`,
       auth-gated via the existing `get_current_user_id`/`get_bearer_token`
       dependencies, same pattern as `extract_wardrobe_item`): upload the
@@ -149,7 +149,7 @@ displays; separately, remove a photo and verify swatch-only fallback.
       enforced the same way `update_wardrobe_item` already enforces it for
       every other field — a mismatched `user_id` or unknown `item_id`
       returns `None` → the route raises 404, never a cross-user write.
-- [ ] T019 [P] [US4]
+- [X] T019 [P] [US4]
       `backend/tests/integration/test_wardrobe_item_photo_edit.py`: (a)
       replace — call the new endpoint on a seeded item, assert
       `photo_path` changed to the new value and no other field changed
@@ -162,32 +162,36 @@ displays; separately, remove a photo and verify swatch-only fallback.
 
 ### Frontend
 
-- [ ] T020 [US4] `frontend/components/ClosetItemCard.tsx`: add a
+- [X] T020 [US4] `frontend/components/ClosetItemCard.tsx`: add a
       replace/remove (or "add photo", for a catalog item with none)
       affordance, revealed on hover/tap rather than permanently visible.
       Replace calls the new `POST /wardrobe/items/{id}/photo`; remove calls
       the existing `PATCH /wardrobe/items/{id}` with `{"photo_path": null}`.
       Either way, the card's existing `useSignedPhotoUrl` hook picks up the
       new/cleared value once the item's `photo_path` updates locally.
-- [ ] T021 [US4] Regenerate `frontend/lib/api-types.ts`: start the backend
+- [X] T021 [US4] Regenerate `frontend/lib/api-types.ts`: start the backend
       locally (`uv run uvicorn whattowear.api:app --reload`), then from
       `frontend/`, `npm run fetch:openapi && npm run gen:types`. Confirm
       the new endpoint and `WardrobeItemPatch.photo_path` appear — the only
       story in this feature that needs this regeneration.
-- [ ] T022 [US4] `npm run typecheck && npm run lint && npm run build` in
+- [X] T022 [US4] `npm run typecheck && npm run lint && npm run build` in
       `frontend/` — clean.
 
 **Checkpoint**: quickstart.md's US4 validation steps all pass manually.
 
 ## Phase 7: Polish
 
-- [ ] T023 [P] `uv run ruff check . && uv run ruff format .` in `backend/`
+- [X] T023 [P] `uv run ruff check . && uv run ruff format .` in `backend/`
       — touched files only need to be clean (this repo has pre-existing,
       unrelated ruff findings elsewhere; don't fix those as part of this
       feature).
-- [ ] T024 `uv run pytest tests/ -q` in `backend/` — full suite green,
-      confirming US4's backend change didn't regress anything.
-- [ ] T025 Per the handoff contract (root `CLAUDE.md` "Session workflow"):
+- [X] T024 `uv run pytest tests/ -q` in `backend/` — 285 passed on a clean
+      isolated rerun. The first full-suite pass showed 278 passed / 7
+      failed (`test_suggest_cache.py`/`test_suggest_refinement.py`), the
+      same documented network-load flakiness pattern from Feature 006's own
+      implementation, not a regression — confirmed by an isolated rerun of
+      both files passing 7/7; neither touches anything this feature changed.
+- [X] T025 Per the handoff contract (root `CLAUDE.md` "Session workflow"):
       update `docs/SDD-HANDOFF.md` and `CLAUDE.md`'s "Current state" for
       this feature, mark this file's tasks `[X]`.
 

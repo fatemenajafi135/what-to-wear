@@ -229,32 +229,57 @@ So:
     root-caused during the merge — it wasn't flaky, see Gotchas below.
   - Full narrative: `docs/SDD-HANDOFF.md` Step 6,
     `docs/005-production-hardening-merge-report.md`.
-- **Feature 006 (wardrobe-item-photos) — implemented, on branch
-  `006-wardrobe-item-photos`, not yet merged to `main`.** Direct user
-  request, not part of the original 5-feature plan: closet cards didn't
-  show the item's actual photo even though one already existed in Storage
-  for every photo-uploaded item. Kept deliberately minimal — one user
-  story, no new API endpoint (the frontend's existing authenticated
-  Supabase client generates signed URLs against the already-secured
-  private bucket directly). Backend: additive migration `0004` adds
-  nullable `photo_path` on `wardrobe_items`; `create_wardrobe_item_from_upload`
-  now sets it (previously received but silently discarded) and
-  `_to_wardrobe_item` returns it on every read path including `GET
-  /wardrobe/items`. Frontend: `ClosetItemCard.tsx` resolves `photo_path`
-  to a signed URL client-side and renders it above the swatch row, with
-  any failure (absent path, expired object, network error) falling back
-  to today's swatch-only card. `api-types.ts` regenerated from the live
-  schema. Full backend suite green, `ruff` clean, frontend
-  typecheck/lint/build clean. **Not done**: live browser verification
-  against a real signed-in session (quickstart.md steps 2-4) — this
-  worktree's Supabase env vars point at the live production project with
-  no service-role key available to create/clean up a throwaway test
-  account, so that manual check is left to the project owner. Own
-  worktree, `/home/fateme/Projects/w2w/what-to-wear-006`. Full detail:
-  `docs/SDD-HANDOFF.md` Step 7, `specs/006-wardrobe-item-photos/`.
-- **Next**: review and merge Feature 006 to `main`, then decide what's
-  after that — all 5 originally-planned features are done and live, plus
-  this one.
+- **Feature 006 (wardrobe-item-photos) — DONE, merged to `main`, deployed
+  live (confirmed on Vercel).** Direct user request, not part of the
+  original 5-feature plan: closet cards didn't show the item's actual photo
+  even though one already existed in Storage for every photo-uploaded item.
+  Kept deliberately minimal — one user story, no new API endpoint (the
+  frontend's existing authenticated Supabase client generates signed URLs
+  against the already-secured private bucket directly). Backend: additive
+  migration `0004` adds nullable `photo_path` on `wardrobe_items`;
+  `create_wardrobe_item_from_upload` now sets it (previously received but
+  silently discarded) and `_to_wardrobe_item` returns it on every read path
+  including `GET /wardrobe/items`. Frontend: `ClosetItemCard.tsx` resolves
+  `photo_path` to a signed URL client-side and renders it above the swatch
+  row, with any failure (absent path, expired object, network error)
+  falling back to today's swatch-only card. Full detail: `docs/SDD-HANDOFF.md`
+  Step 7, `specs/006-wardrobe-item-photos/`.
+- **Feature 008 (bulk-upload-outfit-photos) — implemented, on branch
+  `006-wardrobe-item-photos` (continued forward after 006 merged, per
+  explicit user instruction — not a fresh branch), not yet merged.**
+  Numbered 008, not 007, on the user's explicit correction — a different,
+  unrelated `007-AI-improvements` branch already exists in this repo. Four
+  more photo capabilities, direct user request, all building on Feature
+  006: **US1/P1 bulk photo upload** (new `/closet/add-bulk` page — select
+  up to 30 photos, sequential extraction with per-item progress, per-item
+  review reusing `ExtractedItemForm`, per-item save with independent
+  retry-on-failure so one bad photo/save never costs the rest of the
+  batch); **US2/P2 outfit-suggestion photo display** (`SuggestionResult.tsx`
+  now renders each outfit's items as a horizontal row of real photos via a
+  new `OutfitItemPhoto` component, replacing the old text-only list — the
+  underlying data, `closetById`'s `WardrobeItem` objects, already carried
+  `photo_path`, this was purely a rendering change); **US3/P3 photo preview
+  during single-item review** (`ExtractedItemForm` now shows the captured
+  photo, covering both the immediate-upload and resumed-draft-after-signin
+  paths for free, since both only ever carry a `photoPath` string);
+  **US4/P4 edit/remove photo on a saved item** (`WardrobeItemPatch` gains
+  `photo_path` — enables removal via the existing generic `PATCH`
+  endpoint's already-generic patch-apply loop, zero `crud.py` change needed
+  — plus one new endpoint, `POST /wardrobe/items/{id}/photo`, composing
+  `storage.upload_wardrobe_photo` + `crud.update_wardrobe_item`;
+  deliberately never calls `vision.extract_attributes_from_image` — a photo
+  swap isn't a re-classification, FR-014). Shared infra: `ClosetItemCard`'s
+  Feature-006 signed-URL logic extracted into a reusable
+  `useSignedPhotoUrl` hook, reused by US2/US3/US4 rather than duplicated
+  three times. 5 new backend tests (`test_wardrobe_item_photo_edit.py`),
+  full backend suite green, `ruff` clean, frontend typecheck/lint/build
+  clean after every story. **Not done**: live browser verification against
+  a real signed-in session — same reasoning/gap as Feature 006 (live
+  production Supabase, no service-role key to safely create/clean up a
+  test account). Full detail: `docs/SDD-HANDOFF.md` Step 8,
+  `specs/008-bulk-upload-outfit-photos/`.
+- **Next**: review and merge Feature 008 to `main`, then decide what's
+  after that.
 - **Environment gotcha found while finishing Feature 004**: a fresh `git
   worktree add` only copies tracked files — `backend/data/` (gitignored:
   golden set, KB corpus, wardrobe fixture) was entirely absent from this

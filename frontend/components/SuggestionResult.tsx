@@ -1,5 +1,6 @@
 import type { SuggestResult, WardrobeItem } from "@/lib/types";
 import { OutfitReaction } from "@/components/OutfitReaction";
+import { OutfitItemPhoto } from "@/components/OutfitItemPhoto";
 
 const DIMENSION_LABELS: Record<string, string> = {
   color_harmony: "Color harmony",
@@ -32,23 +33,12 @@ export function SuggestionResult({
           <div className="card-kicker">
             Outfit {i + 1} <span className="text-muted">— score {outfit.rank_score.toFixed(2)}</span>
           </div>
-          <ul className="outfit-items">
+          <div className="outfit-item-photos">
             {outfit.items.map((itemId) => {
               const item = closetById.get(itemId);
-              return (
-                <li key={itemId}>
-                  {item ? (
-                    <>
-                      <span className="tag tag-accent">{item.category.replace("_", " ")}</span>{" "}
-                      <span className="text-muted">({(item.colors ?? []).join(", ")})</span>
-                    </>
-                  ) : (
-                    itemId
-                  )}
-                </li>
-              );
+              return item ? <OutfitItemPhoto key={itemId} item={item} /> : <span key={itemId}>{itemId}</span>;
             })}
-          </ul>
+          </div>
           <div className="card-body">
             {outfit.rationale.map((r, j) => (
               <p key={j}>{r.text}</p>

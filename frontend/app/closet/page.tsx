@@ -53,6 +53,9 @@ export default function ClosetPage() {
           <Link href="/closet/add" className="btn btn-primary">
             Add your first item by photo
           </Link>
+          <Link href="/closet/add-bulk" className="btn btn-ghost">
+            Add multiple photos at once
+          </Link>
         </div>
       )}
 
@@ -70,6 +73,9 @@ export default function ClosetPage() {
               </button>
             ))}
           </div>
+          <Link href="/closet/add-bulk" className="text-muted" style={{ fontSize: 13 }}>
+            Add multiple photos at once
+          </Link>
           <div className="closet-grid">
             {visibleItems.map((item) => (
               <ClosetItemCard key={item.id} item={item} />

@@ -97,6 +97,7 @@ class WardrobeItemPatch(BaseModel):
     fabric: Optional[str] = None
     pattern: Optional[str] = None  # free-text, matches fabric's shape (Feature 003)
     fit: Optional[str] = None  # free-text, matches fabric's shape (Feature 003)
+    photo_path: Optional[str] = None  # Storage object path; None clears it (Feature 008 US4)
 
     @field_validator("colors")
     @classmethod
