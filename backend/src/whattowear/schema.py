@@ -219,11 +219,12 @@ class SuggestRequest(BaseModel):
 
 # --- deterministic scoring (Feature 002 Phase 2+) -----------------------------
 
-ScoreDimension = Literal[
-    "color_harmony", "formality_coherence", "weather_fitness", "silhouette_balance"
-]
+ScoreDimension = Literal["color_harmony", "formality_coherence", "weather_fitness", "silhouette_balance"]
 SCORE_DIMENSIONS: tuple[ScoreDimension, ...] = (
-    "color_harmony", "formality_coherence", "weather_fitness", "silhouette_balance",
+    "color_harmony",
+    "formality_coherence",
+    "weather_fitness",
+    "silhouette_balance",
 )
 
 
@@ -251,8 +252,7 @@ class ScoredOutfit(BaseModel):
         dims = [s.dimension for s in v]
         if sorted(dims) != sorted(SCORE_DIMENSIONS) or len(dims) != len(set(dims)):
             raise ValueError(
-                f"ScoredOutfit.scores must have exactly one entry per dimension in "
-                f"{SCORE_DIMENSIONS}, got {dims!r}"
+                f"ScoredOutfit.scores must have exactly one entry per dimension in {SCORE_DIMENSIONS}, got {dims!r}"
             )
         return v
 

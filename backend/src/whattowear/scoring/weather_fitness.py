@@ -17,7 +17,12 @@ from ..schema import Context, DimensionScore, TempBand, WardrobeItem
 
 # 0 (airy) .. 5 (heaviest) — mirrors WardrobeItem.warmth's own scale.
 _TARGET_WARMTH: dict[TempBand, int] = {
-    "freezing": 5, "cold": 4, "cool": 3, "mild": 2, "warm": 1, "hot": 0,
+    "freezing": 5,
+    "cold": 4,
+    "cool": 3,
+    "mild": 2,
+    "warm": 1,
+    "hot": 0,
 }
 
 
@@ -37,12 +42,14 @@ def score(items: list[WardrobeItem], ctx: Context) -> DimensionScore:
 
     if not core:
         return DimensionScore(
-            dimension="weather_fitness", value=0.5,
+            dimension="weather_fitness",
+            value=0.5,
             reason="no core items to evaluate — neutral score",
         )
     if ctx.temp_band is None:
         return DimensionScore(
-            dimension="weather_fitness", value=0.5,
+            dimension="weather_fitness",
+            value=0.5,
             reason="no weather context available — neutral score",
         )
 

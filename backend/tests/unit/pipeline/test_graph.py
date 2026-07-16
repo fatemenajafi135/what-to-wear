@@ -15,8 +15,12 @@ from whattowear.schema import Context, DimensionScore, Rationale, ScoredOutfit, 
 
 def _item(id, category, *, formality="casual", warmth=1, season=None) -> WardrobeItem:
     return WardrobeItem(
-        id=id, category=category, colors=["#000000"],
-        formality=formality, warmth=warmth, season=season or [],
+        id=id,
+        category=category,
+        colors=["#000000"],
+        formality=formality,
+        warmth=warmth,
+        season=season or [],
     )
 
 
@@ -41,7 +45,8 @@ def _scored_outfit(item_id: str) -> ScoredOutfit:
 class TestWardrobeRetrievalPruning:
     def test_excludes_items_two_notches_below_the_formality_floor(self):
         ctx = Context(
-            occasion="gala", formality="black_tie",
+            occasion="gala",
+            formality="black_tie",
             wardrobe=[_item("gown", "gown", formality="black_tie"), _item("tee", "top", formality="casual")],
         )
         result = graph.wardrobe_retrieval({"ctx": ctx})
@@ -51,7 +56,9 @@ class TestWardrobeRetrievalPruning:
 
     def test_excludes_items_over_the_per_band_warmth_ceiling(self):
         ctx = Context(
-            occasion="beach", formality="casual", temp_band="hot",
+            occasion="beach",
+            formality="casual",
+            temp_band="hot",
             wardrobe=[
                 _item("tank", "top", warmth=1),
                 _item("parka", "coat", warmth=5),
@@ -64,7 +71,9 @@ class TestWardrobeRetrievalPruning:
 
     def test_excludes_items_outside_the_requested_season(self):
         ctx = Context(
-            occasion="office", formality="business_casual", season="summer",
+            occasion="office",
+            formality="business_casual",
+            season="summer",
             wardrobe=[
                 _item("linen_shirt", "top", formality="business_casual", season=["summer"]),
                 _item("wool_sweater", "sweater", formality="business_casual", season=["winter"]),
@@ -83,7 +92,8 @@ class TestWardrobeRetrievalPruning:
 
     def test_slots_are_grouped_by_category_group(self):
         ctx = Context(
-            occasion="dinner", formality="casual",
+            occasion="dinner",
+            formality="casual",
             wardrobe=[_item("t", "top"), _item("j", "jeans"), _item("s", "sneakers")],
         )
         result = graph.wardrobe_retrieval({"ctx": ctx})
@@ -123,8 +133,10 @@ class TestParseRequestRefinementDetection:
         ctx = Context(occasion="office", formality="business_casual")
         result = graph.parse_request(
             {
-                "occasion": "less formal", "thread_id": "t1",
-                "original_context": ctx, "refinement_deltas": ["warmer"],
+                "occasion": "less formal",
+                "thread_id": "t1",
+                "original_context": ctx,
+                "refinement_deltas": ["warmer"],
             }
         )
         assert result["refinement_deltas"] == ["warmer", "less_formal"]
@@ -188,9 +200,7 @@ class TestGenerateOutfitsAlternativesExclusion:
 
         shown_top, shown_bottom, shown_shoe = self._complete_outfit_items(("st", "sb", "ss"))
         new_top, new_bottom, new_shoe = self._complete_outfit_items(("nt", "nb", "ns"))
-        repeated = GenOutfit(
-            items=["st", "sb", "ss"], rationale=[GenRationale(text="r", cites=["L1-x"])]
-        )
+        repeated = GenOutfit(items=["st", "sb", "ss"], rationale=[GenRationale(text="r", cites=["L1-x"])])
         fresh = GenOutfit(items=["nt", "nb", "ns"], rationale=[GenRationale(text="r", cites=["L1-x"])])
         mocker.patch.object(graph, "generate", return_value=GenOutput(outfits=[repeated, fresh]))
 
@@ -198,8 +208,11 @@ class TestGenerateOutfitsAlternativesExclusion:
         ctx = Context(occasion="office", formality="business_casual", wardrobe=wardrobe)
         state = {
             "ctx": ctx,
-            "candidates": {"top": [shown_top, new_top], "bottom": [shown_bottom, new_bottom],
-                            "footwear": [shown_shoe, new_shoe]},
+            "candidates": {
+                "top": [shown_top, new_top],
+                "bottom": [shown_bottom, new_bottom],
+                "footwear": [shown_shoe, new_shoe],
+            },
             "retrieval": mocker.Mock(),
             "refinement_deltas": ["alternatives"],
             "last_result": mocker.Mock(outfits=[_scored_outfit_multi(["st", "sb", "ss"])]),
@@ -223,7 +236,8 @@ class TestGenerateOutfitsAlternativesExclusion:
             "ctx": ctx,
             "candidates": {"top": [top], "bottom": [bottom], "footwear": [shoe]},
             "retrieval": mocker.Mock(),
-            "refinement_deltas": [], "last_result": None,
+            "refinement_deltas": [],
+            "last_result": None,
         }
 
         result = graph.generate_outfits(state)

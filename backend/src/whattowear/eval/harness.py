@@ -91,9 +91,7 @@ def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str], judge: 
     # scoring/ranking checks (Phase 3) — SC-003, SC-005
     outfit_count_in_range = _MIN_EXPECTED_OUTFITS <= len(scored) <= _MAX_EXPECTED_OUTFITS
     all_have_four_scores = all(len(o.scores) == 4 for o in scored) if scored else True
-    ranked_descending = [o.rank_score for o in scored] == sorted(
-        (o.rank_score for o in scored), reverse=True
-    )
+    ranked_descending = [o.rank_score for o in scored] == sorted((o.rank_score for o in scored), reverse=True)
 
     # optional reported-only LLM judge score (Phase 4, T046, FR-010) — never
     # computed by default (an extra LLM call per case would slow/flake the
@@ -127,9 +125,7 @@ def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str], judge: 
     }
 
 
-def run_strategy(
-    cases: list[GoldenCase], strategy: str, rule_text: dict[str, str], judge: bool = False
-) -> list[dict]:
+def run_strategy(cases: list[GoldenCase], strategy: str, rule_text: dict[str, str], judge: bool = False) -> list[dict]:
     rows = []
     for case in cases:
         try:
@@ -209,7 +205,8 @@ if __name__ == "__main__":
     ap.add_argument("--strategies", nargs="*", default=STRATEGIES)
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument(
-        "--judge", action="store_true",
+        "--judge",
+        action="store_true",
         help="also compute the optional reported-only LLM judge score (FR-010) — one extra "
         "LLM call per case, off by default so it doesn't slow/flake the no-regression gate",
     )

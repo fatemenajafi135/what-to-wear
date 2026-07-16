@@ -37,14 +37,16 @@ def score(items: list[WardrobeItem], ctx: Context) -> DimensionScore:
 
     if top is None or bottom is None:
         return DimensionScore(
-            dimension="silhouette_balance", value=0.5,
+            dimension="silhouette_balance",
+            value=0.5,
             reason="no separate top+bottom pairing to evaluate proportion on — neutral score",
         )
 
     top_bucket, bottom_bucket = _bucket(top.fit), _bucket(bottom.fit)
     if top_bucket is None or bottom_bucket is None:
         return DimensionScore(
-            dimension="silhouette_balance", value=0.5,
+            dimension="silhouette_balance",
+            value=0.5,
             reason="fit not recorded for one or both pieces — neutral score",
         )
 

@@ -8,8 +8,13 @@ from whattowear.scoring import silhouette_balance
 
 def _item(id, category, *, fit=None) -> WardrobeItem:
     return WardrobeItem(
-        id=id, category=category, colors=["#000000"],
-        formality="casual", warmth=1, season=["summer"], fit=fit,
+        id=id,
+        category=category,
+        colors=["#000000"],
+        formality="casual",
+        warmth=1,
+        season=["summer"],
+        fit=fit,
     )
 
 
@@ -28,9 +33,7 @@ class TestSilhouetteBalanceScore:
         assert "body" not in first.reason.lower()
 
     def test_contrasting_fit_scores_higher_than_matching_loose(self):
-        contrast = silhouette_balance.score(
-            [_item("t", "top", fit="loose"), _item("j", "jeans", fit="fitted")], _ctx()
-        )
+        contrast = silhouette_balance.score([_item("t", "top", fit="loose"), _item("j", "jeans", fit="fitted")], _ctx())
         both_loose = silhouette_balance.score(
             [_item("t", "top", fit="oversized"), _item("j", "jeans", fit="relaxed")], _ctx()
         )
@@ -45,7 +48,5 @@ class TestSilhouetteBalanceScore:
         assert result.value == 0.5
 
     def test_reason_is_present(self):
-        result = silhouette_balance.score(
-            [_item("t", "top", fit="loose"), _item("j", "jeans", fit="fitted")], _ctx()
-        )
+        result = silhouette_balance.score([_item("t", "top", fit="loose"), _item("j", "jeans", fit="fitted")], _ctx())
         assert result.reason

@@ -37,9 +37,7 @@ def fit_first_lexicographic(scores: list[DimensionScore]) -> float:
 EQUAL_WEIGHTED_AVERAGE: Strategy = equal_weighted_average
 
 
-def rank_outfits(
-    outfits: list[ScoredOutfit], strategy: Strategy = EQUAL_WEIGHTED_AVERAGE
-) -> list[ScoredOutfit]:
+def rank_outfits(outfits: list[ScoredOutfit], strategy: Strategy = EQUAL_WEIGHTED_AVERAGE) -> list[ScoredOutfit]:
     """Compute `rank_score` for each outfit via `strategy` and return them
     ordered descending by that score. Deterministic: identical input yields
     an identical, identically-ordered output (SC-005)."""

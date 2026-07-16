@@ -44,9 +44,7 @@ def judge_outfit(user_input: str, outfit_text: str) -> Optional[float]:
     degradation pattern for optional, best-effort LLM signals)."""
     try:
         llm = get_judge_model().with_structured_output(_JudgeScore)
-        result = llm.invoke(
-            [("system", _PROMPT), ("human", f"REQUEST:\n{user_input}\n\nOUTFIT:\n{outfit_text}")]
-        )
+        result = llm.invoke([("system", _PROMPT), ("human", f"REQUEST:\n{user_input}\n\nOUTFIT:\n{outfit_text}")])
         return result.score
     except Exception:  # noqa: BLE001 - best-effort reported signal, never fatal
         return None

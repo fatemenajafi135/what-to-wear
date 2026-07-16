@@ -26,7 +26,8 @@ def score(items: list[WardrobeItem], ctx: Context) -> DimensionScore:
 
     if len(palette) < 2:
         return DimensionScore(
-            dimension="color_harmony", value=0.5,
+            dimension="color_harmony",
+            value=0.5,
             reason="not enough colors to compare — neutral score",
         )
 

@@ -8,8 +8,12 @@ from whattowear.scoring import formality_coherence
 
 def _item(id, category="top", *, formality="casual") -> WardrobeItem:
     return WardrobeItem(
-        id=id, category=category, colors=["#000000"],
-        formality=formality, warmth=1, season=["summer"],
+        id=id,
+        category=category,
+        colors=["#000000"],
+        formality=formality,
+        warmth=1,
+        season=["summer"],
     )
 
 

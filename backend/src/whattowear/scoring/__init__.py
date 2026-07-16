@@ -36,8 +36,7 @@ def score_outfits(
             items=o.items,
             rationale=[Rationale(text=r.text, cites=r.cites) for r in o.rationale],
             scores=[
-                s.score([wardrobe_by_id[i] for i in o.items if i in wardrobe_by_id], ctx)
-                for s in DIMENSION_SCORERS
+                s.score([wardrobe_by_id[i] for i in o.items if i in wardrobe_by_id], ctx) for s in DIMENSION_SCORERS
             ],
             rank_score=0.0,
         )

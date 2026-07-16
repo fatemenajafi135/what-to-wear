@@ -8,8 +8,12 @@ from whattowear.scoring import weather_fitness
 
 def _item(id, category="top", *, warmth=1) -> WardrobeItem:
     return WardrobeItem(
-        id=id, category=category, colors=["#000000"],
-        formality="casual", warmth=warmth, season=["winter"],
+        id=id,
+        category=category,
+        colors=["#000000"],
+        formality="casual",
+        warmth=warmth,
+        season=["winter"],
     )
 
 
@@ -19,9 +23,7 @@ def _ctx(temp_band=None) -> Context:
 
 class TestWeatherFitnessScore:
     def test_cold_context_no_outerwear_scores_lower_than_with_outerwear(self):
-        no_outer = weather_fitness.score(
-            [_item("t", "top", warmth=1), _item("j", "jeans", warmth=1)], _ctx("cold")
-        )
+        no_outer = weather_fitness.score([_item("t", "top", warmth=1), _item("j", "jeans", warmth=1)], _ctx("cold"))
         with_outer = weather_fitness.score(
             [_item("t", "top", warmth=1), _item("j", "jeans", warmth=1), _item("c", "coat", warmth=4)],
             _ctx("cold"),

@@ -20,7 +20,8 @@ def score(items: list[WardrobeItem], ctx: Context) -> DimensionScore:
 
     if not core:
         return DimensionScore(
-            dimension="formality_coherence", value=0.5,
+            dimension="formality_coherence",
+            value=0.5,
             reason="no core items to compare — neutral score",
         )
 

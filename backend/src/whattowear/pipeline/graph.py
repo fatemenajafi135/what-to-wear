@@ -316,7 +316,8 @@ def explain(state: GraphState) -> dict:
     result = SuggestResult(outfits=scored, sources=base.sources, context=ctx)
 
     memory.remember_interaction(
-        ctx.user_id, state["thread_id"],
+        ctx.user_id,
+        state["thread_id"],
         f"{ctx.occasion}/{ctx.formality}/{ctx.temp_band} -> {[o.items for o in scored]}",
     )
 

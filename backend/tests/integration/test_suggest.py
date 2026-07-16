@@ -103,7 +103,10 @@ def test_well_stocked_closet_returns_outfits_with_all_four_scores(client, mocker
     for o in done_events[0]["data"]["result"]["outfits"]:
         assert len(o["scores"]) == 4
         assert {s["dimension"] for s in o["scores"]} == {
-            "color_harmony", "formality_coherence", "weather_fitness", "silhouette_balance",
+            "color_harmony",
+            "formality_coherence",
+            "weather_fitness",
+            "silhouette_balance",
         }
 
 
@@ -122,7 +125,8 @@ def test_outfits_stream_in_descending_rank_score_order(client, mocker):
 def test_undersized_closet_returns_fewer_outfits_with_note(client, mocker):
     fake = _FakeCompiledGraph(
         _final_state(
-            user_id="jwt-user", outfits=[_scored_outfit("a", 0.9)],
+            user_id="jwt-user",
+            outfits=[_scored_outfit("a", 0.9)],
             note="Only found 1 outfit option(s) — add more items to your closet for more variety.",
         )
     )

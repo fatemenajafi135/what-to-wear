@@ -17,8 +17,10 @@ def _scores(color=0.5, formality=0.5, weather=0.5, silhouette=0.5) -> list[Dimen
 
 def _outfit(id, **score_kwargs) -> ScoredOutfit:
     return ScoredOutfit(
-        items=[id], rationale=[Rationale(text="because", cites=["r1"])],
-        scores=_scores(**score_kwargs), rank_score=0.0,
+        items=[id],
+        rationale=[Rationale(text="because", cites=["r1"])],
+        scores=_scores(**score_kwargs),
+        rank_score=0.0,
     )
 
 
@@ -35,12 +37,8 @@ class TestFitFirstLexicographic:
         fit_poor_look_good = _scores(color=1.0, formality=0.0, weather=0.0, silhouette=1.0)
         fit_good_look_poor = _scores(color=0.0, formality=1.0, weather=1.0, silhouette=0.0)
 
-        assert combine.equal_weighted_average(fit_poor_look_good) == combine.equal_weighted_average(
-            fit_good_look_poor
-        )
-        assert combine.fit_first_lexicographic(fit_good_look_poor) > combine.fit_first_lexicographic(
-            fit_poor_look_good
-        )
+        assert combine.equal_weighted_average(fit_poor_look_good) == combine.equal_weighted_average(fit_good_look_poor)
+        assert combine.fit_first_lexicographic(fit_good_look_poor) > combine.fit_first_lexicographic(fit_poor_look_good)
 
 
 class TestRankOutfits:

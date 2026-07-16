@@ -122,9 +122,7 @@ def remember_interaction(user_id: Optional[str], thread_id: str, summary: str) -
 
 
 def recent_interactions(user_id: str, limit: int = 5) -> list[dict]:
-    items = sorted(
-        _store.search(_history_ns(user_id)), key=lambda it: it.value.get("at", ""), reverse=True
-    )
+    items = sorted(_store.search(_history_ns(user_id)), key=lambda it: it.value.get("at", ""), reverse=True)
     return [it.value for it in items[:limit]]
 
 
