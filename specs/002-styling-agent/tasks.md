@@ -98,12 +98,16 @@ Phase 3.
 **Goal**: The pipeline becomes a LangGraph `StateGraph`; deterministic
 pruning/combination/scoring (Phase 2's package) replaces any model-driven item
 picking; `POST /suggest` (SSE) delivers grounded, scored outfit suggestions.
-`/recommend` stays live only until `/suggest` is verified equivalent, then is
-retired within this same phase (T037a) — see the type-sharing rationale there:
-`OutfitResult.outfits` becomes `list[ScoredOutfit]` in this phase, and
-`/recommend`'s old code path never populates scores, so the two endpoints
-cannot coexist past this phase without a second result type nobody wants to
-maintain.
+`/recommend` stays live only until `/suggest` is verified equivalent **and the
+frontend (Feature 003, which didn't exist when this phase was first planned)
+is confirmed cut over to it (T036a-d)**, then is retired within this same
+phase (T037a) — see the type-sharing rationale there: `OutfitResult.outfits`
+becomes `list[ScoredOutfit]` in this phase, and `/recommend`'s old code path
+never populates scores, so the two endpoints cannot coexist past this phase
+without a second result type nobody wants to maintain. **This phase now
+includes a small amount of frontend work** (T036a-d) — a `/speckit.analyze`
+finding, not in the original plan: the plan's "no frontend work this feature"
+premise was true when written and is false now.
 
 **Independent Test**: As a user with a closet that can dress the occasion,
 `POST /suggest` returns an SSE stream ending in a `done` event with 3–5
@@ -126,7 +130,11 @@ maintain.
 - [ ] T035 [P] [US2] Unit tests for the `wardrobe_retrieval` node's pruning/cap behavior (hard-constraint filtering excludes out-of-band items; candidate count never exceeds k=8 per slot regardless of closet size) in `backend/tests/unit/pipeline/test_graph.py` (depends on T028)
 - [ ] T036 [US2] [US3] Integration test for `POST /suggest`: 3–5 outfits for a well-stocked closet, fewer + `note` for an undersized one (FR-002), every item id owned by the requester (FR-003, SC-002), every outfit carries all 4 `DimensionScore`s plus `rank_score`, and outfits are returned in descending `rank_score` order (FR-008, US3 Acceptance Scenario 2) — in `backend/tests/integration/test_suggest.py` (depends on T034)
 - [ ] T037 Re-run the eval no-regression gate — Phase 3 wires retrieval/generation into the graph via unchanged functions (constitution Principle I); `retrieval_recall` must match `backend/artifacts/eval_runs/` (depends on T034, T032a)
-- [ ] T037a [US2] Retire `POST /recommend` and `pipeline/run.py` now that `eval/harness.py` runs golden-set cases through the graph (T032a) and the no-regression gate is confirmed clean (T037): remove the endpoint and `RecommendRequest`/`RecommendResponse` from `backend/src/whattowear/api.py`, delete `backend/src/whattowear/pipeline/run.py`, delete `backend/tests/integration/test_recommend_auth.py` (its 401/JWT-`sub` coverage is subsumed by T036's `/suggest` integration test) — resolves the `OutfitResult.outfits: list[ScoredOutfit]` type-sharing question by removing the only caller that couldn't populate scores (depends on T032a, T036, T037)
+- [ ] T036a [P] [US2] [US3] SSE-consumption helper in `frontend/lib/api-client.ts` — a new function alongside `apiFetch` (not a modification to it; every other endpoint depends on `apiFetch` staying simple). Browsers' native `EventSource` only supports `GET` and `/suggest` is `POST`, so this must be a hand-rolled parser over `fetch()`'s streaming response body (`ReadableStream` + `TextDecoder`, splitting on `event:`/`data:` lines), not `EventSource` — a `/speckit.analyze` finding: nothing in the frontend can currently consume an SSE response at all (depends on T034)
+- [ ] T036b [P] [US2] Regenerate `frontend/lib/api-types.ts` via `npm run fetch:openapi` against a locally running backend with `/suggest` live, so `SuggestRequest`/`ScoredOutfit`/`DimensionScore` exist on the frontend side (constitution Principle VII, same mechanism Feature 003 established) (depends on T033, T034)
+- [ ] T036c [US2] [US3] Cut the frontend over to `/suggest`: `frontend/app/suggest/page.tsx` calls `/suggest` via T036a's helper instead of `POST /recommend` (consume the `done` event only — no progressive per-outfit streaming UI, that's unscoped new product work, not part of this fix); `frontend/components/SuggestionResult.tsx` renders the four `DimensionScore`s + `rank_score` per outfit, closing the gap between US3's API-level score data (T030) and its actual product promise ("the user sees a separate score") (depends on T036a, T036b, T010)
+- [ ] T036d [US2] [US3] Manual end-to-end verification: dev-server smoke test of the cut-over suggest flow against a locally running backend (same pattern Feature 003 used for its own frontend work) — confirms the live product actually still works before anything is deleted (depends on T036c)
+- [ ] T037a [US2] Retire `POST /recommend` and `pipeline/run.py` now that `eval/harness.py` runs golden-set cases through the graph (T032a), the no-regression gate is confirmed clean (T037), **and the frontend is confirmed cut over to `/suggest` (T036d)**: remove the endpoint and `RecommendRequest`/`RecommendResponse` from `backend/src/whattowear/api.py`, delete `backend/src/whattowear/pipeline/run.py`, delete `backend/tests/integration/test_recommend_auth.py` (its 401/JWT-`sub` coverage is subsumed by T036's `/suggest` integration test) — resolves the `OutfitResult.outfits: list[ScoredOutfit]` type-sharing question by removing the only caller that couldn't populate scores. **T036d is the gate that prevents this from breaking the live, deployed frontend** — a `/speckit.analyze` CRITICAL finding: the original task had no dependency on the frontend at all, and `frontend/` didn't exist when this task was first written (depends on T032a, T036, T037, T036d)
 
 **Checkpoint**: US2 and US3 fully satisfied and observable end-to-end through
 `/suggest`; `/recommend` retired, `/suggest` is the sole suggestion entrypoint.
@@ -175,7 +183,7 @@ complete per spec.md.
 
 - **Phase 1 (essentials, US1)**: ✅ done — no dependency on later phases
 - **Phase 2 (foundational scoring)**: independent of Phase 1's specific changes; blocks Phase 3's `score_and_rank` node (T030 depends on T015)
-- **Phase 3 (graph + `/suggest`, US2+US3)**: depends on Phase 2 completing (needs `scoring/combine.rank_outfits`); ends with `/recommend` retired (T037a) — Phase 4 has only one endpoint to extend
+- **Phase 3 (graph + `/suggest`, US2+US3)**: depends on Phase 2 completing (needs `scoring/combine.rank_outfits`); now also includes a frontend cutover (T036a-d, a `/speckit.analyze` finding — Feature 003's frontend didn't exist when this phase was originally planned) that must complete before `/recommend` retires (T037a) — Phase 4 has only one endpoint to extend
 - **Phase 4 (refinement, US4)**: depends on Phase 3's compiled graph (T032) existing to extend, and on `/recommend` already being gone (T037a) so there's no second endpoint to also wire refinement into
 - **Phase 5 (polish)**: runs after whichever phase is about to merge
 

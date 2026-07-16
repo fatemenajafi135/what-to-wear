@@ -63,14 +63,25 @@ So:
   + shared catalog in Postgres (Supabase), JWT auth (ES256/JWKS), full CRUD.
   `context_assembler.load_wardrobe()` reads Postgres now, not the JSON fixture.
 - **Feature 002 (styling-agent), broadened + phased — Phase 1 DONE and merged
-  to `main`.** Auth-gated `/recommend` behind the JWT dependency (closing the
-  cross-user leak — `user_id` now comes from the verified `sub`, not the
-  body) and backfilled unit tests for the deterministic pipeline (`colors.py`,
-  `cite.py`, `categories.py`, `pipeline/query_builder.py`, `eval/properties.py`)
-  + a `/recommend` auth test. **Phases 2–4 (deterministic scoring → LangGraph
-  + `/suggest` → refinement) are paused**, deliberately reordered behind
-  Feature 003 — see below. Full spec/plan/tasks in `specs/002-styling-agent/`.
-  See SDD-HANDOFF Step 3.
+  to `main`. Resuming now (2026-07-16), in this worktree, in parallel with
+  Feature 004 (its own worktree).** Auth-gated `/recommend` behind the JWT
+  dependency (closing the cross-user leak — `user_id` now comes from the
+  verified `sub`, not the body) and backfilled unit tests for the
+  deterministic pipeline (`colors.py`, `cite.py`, `categories.py`,
+  `pipeline/query_builder.py`, `eval/properties.py`) + a `/recommend` auth
+  test. **Before resuming, `/speckit.analyze` was re-run on this branch** (a
+  lot changed since it was originally planned — Feature 003's whole frontend
+  now exists) and found one CRITICAL gap: the plan's "no frontend work this
+  feature" premise was true when written, false now, and Phase 3's original
+  `/recommend`-retirement task had zero dependency on the frontend that
+  actually calls it — retiring it as originally scoped would have broken the
+  live product. Fixed: `specs/002-styling-agent/tasks.md` now has T036a-d
+  (SSE-consumption helper, regenerated OpenAPI types, cutting the frontend
+  over to `/suggest`, manual verification) gating `/recommend`'s retirement
+  (T037a). `plan.md` corrected to match. **Phases 2–4 (deterministic scoring
+  → LangGraph + `/suggest` → refinement) — resuming now**, starting at task
+  T008. Full spec/plan/tasks in `specs/002-styling-agent/`. See SDD-HANDOFF
+  Step 3.
 - **Feature 003 (mvp-app), redefined from "closet-ingestion" — code complete,
   not yet deployed.** Full spec-kit cycle run on branch `003-mvp-app`.
   Backend: additive `pattern`/`fit` migration, CORS middleware, `vision.py`
@@ -96,8 +107,15 @@ So:
   actually see it rendered. Full narrative:
   `docs/003-mvp-app-implementation-report.md` (local, untracked). See
   SDD-HANDOFF Step 4.
-- **Next: those 3 deploy steps, then resume Feature 002 Phases 2–4** (paused
-  behind 003 — see SDD-HANDOFF Step 3), or start Feature 004.
+- **Working in parallel, in separate git worktrees (from 2026-07-16):**
+  Feature 002 (this worktree, resuming Phases 2-4 at task T008) and Feature
+  004 (`/home/fateme/Projects/w2w/what-to-wear-004`) are being developed at
+  the same time on their own branches — not the same shared directory.
+  **If you're a fresh session reading this from this worktree: you're
+  already in the right place, don't `cd` back to the main repo directory or
+  switch branches out from under the other session.** The 3 manual deploy
+  steps for Feature 003 (Supabase Storage bucket, Railway, Vercel) are still
+  outstanding too, but need dashboard access no coding session has.
 
 ## The rules that bite hardest (full text in the constitution)
 

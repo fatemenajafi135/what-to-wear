@@ -80,9 +80,9 @@ from drifting.
 | # | Feature | Notes |
 |---|---|---|
 | 001 | closet-persistence | ✅ **DONE (merged).** Fixture became a real per-user Postgres database + shared catalog + JWT auth. |
-| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **Phase 1 ✅ done and merged**; Phases 2–4 paused — deliberately reordered behind Feature 003 (see below), resume after. |
-| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | **Code complete, not yet deployed.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access this session didn't have): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). **Known, explicitly deferred gap: visual polish.** Three styling passes this session still didn't match `design/What to Wear.dc.html` to your satisfaction — you said to stop and pick it up later rather than keep iterating blind (no browser/screenshot tool was available to verify visually). Full narrative, including exactly what each pass got wrong and what to do differently next time: `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
-| 004 | preference-memory | Feedback capture, preference derivation. Unchanged, still after 003. |
+| 002 | styling-agent | The big one. Pipeline becomes a graph, plus scoring. **Broadened** to also fold in the recommend-flow cleanup (auth-gate `/recommend`) and unit-test backfill for the deterministic pipeline. Delivered in phases (see Step 3). **Phase 1 ✅ done and merged. Phases 2–4 resuming now (2026-07-16)**, in parallel with Feature 004, each in its own git worktree. `/speckit.analyze` re-run before resuming (a lot changed since original planning — Feature 003's frontend now exists) found and fixed one CRITICAL gap: retiring `/recommend` (T037a) had no dependency on the frontend that actually calls it. Fixed via new tasks T036a-d (frontend cutover to `/suggest`) gating T037a. |
+| 003 | **mvp-app** *(redefined — was "closet-ingestion")* | ✅ **Code complete and merged to `main`, deploy pending.** Full spec-kit cycle run (spec/clarify/plan/tasks/analyze/implement). All 4 user stories built and verified locally (backend: 149+11 tests pass, ruff clean; frontend: typecheck/lint/build clean, dev-server smoke-tested against a locally running backend). **3 manual steps remain, owner-only** (need dashboard access no coding session has): create the Supabase Storage `wardrobe-photos` bucket + RLS policy (T010), deploy backend to Railway (T037), deploy frontend to Vercel (T038); then re-run quickstart.md against the public URLs (T039). **Known, explicitly deferred gap: visual polish** didn't fully match `design/What to Wear.dc.html` — see `docs/003-mvp-app-implementation-report.md` (local, untracked). See Step 4 and `specs/003-mvp-app/tasks.md`. |
+| 004 | preference-memory | `/speckit.specify` + `/speckit.clarify` done, developing now in parallel with 002 (own worktree). Doesn't depend on 002's Phases 2-4 — see Step 5. |
 | 005 | production-hardening | Gateway, cache, guardrails, **full** deploy hardening (bare deploy pulled into 003; this is everything beyond that). |
 
 **Branch strategy note (002 only):** Feature 002 is large enough to run as a
@@ -192,7 +192,23 @@ artifacts/eval_runs/. If they moved, something broke.
 > edits fixed one CRITICAL gap (the graph path wasn't wired into the
 > golden-set/eval-harness gate the constitution's Quality Bar requires) plus five
 > lower-severity findings — see `specs/002-styling-agent/tasks.md` T032a and its
-> Notes. The `/speckit.specify` / `/speckit.plan` prompts below are kept
+> Notes.
+>
+> **`/speckit.analyze` re-run 2026-07-16, before resuming Phases 2–4** (paused
+> behind Feature 003, now resuming in parallel with Feature 004, each in its
+> own git worktree). Found one more CRITICAL gap, this time from environment
+> drift rather than an internal inconsistency: `plan.md` said "no frontend
+> work this feature — `frontend/` stays empty," true when Feature 002 was
+> planned and false since Feature 003 shipped a real frontend that calls
+> `/recommend`. Task T037a (retire `/recommend`) had zero dependency on that
+> frontend. Fixed: `tasks.md` T036a-d (SSE-consumption helper, regenerated
+> OpenAPI types, cut the frontend's suggest page + result component over to
+> `/suggest`, manual verification) now gate T037a — `/recommend` can't be
+> retired until the live product is confirmed still working against
+> `/suggest`. `plan.md`'s Constitution Check (Principle VII row), Project
+> Type line, and Project Structure section corrected to match.
+>
+> The `/speckit.specify` / `/speckit.plan` prompts below are kept
 > **verbatim as the historical record of what was pasted**; clarify then
 > corrected/narrowed the MVP scope (see below) — same pattern as Feature 001.
 > - **Body shape**: deferred entirely out of this feature (no persistent
