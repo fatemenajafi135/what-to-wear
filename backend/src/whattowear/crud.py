@@ -80,6 +80,7 @@ def _to_wardrobe_item(row: WardrobeItemRow | CatalogItemRow) -> WardrobeItem:
         source=getattr(row, "source", None),
         pattern=getattr(row, "pattern", None),
         fit=getattr(row, "fit", None),
+        photo_path=getattr(row, "photo_path", None),
     )
 
 
@@ -212,6 +213,7 @@ def create_wardrobe_item_from_upload(
         season=req.season,
         pattern=req.pattern,
         fit=req.fit,
+        photo_path=req.photo_path,
         source="upload",
         catalog_item_id=None,
     )
