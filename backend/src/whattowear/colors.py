@@ -99,6 +99,27 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
+def hex_to_hsl(hex_color: str) -> tuple[float, float, float]:
+    """Hue (degrees, [0,360)), saturation and lightness (fractions, [0,1]) —
+    the color-theory axes WCAG contrast can't express (hue relationship,
+    not just lightness distance). Used by scoring/color_harmony.py."""
+    r, g, b = (c / 255 for c in _hex_to_rgb(hex_color))
+    mx, mn = max(r, g, b), min(r, g, b)
+    lightness = (mx + mn) / 2
+    if mx == mn:
+        return 0.0, 0.0, lightness
+
+    d = mx - mn
+    saturation = d / (2 - mx - mn) if lightness > 0.5 else d / (mx + mn)
+    if mx == r:
+        hue = (g - b) / d + (6 if g < b else 0)
+    elif mx == g:
+        hue = (b - r) / d + 2
+    else:
+        hue = (r - g) / d + 4
+    return hue * 60, saturation, lightness
+
+
 def nearest_name(hex_color: str) -> str:
     """Nearest-neighbor (Euclidean RGB) name for a hex value — the derived,
     human/search-friendly label. Approximate by design: precision lives in the
