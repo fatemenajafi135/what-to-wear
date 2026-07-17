@@ -309,8 +309,8 @@ So:
   `useSignedPhotoUrl` hook, reused by US2/US3/US4 rather than duplicated
   three times. Full detail: `docs/SDD-HANDOFF.md` Step 9,
   `specs/008-bulk-upload-outfit-photos/`.
-- **AI v2 epic (WP0-WP8) started, `feature/009-scoring-fixes` implemented,
-  not yet merged.** New multi-branch epic on top of 006/007/008, driven by a
+- **AI v2 epic (WP0-WP8) started, `feature/009-scoring-fixes` merged to
+  `main`.** New multi-branch epic on top of 006/007/008, driven by a
   certification-challenge resubmission (`docs/deliverable.md`,
   `docs/claude-code-implementation-spec.md`, `docs/ai-v2-session-handoff.md`
   — the last is the authoritative "start here" pointer for this epic,
@@ -364,13 +364,88 @@ So:
     (1 failure reproduced as a pass twice in isolation — confirmed
     LLM-sampling flakiness per the gotcha below, not a regression). ruff
     clean on every file this feature touches.
-  - **Not yet done**: this branch's changes are uncommitted in the working
-    tree as of this entry — not committed, not merged, not pushed. Next
-    session should confirm with the owner before committing, then continue
-    to `feature/010-approach-plumbing` per the owner's directive.
-- **Next**: continue the AI v2 epic (010 → 011 → planner's call on the
-  rest) once 009 is committed/merged. Separately, all 5 originally-planned
-  features plus 006, 007, and 008 are done and merged.
+  - Since committed and merged to `main`.
+- **Feature 010 (engine) — implemented on `feature/010-engine`, all tasks
+  complete, NOT YET MERGED (owner directive this session: do not merge —
+  commit only).** WP2 Engine, with WP0's T0.5 `approach` plumbing folded in
+  (one branch, per `docs/ai-v2-session-handoff.md`'s scoping decision — the
+  spec's separate 010/011 split is consolidated). Full spec-kit cycle
+  (`specs/010-engine/`); `/speckit.analyze` found and fixed two real
+  coverage gaps before implementing: FR-007 (citation resolution) had no
+  deterministic runtime enforcement, only a prompt instruction — closed
+  with a citation filter in `engine_write` mirroring `verify_grounding`'s
+  role, applied to citations instead of items; FR-011 (refinement
+  approach-stickiness) was only covered by a mocked invoke-dict check —
+  added a real-checkpointer two-turn test.
+  - **`approach` opt-in on `POST /suggest`** (`SuggestRequest.approach`,
+    default `"grounded"` = today's unchanged behavior; `"engine"` is the
+    only new value actually routed anywhere). Sticky across a refinement
+    conversation via the same mechanism `original_context` already uses —
+    `api.py` only includes `approach` in the graph-invoke input on a fresh
+    request, so LangGraph's checkpoint-merge leaves a continuing thread's
+    turn-1 value untouched regardless of what a later turn's body carries.
+  - **New `pipeline/engine.py`**: `enumerate_outfits()` deterministically
+    builds top×bottom×footwear and full_body×footwear skeletons (outerwear-
+    crossed, additively, when cold/freezing), reusing the existing
+    `_is_valid_combination`/`_is_slot_complete` guards — moved verbatim
+    into a new `pipeline/validity.py` first, since `graph.py` importing
+    `engine.py`'s node functions while `engine.py` imported those guards
+    from `graph.py` would have been circular (pre-authorized by the source
+    spec as a "pure move, no edits" if this happened). A >20,000-projected-
+    combo safety valve slices the already-fitness-sorted candidate lists
+    `wardrobe_retrieval` hands it — no second sort. `engine_write()` is the
+    path's one LLM call: selection-and-writing only, never proposing a
+    combination — a structurally/semantically invalid response (wrong
+    count, out-of-range/duplicate index, call failure) discards entirely
+    and falls back to the deterministic top-3-by-`rank_score` with
+    template rationale, so a bad model response degrades the result at
+    worst, never breaks the request.
+  - **Graph wiring**: one new conditional edge after `wardrobe_retrieval`
+    (`approach=="engine"` → `engine_enumerate_and_score` → `engine_write`;
+    everything else → the existing `generate_outfits` → `score_and_rank`,
+    byte-for-byte unchanged), both branches converging on the existing
+    `verify_grounding` → `explain` tail. `engine_write`'s node wrapper
+    mirrors its result into both `scored_outfits` and a synthetic
+    `generated` (`GenOutput`) so neither downstream node needs an
+    engine-specific branch.
+  - Opt-in only (per `docs/ai-v2-session-handoff.md`'s scoping decision) —
+    the default path is provably unaffected, so the full eval no-regression
+    gate was not required for this feature; the comparison lives in the
+    spec/task artifacts instead.
+  - 371/371 backend tests pass (351 pre-feature baseline + 20 new — 17
+    unit, 4 integration, one pre-existing test file gained a class), zero
+    regressions. Two integration tests ran against the live stack for
+    real (KB/Qdrant/DB, one including a genuine `engine_write` LLM call,
+    not mocked) rather than only mocked. ruff clean on every file this
+    feature touches. `frontend/lib/api-types.ts` regenerated — diff shows
+    only the new `approach` field, nothing else.
+  - **Constitution note**: the new `engine` path itself complies with
+    Principle II (deterministic selection); the pre-existing default
+    (`grounded`) path's `generate_outfits` still doesn't (the LLM assembles
+    combinations directly) — untouched by design, per the source spec's own
+    instruction not to "fix" `direct`/`grounded`. The constitution amendment
+    recording their explicit exemption is still a separate follow-up, not
+    done in this feature (doesn't require any code change).
+  - **Grounded vs engine eval comparison** (`eval/harness.py` gained a
+    `--approach` flag, additive, to make this possible): full golden set,
+    same closet, run back-to-back. Core grounding metrics identical/perfect
+    on both. Two lower engine numbers both root-caused, not left as bare
+    deltas — the deterministic fallback's intentionally-empty citations
+    read as a harness-metric miss, not a real quality issue; `engine_write`
+    letting the LLM order its 3 picks (per the source spec) measurably
+    diverges from strict `rank_score` order in 2/24 cases, a real,
+    flagged-not-resolved design tension for the constitution-amendment
+    conversation. `weather_appropriate` and mean `top_rank_score` both
+    higher for engine. Full writeup:
+    `docs/eval-baselines/010-engine/COMPARISON.md`.
+  - Full detail: `specs/010-engine/` (spec/plan/research/data-model/
+    contracts/quickstart/tasks, all current), 12 commits on
+    `feature/010-engine`, one per logical task group.
+- **Next**: get the owner's go-ahead to merge `feature/010-engine`, then
+  continue the AI v2 epic per the planner's call (WP3 HITL, WP1 Direct, WP8
+  eval, WP4 weather as time allows — see
+  `docs/ai-v2-session-handoff.md`'s open flags). Separately, all 5
+  originally-planned features plus 006, 007, and 008 are done and merged.
 - **Environment gotcha found while finishing Feature 004**: a fresh `git
   worktree add` only copies tracked files — `backend/data/` (gitignored:
   golden set, KB corpus, wardrobe fixture) was entirely absent from this

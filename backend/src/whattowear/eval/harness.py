@@ -50,7 +50,15 @@ def _rule_text_map() -> dict[str, str]:
     return {c.metadata["rule_id"]: c.page_content for c in get_kb().chunks}
 
 
-def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str], judge: bool = False) -> dict:
+def run_case(
+    case: GoldenCase, strategy: str, rule_text: dict[str, str], judge: bool = False, approach: str = "grounded"
+) -> dict:
+    """`approach` (Feature 010, WP2) selects which selection path the graph
+    routes through — orthogonal to `strategy` (retrieval). Every eval case
+    is a genuinely fresh, single-turn thread (a new random `thread_id`
+    every call, never continued), so there's no refinement-turn "sticky
+    approach" concern here the way there is in api.py — `approach` is
+    simply included on every invoke, matching how `strategy` already is."""
     graph = get_compiled_graph()
     thread_id = str(uuid.uuid4())
     final_state = graph.invoke(
@@ -62,6 +70,7 @@ def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str], judge: 
             "strategy": strategy,
             "thread_id": thread_id,
             "user_id": str(EVAL_BASELINE_USER_ID),
+            "approach": approach,
         },
         config={"configurable": {"thread_id": thread_id}},
     )
@@ -125,15 +134,21 @@ def run_case(case: GoldenCase, strategy: str, rule_text: dict[str, str], judge: 
     }
 
 
-def run_strategy(cases: list[GoldenCase], strategy: str, rule_text: dict[str, str], judge: bool = False) -> list[dict]:
+def run_strategy(
+    cases: list[GoldenCase], strategy: str, rule_text: dict[str, str], judge: bool = False, approach: str = "grounded"
+) -> list[dict]:
     rows = []
     for case in cases:
         try:
-            rows.append(run_case(case, strategy, rule_text, judge=judge))
+            rows.append(run_case(case, strategy, rule_text, judge=judge, approach=approach))
         except Exception as exc:  # noqa: BLE001
             print(f"  [error] {case.id}/{strategy}: {exc}")
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-    out = ARTIFACTS_DIR / f"{strategy}.jsonl"
+    # Feature 010: a non-default approach gets a distinct filename so an
+    # engine-approach run never clobbers the existing grounded-path artifact
+    # the no-regression gate compares against.
+    suffix = "" if approach == "grounded" else f"-{approach}"
+    out = ARTIFACTS_DIR / f"{strategy}{suffix}.jsonl"
     with open(out, "w", encoding="utf-8") as fh:
         for r in rows:
             fh.write(json.dumps(r) + "\n")
@@ -185,7 +200,9 @@ def summarize(rows_by_strategy: dict[str, list[dict]]) -> None:
         print(line)
 
 
-def main(strategies: list[str] | None = None, limit: int | None = None, judge: bool = False) -> None:
+def main(
+    strategies: list[str] | None = None, limit: int | None = None, judge: bool = False, approach: str = "grounded"
+) -> None:
     strategies = strategies or STRATEGIES
     cases = load_cases()
     if limit:
@@ -193,8 +210,8 @@ def main(strategies: list[str] | None = None, limit: int | None = None, judge: b
     rule_text = _rule_text_map()
     rows_by_strategy: dict[str, list[dict]] = defaultdict(list)
     for strat in strategies:
-        print(f"\nRunning strategy: {strat} ({len(cases)} cases)")
-        rows_by_strategy[strat] = run_strategy(cases, strat, rule_text, judge=judge)
+        print(f"\nRunning strategy: {strat} ({len(cases)} cases, approach={approach})")
+        rows_by_strategy[strat] = run_strategy(cases, strat, rule_text, judge=judge, approach=approach)
     summarize(rows_by_strategy)
 
 
@@ -210,5 +227,13 @@ if __name__ == "__main__":
         help="also compute the optional reported-only LLM judge score (FR-010) — one extra "
         "LLM call per case, off by default so it doesn't slow/flake the no-regression gate",
     )
+    ap.add_argument(
+        "--approach",
+        default="grounded",
+        choices=["direct", "grounded", "engine", "agentic", "compare"],
+        help="Feature 010: which graph selection path to route through (default: grounded, "
+        "today's existing pre-Feature-010 behavior). Non-grounded runs write to a "
+        "distinctly-suffixed artifact file rather than overwriting the grounded baseline.",
+    )
     args = ap.parse_args()
-    main(strategies=args.strategies, limit=args.limit, judge=args.judge)
+    main(strategies=args.strategies, limit=args.limit, judge=args.judge, approach=args.approach)

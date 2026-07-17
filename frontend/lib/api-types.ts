@@ -503,6 +503,14 @@ export interface components {
          * @description Body of POST /suggest (contracts/suggest.md). No `user_id` field —
          *     same fix as RecommendRequest post-Phase-1: identity always comes from
          *     the verified JWT `sub` (FR-001).
+         *
+         *     `approach` (Feature 010, WP2): which selection strategy to run.
+         *     `"grounded"` names today's existing default pipeline (LLM assembles
+         *     outfits, `generate_outfits`/`score_and_rank`) so its meaning is
+         *     explicit rather than implicit-via-absence. Only `"grounded"` (the
+         *     default) and `"engine"` are routed anywhere by this feature; the other
+         *     values are accepted (matching the full roadmap) but fall through to
+         *     the `grounded` branch unchanged, same as omitting the field.
          */
         SuggestRequest: {
             /** Occasion */
@@ -522,6 +530,12 @@ export interface components {
             strategy: string;
             /** Thread Id */
             thread_id?: string | null;
+            /**
+             * Approach
+             * @default grounded
+             * @enum {string}
+             */
+            approach: "direct" | "grounded" | "engine" | "agentic" | "compare";
         };
         /**
          * SuggestResult

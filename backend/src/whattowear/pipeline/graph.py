@@ -37,7 +37,6 @@ a `note` if a refinement's tightened bounds leave nothing (FR-015).
 from __future__ import annotations
 
 import uuid
-from collections import Counter
 from typing import Optional, TypedDict
 
 from langgraph.graph import StateGraph
@@ -52,9 +51,11 @@ from ..retrieval import advanced, baseline, hybrid
 from ..retrieval.base import RetrievalResult
 from ..schema import FORMALITY_ORDER, Context, Formality, SuggestResult, WardrobeItem
 from ..scoring import score_outfits
-from . import cite, context_assembler, query_builder
-from .generator import GenOutfit, GenOutput, generate
+from . import cite, context_assembler, engine, query_builder
+from .generator import GenOutfit, GenOutput, GenRationale, generate
 from .grounding import verify_outfit_grounding
+from .validity import is_slot_complete as _is_slot_complete
+from .validity import is_valid_combination as _is_valid_combination
 
 Strategy = str  # "baseline" | "hybrid" | "advanced"
 
@@ -137,6 +138,12 @@ class GraphState(TypedDict, total=False):
     refinement_deltas: list[str]
     last_result: Optional[SuggestResult]
 
+    # Feature 010 (WP2 Engine): which selection approach this thread uses.
+    # Sticky across refinement turns the same way original_context is — see
+    # api.py's suggest_endpoint, which only includes this key on a fresh
+    # (non-continuing) invoke, and pipeline/engine.py.
+    approach: str
+
     # gather_context output
     ctx: Context
 
@@ -151,56 +158,24 @@ class GraphState(TypedDict, total=False):
     # wardrobe_retrieval output — pruned, capped candidates per category slot
     candidates: dict[str, list[WardrobeItem]]
 
-    # generate_outfits output — only slot-complete outfits (FR-011)
+    # generate_outfits output — only slot-complete outfits (FR-011). Also
+    # set by the engine path's engine_write node (mirrored from its final
+    # ScoredOutfit selection) purely so explain()'s existing
+    # cite.build_result(...) call needs zero changes for either path.
     generated: GenOutput
 
-    # score_and_rank output — ranked, descending by rank_score
+    # engine_enumerate_and_score output (Feature 010) — top-6 deterministically
+    # scored candidates offered to engine_write for selection-and-writing only.
+    engine_shortlist: list
+
+    # score_and_rank output — ranked, descending by rank_score. Also the
+    # engine path's engine_write output (same key, so verify_grounding/
+    # explain consume either path identically).
     scored_outfits: list
 
     # explain output
     result: SuggestResult
     note: Optional[str]
-
-
-def _is_slot_complete(items: list[str], wardrobe_by_id: dict[str, WardrobeItem]) -> bool:
-    """A complete outfit covers the body: top-or-full_body, bottom-or-
-    full_body, and footwear. Missing any -> drop the outfit (FR-011), never
-    fill from the catalog."""
-    groups = {categories.group_of(wardrobe_by_id[i].category) for i in items if i in wardrobe_by_id}
-    has_top_half = "top" in groups or "full_body" in groups
-    has_bottom_half = "bottom" in groups or "full_body" in groups
-    has_footwear = "footwear" in groups
-    return has_top_half and has_bottom_half and has_footwear
-
-
-def _is_valid_combination(items: list[str], wardrobe_by_id: dict[str, WardrobeItem]) -> bool:
-    """Deterministic coherence guard on a generated outfit (constitution
-    Principle II — the LLM proposes candidates, but Python decides what's
-    wearable, not the model). Deliberately LENIENT: it rejects only
-    combinations that are essentially never right, so it can't recreate the
-    "returns nothing" failure by over-pruning a legitimately layered look.
-
-    Rejects:
-      - more than one pair of footwear (the reported shoes+sneakers bug);
-      - two full-body pieces, or two separate bottoms (jeans+chinos);
-      - a full-body piece worn with a separate bottom (the reported dress+pants
-        bug — a dress/suit/jumpsuit is worn on its own).
-
-    Deliberately does NOT restrict (these are real, common looks):
-      - multiple tops — t-shirt + cardigan/sweater is layering, and cardigan/
-        sweater live in the 'top' group, so a top count is never capped;
-      - a top or outerwear over a full-body piece — a cardigan or blazer over a
-        dress is normal; only a separate BOTTOM with a full-body is rejected;
-      - multiple outerwear — a blazer under a coat.
-    """
-    groups = Counter(categories.group_of(wardrobe_by_id[i].category) for i in items if i in wardrobe_by_id)
-    if groups["footwear"] > 1:
-        return False
-    if groups["full_body"] > 1 or groups["bottom"] > 1:
-        return False
-    if groups["full_body"] >= 1 and groups["bottom"] >= 1:
-        return False
-    return True
 
 
 def parse_request(state: GraphState) -> dict:
@@ -412,6 +387,41 @@ def score_and_rank(state: GraphState) -> dict:
     return {"scored_outfits": ranked}
 
 
+@traceable(name="node.engine_enumerate_and_score", run_type="chain")
+def engine_enumerate_and_score(state: GraphState) -> dict:
+    """Feature 010 (WP2): deterministic enumeration + scoring for the engine
+    approach. `require_outerwear` reuses the same freezing/cold band split
+    `_MAX_WARMTH_BY_BAND` already encodes for the hot/warm side (research.md
+    Decision 4 — no new threshold). Scoring is the exact same
+    `scoring.score_outfits` call `score_and_rank` uses above (constitution
+    Principle V) — never a second scoring implementation."""
+    ctx = state["ctx"]
+    require_outerwear = ctx.temp_band in {"freezing", "cold"}
+    combos = engine.enumerate_outfits(state["candidates"], require_outerwear=require_outerwear)
+    wardrobe_by_id = {it.id: it for it in ctx.wardrobe}
+    unscored = [GenOutfit(items=combo, rationale=[]) for combo in combos]
+    ranked = score_outfits(unscored, wardrobe_by_id, ctx)
+    return {"engine_shortlist": ranked[: engine._SHORTLIST_SIZE]}
+
+
+@traceable(name="node.engine_write", run_type="chain")
+def engine_write_node(state: GraphState) -> dict:
+    """Wraps `engine.engine_write` (the engine path's one LLM call) and
+    mirrors its result into both `scored_outfits` (what `verify_grounding`/
+    `explain` already read from `score_and_rank`) and `generated` (what
+    `explain`'s `cite.build_result` call needs for `sources`) — so neither
+    downstream node requires an engine-specific branch."""
+    ctx = state["ctx"]
+    final = engine.engine_write(state["engine_shortlist"], ctx, state["retrieval"])
+    generated = GenOutput(
+        outfits=[
+            GenOutfit(items=o.items, rationale=[GenRationale(text=r.text, cites=r.cites) for r in o.rationale])
+            for o in final
+        ]
+    )
+    return {"scored_outfits": final, "generated": generated}
+
+
 @traceable(name="node.verify_grounding", run_type="chain")
 def verify_grounding(state: GraphState) -> dict:
     """Feature 005 US2/FR-003-005: drop any outfit referencing an item id
@@ -461,6 +471,14 @@ def explain(state: GraphState) -> dict:
     return {"result": result, "note": note, "last_result": result}
 
 
+def _route_by_approach(state: GraphState) -> str:
+    """Feature 010 (WP2): `"engine"` routes to the deterministic-selection
+    path; every other value (including absent, the pre-Feature-010 default)
+    routes to the existing generate-then-rank path unchanged (research.md
+    Decision 1)."""
+    return "engine" if state.get("approach") == "engine" else "grounded"
+
+
 def build_graph() -> StateGraph:
     graph = StateGraph(GraphState)
     graph.add_node("parse_request", parse_request)
@@ -470,6 +488,8 @@ def build_graph() -> StateGraph:
     graph.add_node("wardrobe_retrieval", wardrobe_retrieval)
     graph.add_node("generate_outfits", generate_outfits)
     graph.add_node("score_and_rank", score_and_rank)
+    graph.add_node("engine_enumerate_and_score", engine_enumerate_and_score)
+    graph.add_node("engine_write", engine_write_node)
     graph.add_node("verify_grounding", verify_grounding)
     graph.add_node("explain", explain)
 
@@ -478,9 +498,15 @@ def build_graph() -> StateGraph:
     graph.add_edge("gather_context", "style_retrieval")
     graph.add_edge("style_retrieval", "build_query")
     graph.add_edge("build_query", "wardrobe_retrieval")
-    graph.add_edge("wardrobe_retrieval", "generate_outfits")
+    graph.add_conditional_edges(
+        "wardrobe_retrieval",
+        _route_by_approach,
+        {"engine": "engine_enumerate_and_score", "grounded": "generate_outfits"},
+    )
     graph.add_edge("generate_outfits", "score_and_rank")
+    graph.add_edge("engine_enumerate_and_score", "engine_write")
     graph.add_edge("score_and_rank", "verify_grounding")
+    graph.add_edge("engine_write", "verify_grounding")
     graph.add_edge("verify_grounding", "explain")
     return graph
 
