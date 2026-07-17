@@ -98,6 +98,7 @@ from drifting.
 | 006 | wardrobe-item-photos | ✅ **DONE, merged to `main`, deployed (confirmed live on Vercel)** (2026-07-16). Small, additive: persists the photo path already captured (and previously discarded) at photo-upload time, shows it on the closet card, falls back to the existing color-swatch display when absent. No new API endpoint. See Step 7. |
 | 007 | ai-improvements | ✅ **DONE, merged to `main`** (2026-07-16). Built entirely in a separate, credential-less sandbox, so only unit tests ran there — verified for real in this session: found and fixed a missing Qdrant payload index the new L1 filter needs (cheap, no re-embed), then 226/226 unit tests, the modified `test_suggest_refinement.py` (3/3, real graph calls, directly exercises the warmth-floor fix), and a deliberately reduced eval-gate subset (7 of 24 golden cases × all 3 strategies — g01/g08/g12/g15/g17/g20/g23, chosen to include 2 of the 3 cases whose ground truth changed for the live-L3 design, g12 and g23; g16, the third, wasn't in this subset — same mechanical correction as the other two, not independently re-verified) all green — `retrieval_recall` 0.81/0.93/0.93 (baseline/hybrid/advanced), consistent ordering and magnitude with prior full runs. One isolated LLM citation artifact (a plausible-sounding but nonexistent rule id cited in one hybrid-strategy response) — zero hallucinated *items*, so the actual grounding guarantee held; this is generation-sampling noise, not a 007 regression. See Step 8. |
 | 008 | bulk-upload-outfit-photos | Continued forward on the `006-wardrobe-item-photos` branch after 006 already merged (per explicit user instruction, not a fresh branch). Four more photo capabilities on top of 006, direct user request: bulk photo upload (P1), item photos in outfit suggestions (P2), photo preview during single-item review (P3), edit/remove photo on a saved item (P4). Numbered 008 (not 007) to avoid clashing with the unrelated `007-AI-improvements` branch. See Step 9. |
+| 009 | scoring-fixes | **Implemented on `feature/009-scoring-fixes`, not yet committed/merged.** First branch of a new multi-branch "AI v2" epic (WP0-WP8, `docs/ai-v2-session-handoff.md`), driven by a certification-challenge resubmission. Four independent, verified-real bug fixes in deterministic scoring/retrieval: the color-harmony scorer was inverted (rewarded clashing colors), the ranking default didn't prioritize weather/formality fit, the per-slot candidate cap wasn't sorted before truncating (could drop the best-fitting item), and the color-name lookup was missing common names. Full spec-kit cycle; `/speckit.analyze` and direct implementation-time verification each caught a real issue in the source planning doc before/during coding. Eval no-regression gate green. See Step 10. |
 
 **How 002 and 004's parallel work was reconciled (2026-07-16).** Both
 features were built in separate git worktrees at the same time (see the
@@ -1055,6 +1056,102 @@ capabilities they had in mind, all building on what 006 had just shipped:
 > Own worktree, `/home/fateme/Projects/w2w/what-to-wear-006`, branch
 > `006-wardrobe-item-photos`. Full task list: `specs/008-bulk-upload-outfit-photos/tasks.md`
 > (25 tasks, T001-T025, all done).
+
+## Step 10: Feature 009, scoring-fixes (AI v2 epic, WP0 urgent debug)
+
+Not part of the original 5-feature plan or 006/007/008 — the first branch of
+a new, separate multi-branch epic (`docs/ai-v2-session-handoff.md`, the
+authoritative pointer for this epic; `docs/claude-code-implementation-spec.md`
+has the full WP-by-WP technical breakdown), driven by a certification-
+challenge resubmission. Owner's directive: "urgent debug first" (T0.1-T0.4,
+this branch), then WP0's `approach` plumbing (`feature/010-approach-plumbing`),
+then WP2 Engine (`feature/011-engine`), then the planner's call on the rest.
+**Branch naming for this epic uses a new `feature/NNN-name` convention**
+(owner's decision, differs from 001-008's bare `NNN-name` branches — do not
+rename the earlier ones).
+
+Full spec-kit cycle run (`/speckit.specify` → `/speckit.clarify` →
+`/speckit.plan` → `/speckit.tasks` → `/speckit.analyze` →
+`/speckit.implement`), `specs/009-scoring-fixes/`. `/speckit.clarify` found
+zero critical ambiguities — the source material was already a verified,
+concretely-detailed bug report (four specific defects with expected-vs-actual
+behavior), not an open-ended request. `/speckit.analyze` found and fixed 3
+MEDIUM findings before implementing (all in `research.md`/`tasks.md`, not
+`spec.md`): a planned formality-inference fallback in the retrieval sort key
+that turns out to be dead code (`ctx.formality` is already unconditionally
+resolved upstream), an inaccurate Assumption about reusing an existing
+warmth-band mapping that doesn't actually exist, and a test-coverage gap
+where the ranking-strategy-default test didn't exercise the tie-break
+scenario end-to-end through `rank_outfits` itself.
+
+**Per-story detail** (all four independent, `specs/009-scoring-fixes/tasks.md`
+T001-T021, all done):
+- **US1, P1 — color-harmony scorer rewrite** (the deliverable's Task 5
+  headline story). `scoring/color_harmony.py` previously scored mean
+  pairwise WCAG contrast directly — higher contrast (e.g. tomato red +
+  emerald green) scored *higher* than an elegant tonal pairing (navy +
+  charcoal), rewarding clashes. Rewritten around real color theory: new
+  `colors.hex_to_hsl()`; neutral-anchored/analogous pairings score highest,
+  an equal-weight complementary clash and hues with no organizing
+  relationship score lowest, a value-contrast bonus rewards moderate (not
+  extreme) lightness spread. **Two real inconsistencies in the source
+  technical spec were found and fixed only once the exact numbers were run,
+  not assumed upfront**: (1) the spec's own required test case (tomato red +
+  emerald green must score `<0.45`) failed arithmetic against its own
+  proposed algorithm — 0.4 base + 0.1 bonus = 0.5 — once computed against
+  the real palette hexes; resolved by revising that hue-band's score to 0.3,
+  re-verified against all 6 of the spec's required cases before committing;
+  (2) the spec's own illustrative "navy + mustard" complementary-pair
+  example is structurally impossible in this project's palette, because
+  navy is one of the project's own pre-existing *named neutrals*
+  (`FASHION_COLOR_PALETTE`'s "# neutrals" section — "navy is the new black"
+  is intentional styling convention, not a bug) and can therefore never be
+  the chromatic partner in a 2-hue comparison; substituted `cobalt`. Full
+  narrative with the exact numbers run: `specs/009-scoring-fixes/research.md`
+  Decision 1's addenda.
+- **US2, P1 — ranking default**: `scoring/combine.rank_outfits`'s default
+  strategy changed from `equal_weighted_average` to the existing,
+  already-tested `fit_first_lexicographic` — weather/formality fit now
+  decide before color/silhouette cosmetic tiebreaks. One-line change; the
+  new test also exercises the tie-break scenario through `rank_outfits`
+  itself, not just the underlying strategy function (the `/speckit.analyze`
+  finding above).
+- **US3, P1 — per-slot candidate cap sorted before truncating**:
+  `pipeline/graph.py`'s `wardrobe_retrieval` used to take an arbitrary
+  positional prefix (`items[:_CANDIDATES_PER_SLOT]`) with no sort — the
+  actual best-fitting item in a slot could be silently dropped from ever
+  reaching generation, purely for not being early in closet order. Fixed by
+  sorting on `(formality_distance, warmth_distance)` immediately before the
+  slice; a new `_IDEAL_WARMTH_BY_BAND` constant (distinct from the existing
+  `_MAX_WARMTH_BY_BAND` hard-constraint ceiling — this one's a ranking
+  target, never an exclusion).
+- **US4, P2 — color-name accuracy**: 8 missing common names (teal, orange,
+  coral, pink, turquoise, red, forest green, mint) added to
+  `colors.FASHION_COLOR_PALETTE` — a teal item previously resolved to the
+  nearest distant fallback ("sage"/"light blue").
+
+**Verification**: 350/351 backend tests pass — the 1 failure
+(`test_warmer_raises_mean_warmth_and_preserves_occasion`) reproduced as a
+PASS twice in isolation immediately after, confirming the documented
+LLM-sampling-flakiness gotcha rather than a regression. `ruff check`/`format`
+clean on every file this feature touches. Eval no-regression gate: since
+`backend/artifacts/eval_runs/` is gitignored and this feature explicitly
+changes what it measures, the pre-implementation numbers were snapshotted
+first to a tracked location (`docs/eval-baselines/pre-009/`, per this
+feature's own spec's explicit Step 0 instruction) before any scorer code
+changed. Post-implementation: `retrieval_recall` byte-identical on every
+shared golden case across all three strategies (the post-009 `advanced` run
+also gained a 24th case, `g17`, missing from a flaky pre-009 run — not a
+behavior change), `owned_only` unaffected at 1.00 with zero per-case diffs,
+zero hallucinated items in both runs. Full comparison plus the concrete
+color-harmony before/after evidence for the deliverable:
+`docs/eval-baselines/pre-009/COMPARISON.md`.
+
+**Not yet done**: this branch's changes are uncommitted in the working tree.
+Not committed, not merged to `main`, not pushed. The next session (or this
+one, on explicit instruction) should confirm with the owner before
+committing, then continue to `feature/010-approach-plumbing` per the
+directive in `docs/ai-v2-session-handoff.md`.
 
 ## The rule that matters most
 

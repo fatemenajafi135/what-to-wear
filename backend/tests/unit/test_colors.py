@@ -61,6 +61,45 @@ class TestNearestName:
     def test_nearest_names_maps_a_list(self):
         assert colors.nearest_names(["#000000", "#ffffff"]) == ["black", "white"]
 
+    def test_a_teal_hex_resolves_to_teal_not_a_distant_fallback(self):
+        # Before Feature 009 added "teal" to the palette, this hex had no
+        # close entry and misidentified as "sage" or "light blue".
+        assert colors.nearest_names(["#0d9488"]) == ["teal"]
+
+
+class TestHexToHsl:
+    def test_pure_red_hue_is_zero_fully_saturated(self):
+        h, s, lightness = colors.hex_to_hsl("#ff0000")
+        assert h == pytest.approx(0.0)
+        assert s == pytest.approx(1.0)
+        assert lightness == pytest.approx(0.5)
+
+    def test_pure_green_hue_is_120(self):
+        h, _, _ = colors.hex_to_hsl("#00ff00")
+        assert h == pytest.approx(120.0)
+
+    def test_pure_blue_hue_is_240(self):
+        h, _, _ = colors.hex_to_hsl("#0000ff")
+        assert h == pytest.approx(240.0)
+
+    def test_black_is_zero_lightness_zero_saturation(self):
+        _, s, lightness = colors.hex_to_hsl("#000000")
+        assert s == pytest.approx(0.0)
+        assert lightness == pytest.approx(0.0)
+
+    def test_white_is_full_lightness_zero_saturation(self):
+        _, s, lightness = colors.hex_to_hsl("#ffffff")
+        assert s == pytest.approx(0.0)
+        assert lightness == pytest.approx(1.0)
+
+    def test_mid_gray_is_zero_saturation_half_lightness(self):
+        _, s, lightness = colors.hex_to_hsl("#808080")
+        assert s == pytest.approx(0.0)
+        assert lightness == pytest.approx(0.502, abs=0.01)
+
+    def test_deterministic(self):
+        assert colors.hex_to_hsl("#1b2a4a") == colors.hex_to_hsl("#1b2a4a")
+
 
 class TestContrastRatio:
     def test_identical_colors_ratio_is_one(self):

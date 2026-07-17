@@ -49,10 +49,22 @@ class TestRankOutfits:
         assert [o.items[0] for o in ranked] == ["high", "low"]
         assert ranked[0].rank_score > ranked[1].rank_score
 
-    def test_default_strategy_is_equal_weighted_average(self):
+    def test_default_strategy_is_fit_first_lexicographic(self):
         outfit = _outfit("a", color=0.2, formality=0.4, weather=0.6, silhouette=0.8)
         [ranked] = combine.rank_outfits([outfit])
-        assert ranked.rank_score == 0.5
+        assert ranked.rank_score == combine.fit_first_lexicographic(outfit.scores)
+
+    def test_default_strategy_breaks_ties_on_weather_and_formality_fit(self):
+        # Same construction as TestFitFirstLexicographic's own test, but
+        # exercised through rank_outfits' default parameter end-to-end —
+        # confirms the wiring, not just that the two functions independently
+        # behave correctly (found missing by /speckit.analyze, finding F3).
+        fit_poor_look_good = _outfit("poor-fit", color=1.0, formality=0.0, weather=0.0, silhouette=1.0)
+        fit_good_look_poor = _outfit("good-fit", color=0.0, formality=1.0, weather=1.0, silhouette=0.0)
+
+        ranked = combine.rank_outfits([fit_poor_look_good, fit_good_look_poor])
+
+        assert ranked[0].items[0] == "good-fit"
 
     def test_rerunning_same_input_is_byte_identical(self):
         outfits = [

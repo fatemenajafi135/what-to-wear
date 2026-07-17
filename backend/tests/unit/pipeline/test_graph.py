@@ -99,6 +99,25 @@ class TestWardrobeRetrievalPruning:
         result = graph.wardrobe_retrieval({"ctx": ctx})
         assert set(result["candidates"].keys()) == {"top", "bottom", "footwear"}
 
+    def test_best_fitting_item_survives_the_cap_even_when_placed_after_it(self):
+        # Feature 009, FR-008: the cap used to take a naive positional prefix
+        # (items[:8]) with no sort — an exact formality match placed 9th in
+        # closet order would be silently dropped even though it's the best
+        # fit. All 10 items pass the hard-constraint floor (>= one notch
+        # below "formal") so none are excluded before the cap; only the item
+        # at index 8 (the 9th item) is an *exact* formality match.
+        near_matches_before = [_item(f"near{i}", "top", formality="black_tie") for i in range(8)]
+        exact_match = _item("exact", "top", formality="formal")
+        near_match_after = _item("near8", "top", formality="black_tie")
+        wardrobe = near_matches_before + [exact_match] + [near_match_after]
+
+        ctx = Context(occasion="gala", formality="formal", wardrobe=wardrobe)
+        result = graph.wardrobe_retrieval({"ctx": ctx})
+
+        kept_ids = {it.id for it in result["candidates"]["top"]}
+        assert "exact" in kept_ids
+        assert len(result["candidates"]["top"]) == 8
+
 
 class TestParseRefinementIntent:
     def test_warmer_utterance_parses_to_warmer_delta(self):

@@ -51,15 +51,23 @@ FASHION_COLOR_PALETTE: dict[str, str] = {
     "sage": "#9caf88",
     "olive": "#708238",
     "pistachio": "#93c572",
+    "teal": "#008080",
+    "turquoise": "#40e0d0",
+    "forest green": "#228b22",
+    "mint": "#98d8aa",
     # reds / pinks
     "tomato red": "#ff6347",
     "terracotta": "#e2725b",
     "burgundy": "#800020",
     "blush pink": "#de5d83",
+    "red": "#c0392b",
+    "coral": "#ff7f50",
+    "pink": "#f8a1c4",
     # yellows / oranges
     "butter yellow": "#f4e99b",
     "mustard": "#ffdb58",
     "rust": "#b7410e",
+    "orange": "#e67e22",
     # purples
     "lavender": "#e6e6fa",
     "plum": "#8e4585",
@@ -97,6 +105,27 @@ def name_to_hex(name: str) -> str:
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     h = normalize_hex(hex_color).lstrip("#")
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def hex_to_hsl(hex_color: str) -> tuple[float, float, float]:
+    """Hue (degrees, [0,360)), saturation and lightness (fractions, [0,1]) —
+    the color-theory axes WCAG contrast can't express (hue relationship,
+    not just lightness distance). Used by scoring/color_harmony.py."""
+    r, g, b = (c / 255 for c in _hex_to_rgb(hex_color))
+    mx, mn = max(r, g, b), min(r, g, b)
+    lightness = (mx + mn) / 2
+    if mx == mn:
+        return 0.0, 0.0, lightness
+
+    d = mx - mn
+    saturation = d / (2 - mx - mn) if lightness > 0.5 else d / (mx + mn)
+    if mx == r:
+        hue = (g - b) / d + (6 if g < b else 0)
+    elif mx == g:
+        hue = (b - r) / d + 2
+    else:
+        hue = (r - g) / d + 4
+    return hue * 60, saturation, lightness
 
 
 def nearest_name(hex_color: str) -> str:
