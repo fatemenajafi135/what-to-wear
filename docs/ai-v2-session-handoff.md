@@ -21,7 +21,7 @@ know before touching scoring/retrieval.
 - The `/suggest` cache is **OFF** by default (`WTW_SUGGEST_CACHE_ENABLED`, default
   false). Don't be surprised; don't re-enable without the owner's OK.
 
-## Status: `feature/009-scoring-fixes` implemented, not yet merged
+## Status: `feature/009-scoring-fixes` merged; `feature/010-engine` implemented, not yet merged (owner directive: commit only, no merge this session)
 T0.1-T0.4 are done — full spec-kit cycle (`specs/009-scoring-fixes/`),
 color-harmony rewrite + ranking default + sort-before-cap + palette
 additions, all four independently unit-tested, eval no-regression gate
@@ -35,9 +35,13 @@ structurally impossible here (navy is a named neutral in this project's own
 palette, not a chromatic — substituted cobalt). Full narrative: `CLAUDE.md`
 Current State and `docs/SDD-HANDOFF.md` Step 10.
 
-**This branch's changes are uncommitted in the working tree** — confirm
-with the owner before committing/merging. Next: `feature/010-approach-plumbing`
-(T0.5) per the sequence below, once 009 is committed.
+**009 is now committed and merged to `main`.** `feature/010-engine` (WP2
+Engine, folding in WP0's T0.5 plumbing per the scoping decision below) is
+now also fully implemented — all 23 tasks in `specs/010-engine/tasks.md`
+done, 371/371 backend tests green, 9 commits on the branch. **Not merged
+this session** — the owner asked for commit-only, no merge. Next: get the
+owner's go-ahead to merge, then continue per the planner's call (see the
+Planner's open flags below).
 
 ## Branch convention (owner's decision)
 - **`feature/NNN-name`**, 3-digit, continuing from 008. One branch per WP; each ends
@@ -48,9 +52,8 @@ with the owner before committing/merging. Next: `feature/010-approach-plumbing`
 ## Planned sequence
 | Order | Branch | Scope | Spec ref |
 |-------|--------|-------|----------|
-| 1 | `feature/009-scoring-fixes` | **Urgent debug**: color-harmony rewrite, combine default, sort-before-cap, palette | T0.1–T0.4 |
-| 2 | `feature/010-approach-plumbing` | `approach` scaffolding (no behavior change) | T0.5 |
-| 3 | `feature/011-engine` | Engine approach — Principle II compliance | WP2 |
+| 1 | `feature/009-scoring-fixes` (merged) | **Urgent debug**: color-harmony rewrite, combine default, sort-before-cap, palette | T0.1–T0.4 |
+| 2 | `feature/010-engine` (implemented, not merged) | `approach` plumbing (T0.5) folded into the Engine approach itself — Principle II compliance | T0.5 + WP2 |
 | 4+ | (planner rec) | WP1 Direct → WP3 HITL → WP8 eval; WP4 weather = best "if time" | — |
 
 Owner's directive: **urgent debug first, then WP0 → WP2**, then the above.
@@ -113,24 +116,43 @@ re-measured" narrative needs a preserved before-snapshot.
   simplicity rule (it over-builds).
 
 ## Per-branch acceptance (condensed — full detail in the spec)
-- **009 scoring-fixes: ✅ DONE (implemented, not yet merged).** T0.1 new color
+- **009 scoring-fixes: ✅ DONE, merged to `main`.** T0.1 new color
   tests pass (deleted `test_high_contrast_pair_scores_higher_than_low_contrast_pair`,
   as planned); `test_combine.py`, `test_eval_properties.py` green; T0.3 unit test
   (9th-item-only-exact survives the cap) passes; T0.4 `nearest_names` test
   (`#0d9488`→"teal") passes. Eval baseline snapshotted first, per the Step 0
   instruction above. See `docs/SDD-HANDOFF.md` Step 10 for full detail
   including two real spec-inconsistency fixes found during implementation.
-- **010 approach-plumbing:** `approach` field on `SuggestRequest` (default `engine`,
-  keep `strategy`); appears in graph state; integration test posts `approach:"engine"`
-  → 200; no behavior change.
-- **011 engine:** enumeration counts on a 3×2×2 closet; full-body + outerwear crossing;
-  safety valve; engine returns 3 outfits, every cite resolves; a seeded "perfect"
-  combo ranks #1; golden g01 passes all property checks. **Flag:** verify latency of
-  `score_outfits` over all combos; the 20,000-combo valve is generous — consider
-  top-6/slot (safe post-T0.3).
+- **010 engine (folds in 010 approach-plumbing + 011 engine, one branch per
+  the scoping decision below): ✅ DONE (implemented, NOT merged — owner
+  directive this session).** `approach` field on `SuggestRequest` (default
+  `"grounded"` = today's behavior, not `"engine"` — the spec said default
+  `engine`, but this session kept the opt-in scoping decision below, which
+  supersedes that default for now; keeps `strategy`); appears in graph
+  state, sticky across refinement turns; integration test posts
+  `approach:"engine"` → 200, value in state; default path behavior
+  unchanged (byte-for-byte, confirmed via the full 371-test suite).
+  Enumeration counts verified on synthetic closets; full-body + outerwear
+  crossing (additive, not replacing the bare skeleton); safety valve
+  (slices already-sorted candidates, no re-sort — cheaper than the
+  originally-planned re-sort); engine returns 3 outfits, every cite
+  resolves (a deterministic filter added during `/speckit.analyze`, not
+  just a prompt instruction); a seeded "perfect" combo ranks #1 (confirmed
+  live against the real scorer). **Flag partially addressed, not fully
+  closed**: a dedicated unit test confirms the >20,000-combo safety valve
+  correctly narrows each slot to top-6 (functional correctness) — but this
+  session did NOT load-test real wall-clock `score_outfits` latency at that
+  scale against the live gateway; the live integration tests used a small
+  (6-item) synthetic wardrobe, nowhere near the valve's ~1,500-combo
+  narrowed ceiling. Still an open flag for whoever load-tests this for
+  real. Full detail: `specs/010-engine/`, `CLAUDE.md` Current State.
 
 ## Planner's open flags for the owner (decide as you reach them)
-- WP2 combinatorics/perf — load-test before trusting the 20k valve.
+- WP2 combinatorics/perf — the valve's narrowing logic is unit-tested
+  (correctly slices to top-6/slot above 20k projected combos), but real
+  wall-clock latency at that scale against the live gateway is still
+  untested — load-test before fully trusting the 20k threshold in
+  production.
 - WP3 adds a 5th scorer → eval baseline must be re-run (SC-005 4→5).
 - WP6 compare = 4× LLM cost + the most concurrency-bug-prone code; keep below the
   cut-line unless there's real time.

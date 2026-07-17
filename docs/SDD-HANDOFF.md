@@ -1147,11 +1147,101 @@ zero hallucinated items in both runs. Full comparison plus the concrete
 color-harmony before/after evidence for the deliverable:
 `docs/eval-baselines/pre-009/COMPARISON.md`.
 
-**Not yet done**: this branch's changes are uncommitted in the working tree.
-Not committed, not merged to `main`, not pushed. The next session (or this
-one, on explicit instruction) should confirm with the owner before
-committing, then continue to `feature/010-approach-plumbing` per the
-directive in `docs/ai-v2-session-handoff.md`.
+Since committed and merged to `main`.
+
+## Step 11: Feature 010, engine (AI v2 epic, WP2)
+
+Continues the AI v2 epic on top of merged 009. Per two scoping decisions
+recorded in `docs/ai-v2-session-handoff.md` (don't re-litigate): one branch
+`feature/010-engine` folds WP0's T0.5 `approach` plumbing into WP2 itself
+(the spec's separate 010/011 split is consolidated — plumbing alone has no
+user value, engine is its only consumer); the `engine` approach is kept
+**opt-in**, not flipped to the default, so this feature is purely additive
+and the full eval no-regression gate isn't required for it.
+
+Full spec-kit cycle (`specs/010-engine/`). `/speckit.analyze` found and
+fixed two real coverage gaps before implementing (both MEDIUM/HIGH, neither
+in `spec.md` itself): FR-007 ("every citation resolves to a retrieved rule")
+had no deterministic runtime enforcement in the plan, only a prompt
+instruction — closed by adding a citation filter inside `engine_write`
+mirroring how `verify_grounding` already enforces item-ownership grounding,
+applied to citations instead of items; FR-011 (refinement approach-
+stickiness) was only covered by a mocked invoke-dict check in the original
+task list — added a real-checkpointer two-turn integration test instead.
+
+**Per-story detail** (`specs/010-engine/tasks.md` T001-T023, all done):
+- **Foundational (WP0 T0.5, folded in)** — `SuggestRequest.approach`
+  (`Literal["direct","grounded","engine","agentic","compare"]`, default
+  `"grounded"` names today's unchanged pipeline explicitly rather than
+  leaving it implicit-via-absence); `GraphState.approach`, sticky across a
+  refinement conversation via the same mechanism `original_context` already
+  uses — `api.py` only includes `approach` in the graph-invoke input on a
+  *fresh* request, so LangGraph's checkpoint-merge leaves a continuing
+  thread's turn-1 value untouched regardless of what a later turn's body
+  carries (a new mechanism, not reused from `original_context` itself,
+  since `approach` isn't a `Context` field). `compute_cache_key` extended to
+  hash `approach` too — the `/suggest` cache is off by default, but an
+  `engine` and a `grounded` request with identical context would otherwise
+  silently collide on the same cache key once it's enabled.
+- **US1, P1 — the deterministic-selection approach itself.** New
+  `pipeline/engine.py::enumerate_outfits()`: top×bottom×footwear and
+  full_body×footwear skeletons, outerwear-crossed *additively* (the bare
+  skeleton is kept too, not replaced) when the weather context is
+  cold/freezing — reusing the same band split `_MAX_WARMTH_BY_BAND` already
+  encodes, not a new threshold. Reuses the existing
+  `_is_valid_combination`/`_is_slot_complete` coherence guards — moved
+  verbatim into a new `pipeline/validity.py` first (a "pure move, no edits"
+  pre-authorized by the source technical spec), since `graph.py` needs to
+  import `engine.py`'s node functions while `engine.py` needs those guards,
+  which would otherwise be circular. A >20,000-projected-combo safety valve
+  slices the already-fitness-sorted candidate lists `wardrobe_retrieval`
+  already produces (Feature 009's own sort) down to top-6/slot — no second
+  sort needed, just a narrower slice. New graph nodes
+  `engine_enumerate_and_score` (enumerate → the existing, unchanged
+  `scoring.score_outfits` → top-6 shortlist) and `engine_write` (one LLM
+  call, selection-and-writing only), wired in via one new conditional edge
+  after `wardrobe_retrieval` — everything else, including the entire
+  default path, is byte-for-byte unchanged. `engine_write`'s node wrapper
+  mirrors its result into both `scored_outfits` and a synthetic `generated`
+  so `verify_grounding`/`explain` need zero engine-specific branching.
+- **US2, P1 — the LLM can never smuggle in an unscored/invented outfit.**
+  `engine_write`'s selection is validated (exactly 3 distinct, in-range
+  indices) before being trusted at all; any violation — wrong count,
+  out-of-range/duplicate index, or a call/parsing failure — discards the
+  LLM's output entirely and falls back to the deterministic top-3-by-
+  `rank_score` with template rationale (`cites=[]`, never a fabricated
+  citation), so a bad model response degrades the result at worst and never
+  breaks the request. On a *valid* response, any citation that doesn't
+  resolve to an actually-retrieved rule_id is filtered out of that
+  rationale before it reaches the caller (the `/speckit.analyze` fix above).
+- **US3, P2 — cold-weather outerwear crossing.** Verified via dedicated
+  unit tests: `require_outerwear=True` adds outerwear-inclusive versions
+  when outerwear candidates exist, and still returns the bare skeletons
+  (not nothing) when the closet has no outerwear at all.
+
+**Verification**: 371/371 backend tests pass (351 pre-feature baseline + 20
+new: 17 unit, 4 integration across `test_engine.py`/`test_suggest_engine.py`
+plus one new class each in `test_cache.py`/`test_suggest.py`/
+`test_suggest_refinement.py`), zero regressions. Two integration tests ran
+against the **live stack for real** — live KB/Qdrant retrieval, real
+enumeration/scoring, one including a genuine (not mocked) `engine_write`
+LLM call — confirming the engine path works end-to-end, not just at the
+unit level. `ruff check`/`format` clean on every file this feature touches.
+`frontend/lib/api-types.ts` regenerated against a locally running backend
+(constitution Principle VII) — diff shows only the new `approach` field.
+
+**Not fully closed**: the >20,000-combo safety valve's *narrowing logic* is
+unit-tested (correctly slices to top-6/slot), but real wall-clock
+`score_outfits` latency at that scale against the live gateway was not
+load-tested this session — the live integration tests used a small
+synthetic wardrobe, nowhere near the valve's ~1,500-combo narrowed ceiling.
+Flagged as still-open in `docs/ai-v2-session-handoff.md`.
+
+**Not yet done**: **implemented and committed (9 commits), but explicitly
+NOT merged to `main`** — the owner's directive this session was commit-only,
+no merge. Next session should get the owner's go-ahead to merge, then
+continue the AI v2 epic per the planner's call (WP3 HITL, WP1 Direct, WP8
+eval, WP4 weather as time allows).
 
 ## The rule that matters most
 

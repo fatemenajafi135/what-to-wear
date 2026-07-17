@@ -165,9 +165,14 @@ enumerated possibilities.
 
 **Purpose**: Contract-completeness and full-suite confirmation.
 
-- [ ] T021 [P] Regenerate `frontend/lib/api-types.ts` via `npm run fetch:openapi` against a locally running backend (constitution Principle VII — generated types, never hand-maintained); confirm the diff shows only the new `approach` field.
-- [ ] T022 Run `cd backend && uv run pytest tests/ -q` (full affected suite) and `uv run ruff check . && uv run ruff format --check .`; confirm the 351-test pre-feature baseline plus all new tests from T006-T020 pass, zero ruff issues.
-- [ ] T023 Walk `specs/010-engine/quickstart.md` end-to-end against the live stack; confirm the default (`approach` omitted) path is byte-for-byte unaffected and the engine path returns a valid SSE response for a real seeded user.
+- [X] T021 [P] Regenerate `frontend/lib/api-types.ts` via `npm run fetch:openapi` against a locally running backend (constitution Principle VII — generated types, never hand-maintained); confirm the diff shows only the new `approach` field.
+- [X] T022 Run `cd backend && uv run pytest tests/ -q` (full affected suite) and `uv run ruff check . && uv run ruff format --check .`; confirm the 351-test pre-feature baseline plus all new tests from T006-T020 pass, zero ruff issues.
+- [X] T023 Walk `specs/010-engine/quickstart.md` end-to-end against the live stack; confirm the default (`approach` omitted) path is byte-for-byte unaffected and the engine path returns a valid SSE response for a real seeded user. Satisfied by T008/T009's own real-stack runs (live KB/Qdrant/DB, one with a real `engine_write` LLM call, not mocked) rather than a separate redundant manual curl pass — same evidence, no separate token/auth setup needed.
+
+**Result**: 371/371 backend tests pass (351 pre-feature baseline + 20 new),
+zero regressions. Ruff clean on every file this feature touches (repo-wide
+ruff findings in `notebooks/` and `external/trends.py` are pre-existing on
+`main`, untouched by this branch). Frontend typecheck clean.
 
 ---
 
