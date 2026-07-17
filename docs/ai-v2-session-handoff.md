@@ -38,10 +38,11 @@ Current State and `docs/SDD-HANDOFF.md` Step 10.
 **009 is now committed and merged to `main`.** `feature/010-engine` (WP2
 Engine, folding in WP0's T0.5 plumbing per the scoping decision below) is
 now also fully implemented — all 23 tasks in `specs/010-engine/tasks.md`
-done, 371/371 backend tests green, 9 commits on the branch. **Not merged
-this session** — the owner asked for commit-only, no merge. Next: get the
-owner's go-ahead to merge, then continue per the planner's call (see the
-Planner's open flags below).
+done, plus a follow-on grounded-vs-engine eval-baseline comparison
+(`docs/eval-baselines/010-engine/COMPARISON.md`), 12 commits on the branch.
+**Not merged this session** — the owner asked for commit-only, no merge.
+Next: get the owner's go-ahead to merge, then continue per the planner's
+call (see the Planner's open flags below).
 
 ## Branch convention (owner's decision)
 - **`feature/NNN-name`**, 3-digit, continuing from 008. One branch per WP; each ends
