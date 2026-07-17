@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from whattowear import api
 from whattowear.auth import get_current_user_id
 from whattowear.crud import EVAL_BASELINE_USER_ID
+from whattowear.pipeline.graph import get_compiled_graph
 from whattowear.schema import FORMALITY_ORDER
 
 
@@ -126,6 +127,24 @@ class TestLessFormalRefinement:
             # turn 1 within its own (wider) allowed band.
             original_notch = FORMALITY_ORDER["business_casual"]
             assert _max_formality_notch(second, wardrobe) < original_notch
+
+
+class TestApproachStickiness:
+    """Feature 010, FR-011 (T009, `/speckit.analyze` finding C2): a
+    conversation that started on the engine approach must stay on it for
+    later turns, even though the second turn's request body doesn't (and,
+    per the refinement contract, can't meaningfully) restate `approach` —
+    checked against the REAL checkpointer, not the mocked invoke-dict
+    check in test_suggest.py."""
+
+    def test_engine_approach_persists_across_a_refinement_turn(self, client):
+        first = _suggest(client, occasion="office", approach="engine")
+        _suggest(client, occasion="warmer", thread_id=first["thread_id"])  # approach omitted
+
+        config = {"configurable": {"thread_id": first["thread_id"]}}
+        persisted = get_compiled_graph().get_state(config).values["approach"]
+
+        assert persisted == "engine"
 
 
 class TestAlternativesRefinement:
