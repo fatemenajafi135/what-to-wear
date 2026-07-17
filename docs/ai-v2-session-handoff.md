@@ -137,3 +137,60 @@ re-measured" narrative needs a preserved before-snapshot.
 - WP4 weather is under-prioritized in the spec: weather is currently **dead** (the
   frontend sends only `occasion`, so `temp_band` is always None). Cheap, credible fix
   — pull it up if the rubric rewards context-awareness.
+
+---
+
+## Next up: WP2 Engine — focused execution plan
+
+**Goal:** land the **Engine approach (WP2)** — the Principle-II-compliance milestone
+and the highest-value item — as a self-contained, low-risk increment on top of the
+merged 009 work.
+
+### Two scoping decisions (already made — don't re-litigate)
+1. **One branch `feature/010-engine`** that folds WP0's T0.5 plumbing into WP2
+   (plumbing alone has no user value; engine needs it — merging them cuts
+   branch/merge overhead). The spec's separate `010`/`011` split is consolidated here.
+2. **Keep the current path as the DEFAULT; make `engine` OPT-IN** (`approach:"engine"`).
+   The spec says default `engine`, but flipping the default changes the default
+   suggestion path and triggers the full (flaky) eval no-regression gate. Opt-in keeps
+   engine purely additive → **the eval gate isn't required for this merge**; the
+   comparison lives in the writeup. Flip the default later, once it's proven.
+
+### Steps (in order; rough effort in parens)
+1. **(~20m) Plumbing.** Branch `feature/010-engine`. `SuggestRequest.approach` (Literal,
+   **default = current behavior**, keep `strategy`), `GraphState.approach` persisted
+   alongside `original_context`, conditional-edge skeleton, regen
+   `frontend/lib/api-types.ts`. *Gate:* post `approach:"engine"` → 200, value in state.
+2. **(~30m) Enumerator.** `pipeline/engine.py::enumerate_outfits` — skeletons
+   top×bottom×footwear + full_body×footwear; outerwear crossing when
+   `ctx.temp_band in {"freezing","cold"}`; >20k-combo safety valve → top-6/slot.
+   **Reuse** `_is_valid_combination` + `_is_slot_complete` (import; move to
+   `pipeline/validity.py` only if circular). *Gate:* unit — 3×2×2 counts, full-body,
+   outerwear cases.
+3. **(~30m) Graph path.** `gather_context → style_retrieval → wardrobe_retrieval →
+   engine_enumerate_and_score → engine_write → verify_grounding → explain`.
+   `engine_enumerate_and_score`: enumerate → `score_outfits` (existing) on all →
+   top-K=6. `engine_write`: ONE LLM call, selection+writing only (ordered pick of 3
+   indices + rationale citing rule_ids, structured output); **reject any out-of-range
+   index → deterministic fallback to top-3 by rank_score**.
+4. **(~20m) Verify.** Integration test: engine returns 3 outfits, all items owned,
+   every cite resolves (`eval/properties`); a seeded "perfect" combo ranks #1.
+   *Gate:* tests green.
+5. **(~15m) Land.** Affected unit + integration green, `ruff`, commit per logical unit,
+   `--no-ff` merge to main.
+
+### Fallback (risk management)
+If the engine path proves harder than expected — graph routing or `engine_write`
+structured-output not cooperating — **fall back to WP1 Direct** rather than leaving a
+half-finished branch: new `pipeline/direct.py`, one LLM call, prompt = context + **full
+closet** via `_format_items` (import from `generator.py`) + "3 complete outfits, ids
+only"; apply `_is_slot_complete` + `_is_valid_combination`; wrap as `ScoredOutfit` with
+a single `DimensionScore(dimension="direct", value=0.5, ...)`. That still ships a clean,
+distinct second approach. Either way, don't merge a branch that isn't green.
+
+### Writeup follow-through
+- Engine (or Direct) as a distinct, evaluated approach vs. the current grounded path.
+- The 009 color-harmony closed-loop story (numbers in
+  `docs/eval-baselines/pre-009/COMPARISON.md`).
+- Principle-II: engine complies (deterministic selection); document the design even if
+  only Direct shipped. Constitution amendment noted as follow-up.
