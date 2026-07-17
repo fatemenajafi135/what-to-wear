@@ -33,6 +33,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.store.memory import InMemoryStore
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from .. import crud
 from ..db import SessionLocal
@@ -65,12 +66,22 @@ def get_checkpointer() -> InMemorySaver | PostgresSaver:
     InMemorySaver if neither is configured/reachable (e.g. a dev environment
     without Postgres set up at all).
 
-    Connects manually with `prepare_threshold=None` rather than using
-    PostgresSaver.from_conn_string (which hardcodes `prepare_threshold=0` —
-    prepare on first use): that reproduced db.py's own documented
+    Backed by a `ConnectionPool`, NOT a single long-lived connection. The
+    process-wide graph singleton reuses one checkpointer across every
+    request; a lone connection to the Supabase pooler gets closed on the
+    server side after an idle period, so the FIRST /suggest worked and the
+    NEXT one raised `OperationalError: the connection is closed` from inside
+    `graph.invoke` (checkpointer.get_tuple). The pool checks a connection's
+    liveness on checkout (`check=ConnectionPool.check_connection`) and
+    transparently discards+replaces a dead one, so an idle drop can never
+    surface as a 500.
+
+    Pool connections use `prepare_threshold=None` rather than
+    PostgresSaver.from_conn_string's hardcoded `prepare_threshold=0`
+    (prepare on first use): that reproduced db.py's own documented
     "prepared statement does not exist" failure even against
-    DATABASE_URL_DIRECT, not only the pooler — so the same mitigation
-    db.py's SQLAlchemy engine uses applies here too."""
+    DATABASE_URL_DIRECT, not only the pooler — the same mitigation db.py's
+    SQLAlchemy engine uses applies here too."""
     global _checkpointer
     if _checkpointer is not None:
         return _checkpointer
@@ -80,10 +91,16 @@ def get_checkpointer() -> InMemorySaver | PostgresSaver:
     url = direct_url if _reachable(direct_url) else pooler_url
 
     if url:
-        conn = _checkpointer_stack.enter_context(
-            psycopg.connect(url, autocommit=True, prepare_threshold=None, row_factory=dict_row)
+        pool = ConnectionPool(
+            conninfo=url,
+            min_size=1,
+            max_size=int(os.environ.get("WTW_CHECKPOINTER_POOL_MAX", "5")),
+            kwargs={"autocommit": True, "prepare_threshold": None, "row_factory": dict_row},
+            check=ConnectionPool.check_connection,
+            open=True,
         )
-        saver = PostgresSaver(conn)
+        _checkpointer_stack.callback(pool.close)
+        saver = PostgresSaver(pool)
         saver.setup()
         _checkpointer = saver
     else:

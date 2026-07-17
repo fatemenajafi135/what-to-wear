@@ -37,6 +37,7 @@ dependencies = [
     "sqlalchemy>=2.0.0,<3.0.0",
     "alembic>=1.13.0,<2.0.0",
     "psycopg[binary]>=3.2.0,<4.0.0",
+    "psycopg-pool>=3.2.0,<4.0.0",
     "pyjwt[crypto]>=2.9.0,<3.0.0",
     "python-multipart>=0.0.32",
     "langgraph-checkpoint-postgres>=3.1.0",
