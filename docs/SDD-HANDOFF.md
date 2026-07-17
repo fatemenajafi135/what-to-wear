@@ -1237,7 +1237,31 @@ load-tested this session — the live integration tests used a small
 synthetic wardrobe, nowhere near the valve's ~1,500-combo narrowed ceiling.
 Flagged as still-open in `docs/ai-v2-session-handoff.md`.
 
-**Not yet done**: **implemented and committed (9 commits), but explicitly
+**Grounded vs engine eval-baseline comparison** (`docs/eval-baselines/
+010-engine/`): `eval/harness.py` gained an additive `--approach` flag (it
+had no way to run anything but the default path before this feature) and
+was run over the full 24-case golden set for both approaches back-to-back,
+same closet, same point in time — not a before/after of one path like
+009's, a same-time comparison of two. `retrieval_recall`/`owned_only`/
+`cites_grounded` identical or perfect on both, confirming the core grounding
+guarantees hold on the new path too, not just asserted by unit tests. Two
+lower engine numbers (`every_choice_cites`, `outfit_count_in_range`, both
+0.79 vs 1.00/0.92) were traced to their exact source rather than left
+unexplained: all 5 affected cases are the deterministic fallback correctly
+declining to fabricate a citation when the shortlist had fewer than 3 valid
+combos — a harness-metric blind spot, not a real regression, confirmed
+directly against the fallback's rationale text in the artifact.
+`ranked_descending` (0.92) failing on 2/24 happy-path cases is a real,
+measured consequence of a deliberate design choice (`engine_write` lets the
+LLM order its 3 already-selected picks, per the source technical spec) —
+flagged explicitly for the owner's input on the still-open constitution
+amendment rather than resolved unilaterally either way. `weather_appropriate`
+(0.92 vs 0.83) and mean `top_rank_score` (798.65 vs 782.74) are both higher
+for engine — a genuine, measured benefit of deterministic selection, not
+just constitution compliance. Full writeup:
+`docs/eval-baselines/010-engine/COMPARISON.md`.
+
+**Not yet done**: **implemented and committed (12 commits), but explicitly
 NOT merged to `main`** — the owner's directive this session was commit-only,
 no merge. Next session should get the owner's go-ahead to merge, then
 continue the AI v2 epic per the planner's call (WP3 HITL, WP1 Direct, WP8

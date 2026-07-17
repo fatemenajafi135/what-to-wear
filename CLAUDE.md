@@ -426,8 +426,20 @@ So:
     instruction not to "fix" `direct`/`grounded`. The constitution amendment
     recording their explicit exemption is still a separate follow-up, not
     done in this feature (doesn't require any code change).
+  - **Grounded vs engine eval comparison** (`eval/harness.py` gained a
+    `--approach` flag, additive, to make this possible): full golden set,
+    same closet, run back-to-back. Core grounding metrics identical/perfect
+    on both. Two lower engine numbers both root-caused, not left as bare
+    deltas — the deterministic fallback's intentionally-empty citations
+    read as a harness-metric miss, not a real quality issue; `engine_write`
+    letting the LLM order its 3 picks (per the source spec) measurably
+    diverges from strict `rank_score` order in 2/24 cases, a real,
+    flagged-not-resolved design tension for the constitution-amendment
+    conversation. `weather_appropriate` and mean `top_rank_score` both
+    higher for engine. Full writeup:
+    `docs/eval-baselines/010-engine/COMPARISON.md`.
   - Full detail: `specs/010-engine/` (spec/plan/research/data-model/
-    contracts/quickstart/tasks, all current), 9 commits on
+    contracts/quickstart/tasks, all current), 12 commits on
     `feature/010-engine`, one per logical task group.
 - **Next**: get the owner's go-ahead to merge `feature/010-engine`, then
   continue the AI v2 epic per the planner's call (WP3 HITL, WP1 Direct, WP8

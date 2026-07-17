@@ -145,7 +145,22 @@ re-measured" narrative needs a preserved before-snapshot.
   scale against the live gateway; the live integration tests used a small
   (6-item) synthetic wardrobe, nowhere near the valve's ~1,500-combo
   narrowed ceiling. Still an open flag for whoever load-tests this for
-  real. Full detail: `specs/010-engine/`, `CLAUDE.md` Current State.
+  real. **Eval-baseline comparison run after implementation** (the harness
+  didn't support selecting `approach` before this feature —
+  `eval/harness.py` gained a `--approach` flag): full golden set (24 cases),
+  grounded vs engine, same closet, same point in time. Core grounding
+  metrics (`retrieval_recall`, `owned_only`, `cites_grounded`) identical or
+  perfect on both. Two lower engine numbers both traced to their exact root
+  cause, not left as bare deltas: the deterministic fallback (triggers on a
+  <3-combo shortlist) correctly never fabricates a citation, which reads as
+  a harness-metric miss rather than a real quality issue; and `engine_write`
+  letting the LLM order its 3 already-selected picks (per the source spec)
+  measurably diverges from strict `rank_score` order in 2/24 cases — a real
+  design tension worth the owner's input for the constitution amendment, not
+  resolved unilaterally. `weather_appropriate` and mean `top_rank_score` are
+  both higher for engine. Full writeup: `docs/eval-baselines/010-engine/
+  COMPARISON.md`. Full detail: `specs/010-engine/`, `CLAUDE.md` Current
+  State.
 
 ## Planner's open flags for the owner (decide as you reach them)
 - WP2 combinatorics/perf — the valve's narrowing logic is unit-tested
