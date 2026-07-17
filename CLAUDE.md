@@ -309,8 +309,68 @@ So:
   `useSignedPhotoUrl` hook, reused by US2/US3/US4 rather than duplicated
   three times. Full detail: `docs/SDD-HANDOFF.md` Step 9,
   `specs/008-bulk-upload-outfit-photos/`.
-- **Next**: all 5 originally-planned features plus 006, 007, and 008 are
-  done and merged — worth a planning conversation about what's after that.
+- **AI v2 epic (WP0-WP8) started, `feature/009-scoring-fixes` implemented,
+  not yet merged.** New multi-branch epic on top of 006/007/008, driven by a
+  certification-challenge resubmission (`docs/deliverable.md`,
+  `docs/claude-code-implementation-spec.md`, `docs/ai-v2-session-handoff.md`
+  — the last is the authoritative "start here" pointer for this epic,
+  analogous to this file's own role for the rest of the project). Owner's
+  directive: urgent debug first (T0.1-T0.4, this branch), then WP0's
+  `approach` plumbing (010), then WP2 Engine (011), then the planner's
+  recommendation for what follows. **009 ran the full spec-kit cycle**
+  (`specs/009-scoring-fixes/`) and fixed four verified-real bugs, all
+  independent (four user stories):
+  - **Color-harmony scorer was inverted** (Task 5's headline deliverable
+    story) — `scoring/color_harmony.py` scored mean pairwise WCAG contrast
+    directly, rewarding clashing complementary pairs over tonal/neutral
+    ones. Rewritten around real color theory (neutral-anchored/analogous
+    favored, unbalanced-complementary and 3+-hue clashes penalized) — new
+    `colors.hex_to_hsl()`. **A real inconsistency in the source technical
+    spec was found and fixed during implementation, not assumed upfront**:
+    the spec's own required test case (tomato red + emerald green, `<0.45`)
+    failed arithmetic against its own proposed algorithm once run against
+    the real palette hexes (0.4 base + 0.1 bonus = 0.5) — resolved by
+    revising that hue-band's base score 0.4→0.3, re-verified against all 6
+    of the spec's required cases before committing. A second such issue:
+    the spec's own illustrative "navy + mustard" complementary-pair example
+    doesn't work at all, because navy is one of this project's own *named
+    neutrals* (pre-existing, intentional — "navy is the new black") and so
+    can never be a chromatic partner; substituted `cobalt`. Full narrative:
+    `specs/009-scoring-fixes/research.md` Decision 1's addenda.
+  - **Default ranking strategy** changed from equal-weighted average to the
+    existing, already-tested `fit_first_lexicographic` (weather/formality
+    fit decide before color/silhouette cosmetic tiebreaks) — a one-line
+    default-parameter change in `scoring/combine.py`.
+  - **Per-slot candidate cap wasn't sorted before truncating** — the actual
+    best-fitting item in a slot could be silently dropped from
+    `pipeline/graph.py`'s `wardrobe_retrieval` purely for not being early in
+    closet order. Fixed by sorting on formality/warmth fitness immediately
+    before the existing `_CANDIDATES_PER_SLOT` slice. **`/speckit.analyze`
+    caught a real plan error before this was implemented**: the draft
+    algorithm assumed a formality-inference fallback was needed
+    (`ctx.formality or infer_formality(...)`), but `ctx.formality` is
+    already unconditionally resolved by `context_assembler.assemble_context`
+    before `Context` is ever built — the fallback would have been dead
+    code, simplified out before implementing.
+  - **Color-name lookup was missing common names** (e.g. teal resolved to
+    "sage") — 8 names added to `colors.FASHION_COLOR_PALETTE`.
+  - Eval no-regression gate: `retrieval_recall` byte-identical on every
+    shared golden case across all three strategies (baseline/hybrid/
+    advanced), `owned_only` unaffected, zero hallucinated items — full
+    comparison against a snapshotted pre-009 baseline (gitignored source,
+    tracked at `docs/eval-baselines/pre-009/` and `.../post-009/` since
+    `backend/artifacts/eval_runs/` isn't) in
+    `docs/eval-baselines/pre-009/COMPARISON.md`. 350/351 backend tests pass
+    (1 failure reproduced as a pass twice in isolation — confirmed
+    LLM-sampling flakiness per the gotcha below, not a regression). ruff
+    clean on every file this feature touches.
+  - **Not yet done**: this branch's changes are uncommitted in the working
+    tree as of this entry — not committed, not merged, not pushed. Next
+    session should confirm with the owner before committing, then continue
+    to `feature/010-approach-plumbing` per the owner's directive.
+- **Next**: continue the AI v2 epic (010 → 011 → planner's call on the
+  rest) once 009 is committed/merged. Separately, all 5 originally-planned
+  features plus 006, 007, and 008 are done and merged.
 - **Environment gotcha found while finishing Feature 004**: a fresh `git
   worktree add` only copies tracked files — `backend/data/` (gitignored:
   golden set, KB corpus, wardrobe fixture) was entirely absent from this
