@@ -21,7 +21,7 @@ know before touching scoring/retrieval.
 - The `/suggest` cache is **OFF** by default (`WTW_SUGGEST_CACHE_ENABLED`, default
   false). Don't be surprised; don't re-enable without the owner's OK.
 
-## Status: `feature/009-scoring-fixes` merged; `feature/010-engine` implemented, not yet merged (owner directive: commit only, no merge this session)
+## Status: `feature/009-scoring-fixes` and `feature/010-engine` both merged to `main`
 T0.1-T0.4 are done — full spec-kit cycle (`specs/009-scoring-fixes/`),
 color-harmony rewrite + ranking default + sort-before-cap + palette
 additions, all four independently unit-tested, eval no-regression gate
@@ -39,10 +39,12 @@ Current State and `docs/SDD-HANDOFF.md` Step 10.
 Engine, folding in WP0's T0.5 plumbing per the scoping decision below) is
 now also fully implemented — all 23 tasks in `specs/010-engine/tasks.md`
 done, plus a follow-on grounded-vs-engine eval-baseline comparison
-(`docs/eval-baselines/010-engine/COMPARISON.md`), 12 commits on the branch.
-**Not merged this session** — the owner asked for commit-only, no merge.
-Next: get the owner's go-ahead to merge, then continue per the planner's
-call (see the Planner's open flags below).
+(`docs/eval-baselines/010-engine/COMPARISON.md`). **Merged to `main`** after
+review, with the `ranked_descending` finding resolved via Option B —
+`engine_write` now sorts its picks into deterministic `rank_score` order, so
+on the engine path the LLM neither selects nor ranks (Principle II is
+unqualified). Next: continue per the planner's call (see the Planner's open
+flags below) — WP1 Direct / WP3 HITL / WP8 eval, or the writeup.
 
 ## Branch convention (owner's decision)
 - **`feature/NNN-name`**, 3-digit, continuing from 008. One branch per WP; each ends
