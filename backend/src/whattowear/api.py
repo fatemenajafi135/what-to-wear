@@ -95,6 +95,16 @@ def health(response: Response) -> dict:
     return {"status": "ok"}
 
 
+def _suggest_cache_enabled() -> bool:
+    """Per-user /suggest cache toggle. Default OFF — we're validating the
+    pipeline end-to-end without a caching layer first (a stale entry can
+    otherwise mask a just-deployed fix for up to its TTL). The cache code and
+    its tests stay intact; flip WTW_SUGGEST_CACHE_ENABLED=true to restore it
+    (a deliberate, approved step, not the default). Read per-request so it can
+    be toggled without a code change / redeploy."""
+    return os.environ.get("WTW_SUGGEST_CACHE_ENABLED", "false").strip().lower() in ("1", "true", "yes")
+
+
 @app.post("/suggest", response_model=SuggestResult)
 def suggest_endpoint(
     req: SuggestRequest,
@@ -131,7 +141,7 @@ def suggest_endpoint(
     wardrobe = load_wardrobe(user_id)
 
     cache_key = None
-    if is_fresh_request:
+    if is_fresh_request and _suggest_cache_enabled():
         cache_key = suggest_cache.compute_cache_key(
             user_id,
             occasion=req.occasion,
