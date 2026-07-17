@@ -68,6 +68,20 @@ _CANDIDATES_PER_SLOT = 8
 # per-band expectations — not a second, divergent threshold set).
 _MAX_WARMTH_BY_BAND: dict[str, int] = {"warm": 2, "hot": 1}
 
+# Ideal target warmth per band, used only to *rank* candidates within a slot
+# before the per-slot cap below (Feature 009, FR-008) — distinct from
+# _MAX_WARMTH_BY_BAND above, which is a hard-constraint ceiling for warm/hot
+# only. This is a ranking target across all six bands and never excludes an
+# item on its own.
+_IDEAL_WARMTH_BY_BAND: dict[str, int] = {
+    "freezing": 4,
+    "cold": 3,
+    "cool": 2,
+    "mild": 2,
+    "warm": 1,
+    "hot": 0,
+}
+
 # Phase 4 refinement deltas (FR-013) — per-occurrence adjustment to the
 # hard-constraint bounds in wardrobe_retrieval, not to ctx itself.
 _REFINEMENT_WARMTH_STEP = 2  # warmth floor added per "warmer" utterance
@@ -283,7 +297,9 @@ def wardrobe_retrieval(state: GraphState) -> dict:
     Reuses eval/properties.py's weather_appropriate predicate rather than a
     second, forked warmth check. `refinement_deltas` (Phase 4) shift these
     same bounds — a "warmer"/"less formal" request never touches `ctx`
-    itself (FR-013), only what counts as fitting here."""
+    itself (FR-013), only what counts as fitting here. Each slot is sorted
+    by fitness before the cap (Feature 009, FR-008) — the closet's original
+    order must never decide which items survive."""
     ctx = state["ctx"]
     deltas = state.get("refinement_deltas", [])
     category_ceilings = _category_warmth_ceiling(ctx.wardrobe)
@@ -294,8 +310,25 @@ def wardrobe_retrieval(state: GraphState) -> dict:
         slot = categories.group_of(item.category)
         candidates.setdefault(slot, []).append(item)
 
-    candidates = {slot: items[:_CANDIDATES_PER_SLOT] for slot, items in candidates.items()}
+    candidates = {
+        slot: sorted(items, key=lambda item: _slot_fitness_key(item, ctx))[:_CANDIDATES_PER_SLOT]
+        for slot, items in candidates.items()
+    }
     return {"candidates": candidates}
+
+
+def _slot_fitness_key(item: WardrobeItem, ctx: Context) -> tuple[int, int]:
+    """Ascending-badness sort key: exact formality match and ideal-for-weather
+    warmth sort first, so `wardrobe_retrieval`'s per-slot cap can no longer
+    silently drop the best-fitting item just because it wasn't early in
+    closet order (Feature 009, FR-008). `ctx.formality` is always populated
+    by the time this runs — `context_assembler.assemble_context` already
+    resolves it (inferring from free-text occasion if unset) before `ctx` is
+    ever constructed, on every path including refinement — so no fallback
+    inference is needed here."""
+    formality_distance = abs(FORMALITY_ORDER[item.formality] - FORMALITY_ORDER[ctx.formality])
+    warmth_distance = abs(item.warmth - _IDEAL_WARMTH_BY_BAND[ctx.temp_band]) if ctx.temp_band else 0
+    return formality_distance, warmth_distance
 
 
 def _item_fits_hard_constraints(
