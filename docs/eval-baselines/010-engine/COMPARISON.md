@@ -49,7 +49,15 @@ follow-up: teach `every_choice_cites`/`outfit_count_in_range` (or a new
 harness field) to recognize a fallback-produced outfit as a distinct,
 intentional case rather than a bare failure.
 
-## A real, spec'd design tension — worth the owner's input for the constitution amendment
+## A real, spec'd design tension — RESOLVED (Option B)
+
+> **RESOLVED (applied after this comparison was captured):** `engine_write` now
+> sorts its 3 picks into deterministic `rank_score`-descending order before
+> returning, so the LLM chooses *which* 3 outfits to surface but never their
+> order — the final ranking is 100% deterministic and `ranked_descending` is
+> 1.00 by construction. The `0.92` in the table above and the analysis below
+> reflect the pre-fix measurement, kept for the record. The Principle-II story
+> is now unqualified: on the engine path the LLM neither selects nor ranks.
 
 `ranked_descending` fails on 2/24 cases (`g15`, `g20`), both on the happy
 path (3 outfits returned, no fallback). Traced to source: `engine_write`

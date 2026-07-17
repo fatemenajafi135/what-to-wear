@@ -231,6 +231,9 @@ class TestEngineWriteFallback:
 
         result = engine.engine_write(shortlist, ctx, retrieval)
 
-        assert [o.items for o in result] == [["c"], ["a"], ["b"]]  # order follows the LLM's pick order
-        assert result[0].rationale[0].cites == ["L1-real"]  # hallucinated citation dropped
-        assert result[0].rank_score == 0.5  # ScoredOutfit's own deterministic score untouched
+        # returned in deterministic rank_score order (Option B), NOT the LLM's pick order
+        assert [o.items for o in result] == [["a"], ["b"], ["c"]]
+        assert result[0].rank_score == 0.9  # highest deterministic score ranked first
+        # the hallucinated citation on the "c" pick was dropped wherever it lands
+        c_outfit = next(o for o in result if o.items == ["c"])
+        assert c_outfit.rationale[0].cites == ["L1-real"]

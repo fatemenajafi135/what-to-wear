@@ -1,10 +1,11 @@
 """WP2: the deterministic-selection ("engine") approach (Feature 010).
 
-Item selection here is enumerate + score, pure Python (constitution
-Principle II) — the LLM's only role (`engine_write`) is picking an ordered
-3 of an already-scored top-6 shortlist and writing rationale text, never
-proposing a combination itself. See `specs/010-engine/` for the full
-spec/plan/research behind these decisions.
+Item selection AND ranking here are enumerate + score, pure Python
+(constitution Principle II) — the LLM's only role (`engine_write`) is picking
+WHICH 3 of an already-scored top-6 shortlist to surface and writing rationale
+text; the results are returned in deterministic rank_score order, so the model
+never proposes a combination or controls the final ranking. See
+`specs/010-engine/` for the full spec/plan/research behind these decisions.
 """
 
 from __future__ import annotations
@@ -163,18 +164,26 @@ def engine_write(shortlist: list[ScoredOutfit], ctx: Context, retrieval: Retriev
     except Exception:  # noqa: BLE001 - any call/parsing failure degrades to the deterministic fallback
         output = None
 
+    selected: list[ScoredOutfit]
     if not _is_valid_selection(output, len(shortlist)):
-        return [
+        selected = [
             outfit.model_copy(update={"rationale": _fallback_rationale(outfit)})
             for outfit in shortlist[:_REQUIRED_SELECTIONS]
         ]
+    else:
+        selected = []
+        for selection in output.selections:
+            outfit = shortlist[selection.index]
+            filtered_rationale = [
+                GenRationale(text=r.text, cites=[c for c in r.cites if c in retrieved_rule_ids])
+                for r in selection.rationale
+            ]
+            selected.append(outfit.model_copy(update={"rationale": filtered_rationale}))
 
-    selected: list[ScoredOutfit] = []
-    for selection in output.selections:
-        outfit = shortlist[selection.index]
-        filtered_rationale = [
-            GenRationale(text=r.text, cites=[c for c in r.cites if c in retrieved_rule_ids])
-            for r in selection.rationale
-        ]
-        selected.append(outfit.model_copy(update={"rationale": filtered_rationale}))
+    # Principle II: the LLM chooses WHICH 3 to surface, never their order — the
+    # returned ranking is always deterministic rank_score-descending. (The
+    # fallback slice is already in that order; sorting the LLM-picked path the
+    # same way means the model never influences final rank order, closing the
+    # `ranked_descending` gap the grounded-vs-engine eval surfaced.)
+    selected.sort(key=lambda o: o.rank_score, reverse=True)
     return selected
