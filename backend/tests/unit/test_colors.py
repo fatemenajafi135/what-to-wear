@@ -61,6 +61,11 @@ class TestNearestName:
     def test_nearest_names_maps_a_list(self):
         assert colors.nearest_names(["#000000", "#ffffff"]) == ["black", "white"]
 
+    def test_a_teal_hex_resolves_to_teal_not_a_distant_fallback(self):
+        # Before Feature 009 added "teal" to the palette, this hex had no
+        # close entry and misidentified as "sage" or "light blue".
+        assert colors.nearest_names(["#0d9488"]) == ["teal"]
+
 
 class TestHexToHsl:
     def test_pure_red_hue_is_zero_fully_saturated(self):

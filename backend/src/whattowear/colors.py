@@ -51,15 +51,23 @@ FASHION_COLOR_PALETTE: dict[str, str] = {
     "sage": "#9caf88",
     "olive": "#708238",
     "pistachio": "#93c572",
+    "teal": "#008080",
+    "turquoise": "#40e0d0",
+    "forest green": "#228b22",
+    "mint": "#98d8aa",
     # reds / pinks
     "tomato red": "#ff6347",
     "terracotta": "#e2725b",
     "burgundy": "#800020",
     "blush pink": "#de5d83",
+    "red": "#c0392b",
+    "coral": "#ff7f50",
+    "pink": "#f8a1c4",
     # yellows / oranges
     "butter yellow": "#f4e99b",
     "mustard": "#ffdb58",
     "rust": "#b7410e",
+    "orange": "#e67e22",
     # purples
     "lavender": "#e6e6fa",
     "plum": "#8e4585",
