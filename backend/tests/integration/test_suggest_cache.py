@@ -27,6 +27,15 @@ from whattowear.pipeline import graph as graph_module
 # tests (or across files), not just within this one.
 
 
+@pytest.fixture(autouse=True)
+def _enable_suggest_cache(monkeypatch):
+    """The per-user /suggest cache is OFF by default at runtime right now
+    (experiment mode, pending re-approval — api._suggest_cache_enabled). These
+    tests exercise the cache mechanism specifically, so they opt it back on;
+    the flag is read per-request, so setenv here is enough."""
+    monkeypatch.setenv("WTW_SUGGEST_CACHE_ENABLED", "true")
+
+
 @pytest.fixture
 def client():
     api.app.dependency_overrides[get_current_user_id] = lambda: str(EVAL_BASELINE_USER_ID)

@@ -138,10 +138,25 @@ def build_vectorstore(
         f"persisting to {url}" if url else "in-memory",
     )
     location_kwargs = {"url": url, "api_key": api_key} if url else {"location": ":memory:"}
+    # force_recreate: a rebuild must REPLACE the collection, not add to it.
+    # Without this, from_documents upserts new points alongside whatever's
+    # already there, so a persisted collection accumulates across runs (a real
+    # bug: it bloated to 3314 points for a 391-chunk corpus). The point count
+    # then never matches len(chunks), so get_kb() re-embeds on every process
+    # start — slow, and it intermittently times out against Qdrant Cloud.
+    # Recreating means a rebuild always lands at exactly len(chunks), so the
+    # freshness check passes afterward and startups just reconnect.
+    # A longer client timeout + smaller upsert batches, so a slow/cold Qdrant
+    # Cloud response can't abort the (re)build mid-way and leave a partial
+    # collection (seen in practice: the default timeout aborted after the
+    # first 64-point batch). Both tunable via env for a persistently slow host.
     vs = QdrantVectorStore.from_documents(
         documents=chunks,
         embedding=get_embeddings(),
         collection_name=collection,
+        force_recreate=True,
+        timeout=int(os.environ.get("WTW_QDRANT_TIMEOUT", "120")),
+        batch_size=int(os.environ.get("WTW_QDRANT_BATCH_SIZE", "32")),
         **location_kwargs,
     )
     if url:

@@ -7,12 +7,13 @@ location), fall back to a caller-supplied `temp_c`, else leave weather unset.
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from langsmith import traceable
 
 from ..external.weather import month_to_season, temp_to_band
-from ..schema import Context, Formality, WardrobeItem
+from ..schema import FORMALITY_ORDER, Context, Formality, WardrobeItem
 
 # Fallback occasion -> default formality (mirrors the L4 occ entries). Used only
 # when the caller doesn't state a formality.
@@ -27,6 +28,58 @@ OCCASION_FORMALITY: dict[str, Formality] = {
     "gala": "black_tie",
     "party": "semi_formal",
 }
+
+# Whole-word keywords scanned inside a FREE-TEXT occasion ("wedding party",
+# "beach day") when the whole string isn't an exact OCCASION_FORMALITY key.
+# Single tokens only; the multi-word "black tie" cue is matched separately.
+OCCASION_KEYWORDS: dict[str, Formality] = {
+    "gala": "black_tie",
+    "wedding": "formal",
+    "funeral": "formal",
+    "cocktail": "semi_formal",
+    "party": "semi_formal",
+    "prom": "semi_formal",
+    "interview": "business_casual",
+    "office": "business_casual",
+    "work": "business_casual",
+    "business": "business_casual",
+    "meeting": "business_casual",
+    "conference": "business_casual",
+    "date": "smart_casual",
+    "dinner": "smart_casual",
+    "brunch": "smart_casual",
+    "restaurant": "smart_casual",
+    "beach": "casual",
+    "gym": "casual",
+    "workout": "casual",
+    "hike": "casual",
+    "hiking": "casual",
+    "picnic": "casual",
+}
+
+
+def infer_formality(occasion: str) -> Formality:
+    """Resolve a free-text occasion to a formality.
+
+    Exact match on the known occasions first (backward compatible), then a
+    WHOLE-WORD keyword scan, so a free-text occasion like "wedding party"
+    resolves to "formal" instead of silently defaulting to smart_casual (the
+    reported "casual dress suggested for a wedding" bug). Whole-word, not
+    substring, so "homework" never trips the "work" keyword. When several
+    keywords match (e.g. "beach wedding"), the MOST FORMAL wins — under-
+    dressing a formal event is the worse failure. Falls back to smart_casual.
+    """
+    text = occasion.strip().lower()
+    if text in OCCASION_FORMALITY:
+        return OCCASION_FORMALITY[text]
+    matches: list[Formality] = []
+    if "black tie" in text or "black-tie" in text:
+        matches.append("black_tie")
+    tokens = set(re.findall(r"[a-z]+", text))
+    matches.extend(OCCASION_KEYWORDS[t] for t in tokens if t in OCCASION_KEYWORDS)
+    if not matches:
+        return "smart_casual"
+    return max(matches, key=lambda f: FORMALITY_ORDER[f])
 
 
 def load_wardrobe(user_id: str) -> list[WardrobeItem]:
@@ -51,7 +104,7 @@ def assemble_context(
     wardrobe: Optional[list[WardrobeItem]] = None,
     user_id: Optional[str] = None,
 ) -> Context:
-    formality = formality or OCCASION_FORMALITY.get(occasion, "smart_casual")
+    formality = formality or infer_formality(occasion)
     wardrobe = wardrobe if wardrobe is not None else (load_wardrobe(user_id) if user_id else [])
 
     condition = None

@@ -34,7 +34,7 @@ import redis
 
 from ..external.weather import month_to_season, temp_to_band
 from ..schema import Formality, SuggestResult, WardrobeItem
-from .context_assembler import OCCASION_FORMALITY
+from .context_assembler import infer_formality
 
 _KEY_PREFIX = "suggest:v1:"
 _DEFAULT_TTL_SECONDS = 3600
@@ -73,13 +73,12 @@ def compute_cache_key(
     verified `user_id` is always part of the material, never derived from
     anything client-suppliable independent of auth. `occasion`/`mood` are
     normalized so equivalent-but-differently-cased requests collapse to the
-    same key; `formality` resolves through the same default
-    (`OCCASION_FORMALITY`) `context_assembler.assemble_context` itself uses,
-    so a request that omits it still matches one that states the resolved
-    value explicitly."""
+    same key; `formality` resolves through the same `infer_formality()`
+    `context_assembler.assemble_context` itself uses, so a request that omits
+    it still matches one that states the resolved value explicitly."""
     occasion_norm = occasion.strip().lower()
     mood_norm = (mood or "").strip().lower()
-    resolved_formality = formality or OCCASION_FORMALITY.get(occasion_norm, "smart_casual")
+    resolved_formality = formality or infer_formality(occasion_norm)
 
     if temp_c is not None:
         temp_band = temp_to_band(temp_c)
