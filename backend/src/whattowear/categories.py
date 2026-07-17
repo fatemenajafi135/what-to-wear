@@ -73,14 +73,29 @@ CATEGORY_GROUPS: dict[str, CategoryGroup] = {
     "sunglasses": "accessory",
     "tie": "accessory",
     "watch": "accessory",
+    # The six GROUP names must also map to themselves. The photo-extraction
+    # path (vision.py) prompts the model for a bare group name, so items are
+    # stored as 'bottom'/'footwear'/'full_body'/'accessory' — those must
+    # round-trip, not fall through to the accessory default (which silently
+    # collapsed every photo bottom/shoe/dress into 'accessory', leaving the
+    # bottom/footwear slots empty so no outfit could ever be assembled).
+    # ('top' and 'outerwear' already round-trip via the entries above.)
+    "bottom": "bottom",
+    "full_body": "full_body",
+    "footwear": "footwear",
+    "accessory": "accessory",
 }
 
 CORE_GROUPS: frozenset[str] = frozenset({"top", "bottom", "full_body", "outerwear", "footwear"})
 
 
 def group_of(category: str) -> CategoryGroup:
-    """Unrecognized categories default to 'accessory' — see module docstring."""
-    return CATEGORY_GROUPS.get(category, "accessory")
+    """Map a category to its outfit-slot group. Input is normalized for
+    case/whitespace, and both a specific garment type ('chinos') and a bare
+    group name ('bottom', as the photo-extraction path stores it) resolve
+    correctly. Genuinely unrecognized categories still default to
+    'accessory' — see module docstring."""
+    return CATEGORY_GROUPS.get(category.strip().lower(), "accessory")
 
 
 def is_core(category: str) -> bool:

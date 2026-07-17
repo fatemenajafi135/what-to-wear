@@ -30,10 +30,41 @@ class TestGroupOf:
     def test_unknown_category_defaults_to_accessory(self):
         assert categories.group_of("space_suit") == "accessory"
 
+    @pytest.mark.parametrize(
+        "group", ["top", "bottom", "full_body", "outerwear", "footwear", "accessory"]
+    )
+    def test_group_names_round_trip(self, group):
+        """The photo-extraction path (vision.py) stores the bare GROUP name as
+        the category, so every group name MUST map to itself — not fall
+        through to the accessory default. Regression guard for the bug where
+        'bottom'/'footwear'/'full_body' collapsed into 'accessory', leaving
+        those outfit slots permanently empty."""
+        assert categories.group_of(group) == group
+
+    def test_every_vision_prompt_category_maps_to_a_real_group(self):
+        """The exact vocabulary vision.py asks the model to emit must all
+        resolve to real slot groups — none may hit the accessory default by
+        accident. Ties the taxonomy to what the extractor actually produces."""
+        vision_categories = ["top", "bottom", "full_body", "outerwear", "footwear", "accessory"]
+        for cat in vision_categories:
+            assert categories.group_of(cat) == cat
+
+    @pytest.mark.parametrize("raw", ["Top", " bottom ", "FOOTWEAR", "Full_Body"])
+    def test_case_and_whitespace_are_normalized(self, raw):
+        assert categories.group_of(raw) == raw.strip().lower()
+
 
 class TestIsCore:
     @pytest.mark.parametrize("category", ["top", "jeans", "dress", "coat", "sneakers"])
     def test_core_garment_groups_are_core(self, category):
+        assert categories.is_core(category) is True
+
+    @pytest.mark.parametrize("category", ["bottom", "full_body", "footwear"])
+    def test_bare_core_group_names_are_core(self, category):
+        """Photo items stored as a bare group name must be recognized as core
+        garments — the bug had them defaulting to 'accessory', so the scorers
+        (color/formality/weather use is_core) silently ignored every pant,
+        shoe, and dress in a photo closet."""
         assert categories.is_core(category) is True
 
     @pytest.mark.parametrize("category", ["belt", "scarf", "jewelry", "watch"])
