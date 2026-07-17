@@ -81,6 +81,16 @@ elsewhere in this codebase of never trusting unvalidated LLM structured
 output outright (`verify_grounding` plays the same "safety net, not the only
 guarantee" role for item grounding).
 
+**Addendum (`/speckit.analyze` finding C1)**: selection-index validation
+alone doesn't close FR-007 ("every rationale MUST cite only rules that were
+actually retrieved") — the LLM could return a structurally valid selection
+(3 distinct, in-range indices) whose rationale still cites a hallucinated
+`rule_id`. `engine_write` therefore also filters each accepted rationale's
+`cites` list against the actual retrieved rule_id set (from `retrieval`,
+already a required parameter) before returning, dropping any unresolvable
+entry rather than the whole outfit. This runs on the happy path only — the
+deterministic fallback's `cites=[]` already trivially satisfies FR-007.
+
 **Alternatives considered**: Surfacing an error/500 to the caller on invalid
 selection — rejected: violates FR-006 and the project's own "the demo must
 never break" operating principle (`docs/ai-v2-session-handoff.md`'s hard
@@ -103,25 +113,35 @@ warns against.
 as an outerwear trigger — explicitly out of scope per the spec (temp-band
 only, matching `docs/claude-code-implementation-spec.md` WP2's own wording).
 
-## Decision 5: Safety valve reuses the existing per-slot fitness sort, not a new metric
+## Decision 5: Safety valve slices the already-sorted candidate lists, no new sort
 
 **Decision**: Before materializing the full combination list,
 `enumerate_outfits` computes the projected count
 (`len(top)*len(bottom)*len(footwear)`, `+ len(full_body)*len(footwear)`,
 each `× len(outerwear)` when crossing is active). If the projection exceeds
-20,000, each slot's candidate list is tightened to its own top 6 using the
-same ascending-badness fitness key `pipeline/graph.py` already computes
-(`_slot_fitness_key`, added in Feature 009) before enumeration proceeds.
+20,000, each slot's candidate list is tightened to its own top 6 by simple
+slicing (`items[:6]`) — **no new sort is needed** because
+`wardrobe_retrieval` (`pipeline/graph.py`) already sorts every slot's
+candidates by ascending-badness fitness (`_slot_fitness_key`, Feature 009)
+*before* capping each slot at 8. `enumerate_outfits` only ever receives
+already-best-first-ordered lists, so narrowing further is a slice, not a
+second sort.
 
-**Rationale**: Reuses the exact sort key that already encodes "best fit for
-this request" (formality distance, warmth distance) rather than inventing a
-second ranking heuristic just for the valve.
+**Rationale**: Reuses the ordering `wardrobe_retrieval` already produced
+instead of recomputing it — cheaper and avoids a second, potentially
+divergent notion of "best fit" (`_slot_fitness_key` needs `ctx`, which
+`enumerate_outfits` deliberately doesn't take as a parameter — see its
+signature in `docs/claude-code-implementation-spec.md` WP2 — so recomputing
+it here isn't even the simplest option available; slicing the existing order
+is).
 
 **Alternatives considered**: A hard combination-count cutoff applied *after*
 generating the full Python list — rejected: defeats the purpose of a safety
 valve (the expensive step already happened) and was explicitly called out in
 `docs/ai-v2-session-handoff.md` as the wrong approach ("tighten to top-6/slot
-... before ever enumerating").
+... before ever enumerating"). Re-sorting inside `enumerate_outfits` — 
+rejected once the already-sorted-input property above was noticed: strictly
+redundant work.
 
 ## Decision 6: `approach` persistence across refinement turns
 
