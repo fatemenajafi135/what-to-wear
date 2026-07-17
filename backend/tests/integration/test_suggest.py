@@ -90,6 +90,30 @@ def test_graph_driven_by_jwt_sub_not_body_field(client, mocker):
     assert fake.invoked_with["user_id"] == "jwt-user"
 
 
+def test_fresh_request_passes_approach_into_initial_state(client, mocker):
+    fake = _FakeCompiledGraph(_final_state(user_id="jwt-user", outfits=[]))
+    mocker.patch.object(api, "get_compiled_graph", return_value=fake)
+    _as_user("jwt-user")
+
+    client.post("/suggest", json={"occasion": "dinner", "approach": "engine"})
+
+    assert fake.invoked_with["approach"] == "engine"
+
+
+def test_continuing_request_omits_approach_so_the_checkpoint_wins(client, mocker):
+    # Feature 010, research.md Decision 6: a continuing (thread_id supplied)
+    # request must NOT re-pass approach, so LangGraph's checkpoint-merge
+    # behavior leaves turn 1's persisted value untouched regardless of
+    # whatever this turn's body happens to carry.
+    fake = _FakeCompiledGraph(_final_state(user_id="jwt-user", outfits=[], thread_id="thread-1"))
+    mocker.patch.object(api, "get_compiled_graph", return_value=fake)
+    _as_user("jwt-user")
+
+    client.post("/suggest", json={"occasion": "warmer", "thread_id": "thread-1", "approach": "grounded"})
+
+    assert "approach" not in fake.invoked_with
+
+
 def test_well_stocked_closet_returns_outfits_with_all_four_scores(client, mocker):
     outfits = [_scored_outfit("a", 0.9), _scored_outfit("b", 0.7), _scored_outfit("c", 0.5)]
     fake = _FakeCompiledGraph(_final_state(user_id="jwt-user", outfits=outfits))

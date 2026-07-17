@@ -68,6 +68,7 @@ def compute_cache_key(
     location: Optional[str],
     temp_c: Optional[float],
     wardrobe: list[WardrobeItem],
+    approach: str,
 ) -> str:
     """Per-user only by construction (this session's clarification) — the
     verified `user_id` is always part of the material, never derived from
@@ -75,7 +76,12 @@ def compute_cache_key(
     normalized so equivalent-but-differently-cased requests collapse to the
     same key; `formality` resolves through the same `infer_formality()`
     `context_assembler.assemble_context` itself uses, so a request that omits
-    it still matches one that states the resolved value explicitly."""
+    it still matches one that states the resolved value explicitly.
+
+    `approach` (Feature 010) is required, not optional-with-a-default: an
+    `engine` request and a `grounded` request with otherwise-identical
+    context must never collide on the same key, or one approach's cached
+    result would silently be served for the other once caching is enabled."""
     occasion_norm = occasion.strip().lower()
     mood_norm = (mood or "").strip().lower()
     resolved_formality = formality or infer_formality(occasion_norm)
@@ -107,6 +113,7 @@ def compute_cache_key(
             str(season),
             location_component,
             wardrobe_fp,
+            approach,
         ]
     )
     return _KEY_PREFIX + hashlib.sha256(material.encode()).hexdigest()

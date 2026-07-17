@@ -26,6 +26,7 @@ def _key(**overrides):
         location=None,
         temp_c=10.0,
         wardrobe=[_item("a")],
+        approach="grounded",
     )
     defaults.update(overrides)
     return compute_cache_key(**defaults)
@@ -74,3 +75,11 @@ class TestTemperatureAndLocation:
 
     def test_location_used_when_no_temp_c_given(self):
         assert _key(temp_c=None, location="Paris") != _key(temp_c=None, location="Tokyo")
+
+
+class TestApproachScoping:
+    """Feature 010: an engine request and a grounded request with otherwise
+    identical context must never collide on the same cache key."""
+
+    def test_different_approach_yields_different_key(self):
+        assert _key(approach="engine") != _key(approach="grounded")

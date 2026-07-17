@@ -150,6 +150,7 @@ def suggest_endpoint(
             location=req.location,
             temp_c=req.temp_c,
             wardrobe=wardrobe,
+            approach=req.approach,
         )
         cached = suggest_cache.get_cached_result(cache_key)
         if cached is not None:
@@ -175,6 +176,7 @@ def suggest_endpoint(
                     "original_context": ctx,
                     "last_result": cached_result,
                     "refinement_deltas": [],
+                    "approach": req.approach,
                 },
             )
             return StreamingResponse(
@@ -183,20 +185,25 @@ def suggest_endpoint(
 
     graph = get_compiled_graph()
     config = {"configurable": {"thread_id": thread_id}}
-    final_state = graph.invoke(
-        {
-            "occasion": req.occasion,
-            "mood": req.mood,
-            "formality": req.formality,
-            "location": req.location,
-            "temp_c": req.temp_c,
-            "strategy": req.strategy,
-            "thread_id": thread_id,
-            "user_id": user_id,
-            "wardrobe": wardrobe,
-        },
-        config=config,
-    )
+    initial_state = {
+        "occasion": req.occasion,
+        "mood": req.mood,
+        "formality": req.formality,
+        "location": req.location,
+        "temp_c": req.temp_c,
+        "strategy": req.strategy,
+        "thread_id": thread_id,
+        "user_id": user_id,
+        "wardrobe": wardrobe,
+    }
+    if is_fresh_request:
+        # Feature 010: sticky across a conversation, like original_context —
+        # only set from the request on turn 1. Omitted here (not just left
+        # at its current value) on a continuing thread so the checkpointed
+        # turn-1 value survives; LangGraph only overwrites keys present in
+        # a given invoke's input dict (research.md Decision 6).
+        initial_state["approach"] = req.approach
+    final_state = graph.invoke(initial_state, config=config)
 
     if cache_key is not None:
         suggest_cache.set_cached_result(cache_key, final_state["result"], final_state.get("note"))

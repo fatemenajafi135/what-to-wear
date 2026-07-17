@@ -245,10 +245,21 @@ class PreferenceProfile(BaseModel):
     signals: list[PreferenceSignal] = Field(default_factory=list)
 
 
+Approach = Literal["direct", "grounded", "engine", "agentic", "compare"]
+
+
 class SuggestRequest(BaseModel):
     """Body of POST /suggest (contracts/suggest.md). No `user_id` field —
     same fix as RecommendRequest post-Phase-1: identity always comes from
-    the verified JWT `sub` (FR-001)."""
+    the verified JWT `sub` (FR-001).
+
+    `approach` (Feature 010, WP2): which selection strategy to run.
+    `"grounded"` names today's existing default pipeline (LLM assembles
+    outfits, `generate_outfits`/`score_and_rank`) so its meaning is
+    explicit rather than implicit-via-absence. Only `"grounded"` (the
+    default) and `"engine"` are routed anywhere by this feature; the other
+    values are accepted (matching the full roadmap) but fall through to
+    the `grounded` branch unchanged, same as omitting the field."""
 
     occasion: str
     mood: Optional[str] = None
@@ -257,6 +268,7 @@ class SuggestRequest(BaseModel):
     temp_c: Optional[float] = None
     strategy: str = "advanced"
     thread_id: Optional[str] = None
+    approach: Approach = "grounded"
 
 
 # --- deterministic scoring (Feature 002 Phase 2+) -----------------------------

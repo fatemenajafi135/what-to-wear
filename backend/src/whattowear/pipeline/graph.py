@@ -137,6 +137,12 @@ class GraphState(TypedDict, total=False):
     refinement_deltas: list[str]
     last_result: Optional[SuggestResult]
 
+    # Feature 010 (WP2 Engine): which selection approach this thread uses.
+    # Sticky across refinement turns the same way original_context is — see
+    # api.py's suggest_endpoint, which only includes this key on a fresh
+    # (non-continuing) invoke, and pipeline/engine.py.
+    approach: str
+
     # gather_context output
     ctx: Context
 
