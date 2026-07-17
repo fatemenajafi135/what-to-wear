@@ -82,12 +82,47 @@ class TestOccasionFormalityDefault:
         assert ctx.formality == "black_tie"
 
     def test_unknown_occasion_defaults_to_smart_casual(self):
-        ctx = context_assembler.assemble_context("hiking")
+        # no occasion keyword anywhere in the free text -> the neutral default
+        ctx = context_assembler.assemble_context("reading at home")
         assert ctx.formality == "smart_casual"
 
     def test_explicit_formality_overrides_the_occasion_default(self):
         ctx = context_assembler.assemble_context("office", formality="formal")
         assert ctx.formality == "formal"
+
+    def test_free_text_occasion_is_inferred_not_defaulted(self):
+        # the reported bug: "wedding party" isn't an exact key, but must still
+        # resolve to formal instead of silently defaulting to smart_casual.
+        ctx = context_assembler.assemble_context("wedding party")
+        assert ctx.formality == "formal"
+
+
+class TestInferFormality:
+    def test_wedding_free_text_resolves_to_formal(self):
+        assert context_assembler.infer_formality("a wedding party this weekend") == "formal"
+
+    def test_beach_free_text_resolves_to_casual(self):
+        assert context_assembler.infer_formality("beach day tomorrow") == "casual"
+
+    def test_job_interview_free_text_resolves_to_business_casual(self):
+        assert context_assembler.infer_formality("got a job interview") == "business_casual"
+
+    def test_conflicting_keywords_take_the_most_formal(self):
+        # a beach wedding is still a wedding -- lean formal, never casual
+        assert context_assembler.infer_formality("beach wedding") == "formal"
+
+    def test_black_tie_phrase_resolves_to_black_tie(self):
+        assert context_assembler.infer_formality("black tie dinner") == "black_tie"
+
+    def test_whole_word_scan_avoids_substring_false_positives(self):
+        # "homework" contains "work" but must NOT match the whole-word keyword
+        assert context_assembler.infer_formality("homework session") == "smart_casual"
+
+    def test_no_keyword_falls_back_to_smart_casual(self):
+        assert context_assembler.infer_formality("reading at home") == "smart_casual"
+
+    def test_exact_known_occasion_still_resolves(self):
+        assert context_assembler.infer_formality("gala") == "black_tie"
 
 
 class TestWardrobeResolution:
