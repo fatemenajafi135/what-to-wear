@@ -37,7 +37,6 @@ a `note` if a refinement's tightened bounds leave nothing (FR-015).
 from __future__ import annotations
 
 import uuid
-from collections import Counter
 from typing import Optional, TypedDict
 
 from langgraph.graph import StateGraph
@@ -55,6 +54,8 @@ from ..scoring import score_outfits
 from . import cite, context_assembler, query_builder
 from .generator import GenOutfit, GenOutput, generate
 from .grounding import verify_outfit_grounding
+from .validity import is_slot_complete as _is_slot_complete
+from .validity import is_valid_combination as _is_valid_combination
 
 Strategy = str  # "baseline" | "hybrid" | "advanced"
 
@@ -166,47 +167,6 @@ class GraphState(TypedDict, total=False):
     # explain output
     result: SuggestResult
     note: Optional[str]
-
-
-def _is_slot_complete(items: list[str], wardrobe_by_id: dict[str, WardrobeItem]) -> bool:
-    """A complete outfit covers the body: top-or-full_body, bottom-or-
-    full_body, and footwear. Missing any -> drop the outfit (FR-011), never
-    fill from the catalog."""
-    groups = {categories.group_of(wardrobe_by_id[i].category) for i in items if i in wardrobe_by_id}
-    has_top_half = "top" in groups or "full_body" in groups
-    has_bottom_half = "bottom" in groups or "full_body" in groups
-    has_footwear = "footwear" in groups
-    return has_top_half and has_bottom_half and has_footwear
-
-
-def _is_valid_combination(items: list[str], wardrobe_by_id: dict[str, WardrobeItem]) -> bool:
-    """Deterministic coherence guard on a generated outfit (constitution
-    Principle II — the LLM proposes candidates, but Python decides what's
-    wearable, not the model). Deliberately LENIENT: it rejects only
-    combinations that are essentially never right, so it can't recreate the
-    "returns nothing" failure by over-pruning a legitimately layered look.
-
-    Rejects:
-      - more than one pair of footwear (the reported shoes+sneakers bug);
-      - two full-body pieces, or two separate bottoms (jeans+chinos);
-      - a full-body piece worn with a separate bottom (the reported dress+pants
-        bug — a dress/suit/jumpsuit is worn on its own).
-
-    Deliberately does NOT restrict (these are real, common looks):
-      - multiple tops — t-shirt + cardigan/sweater is layering, and cardigan/
-        sweater live in the 'top' group, so a top count is never capped;
-      - a top or outerwear over a full-body piece — a cardigan or blazer over a
-        dress is normal; only a separate BOTTOM with a full-body is rejected;
-      - multiple outerwear — a blazer under a coat.
-    """
-    groups = Counter(categories.group_of(wardrobe_by_id[i].category) for i in items if i in wardrobe_by_id)
-    if groups["footwear"] > 1:
-        return False
-    if groups["full_body"] > 1 or groups["bottom"] > 1:
-        return False
-    if groups["full_body"] >= 1 and groups["bottom"] >= 1:
-        return False
-    return True
 
 
 def parse_request(state: GraphState) -> dict:
