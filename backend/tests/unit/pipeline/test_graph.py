@@ -322,3 +322,77 @@ class TestExplainUnsatisfiableRefinementFallback:
 
         assert result["result"].outfits == []
         assert "enough items" in result["note"]
+
+
+class TestIsValidCombination:
+    """The deterministic coherence guard. Split into the incoherent combos it
+    MUST reject (the reported funny outfits) and the legitimately plural looks
+    it MUST still allow (guarding against over-strictness re-creating the
+    'returns nothing' failure)."""
+
+    def _wb(self, *items):
+        return {it.id: it for it in items}
+
+    def _valid(self, *items):
+        return graph._is_valid_combination([it.id for it in items], self._wb(*items))
+
+    # --- must reject ---
+    def test_a_normal_outfit_is_valid(self):
+        assert self._valid(_item("t", "top"), _item("j", "jeans"), _item("s", "sneakers")) is True
+
+    def test_two_footwear_is_rejected(self):
+        # the reported shoes + sneakers bug
+        assert self._valid(_item("t", "top"), _item("j", "jeans"), _item("sh", "shoes"), _item("sn", "sneakers")) is False
+
+    def test_full_body_with_a_separate_bottom_is_rejected(self):
+        # the reported dress + pants bug
+        assert self._valid(_item("d", "dress"), _item("p", "trousers"), _item("h", "heels")) is False
+
+    def test_two_full_body_pieces_are_rejected(self):
+        assert self._valid(_item("d1", "dress"), _item("d2", "gown"), _item("h", "heels")) is False
+
+    def test_two_separate_bottoms_are_rejected(self):
+        assert self._valid(_item("t", "top"), _item("j", "jeans"), _item("c", "chinos"), _item("s", "sneakers")) is False
+
+    # --- must still allow (leniency: real, common layered looks) ---
+    def test_layered_tops_are_allowed(self):
+        # t-shirt + cardigan are both the 'top' group -- layering, not a conflict
+        assert self._valid(_item("tee", "t-shirt"), _item("card", "cardigan"), _item("j", "jeans"), _item("s", "sneakers")) is True
+
+    def test_a_cardigan_over_a_dress_is_allowed(self):
+        # cardigan is the 'top' group; a top layered over a full_body piece is fine
+        assert self._valid(_item("d", "dress"), _item("card", "cardigan"), _item("h", "heels")) is True
+
+    def test_outerwear_over_a_dress_is_allowed(self):
+        assert self._valid(_item("d", "dress"), _item("b", "blazer"), _item("h", "heels")) is True
+
+    def test_layered_outerwear_is_allowed(self):
+        assert self._valid(
+            _item("t", "top"), _item("j", "jeans"), _item("bl", "blazer"), _item("co", "coat"), _item("s", "sneakers")
+        ) is True
+
+
+class TestGenerateOutfitsValidityFilter:
+    def test_an_incoherent_generated_outfit_is_dropped(self, mocker):
+        from whattowear.pipeline.generator import GenOutfit, GenOutput, GenRationale
+
+        # LLM returns one clean outfit and one with two pairs of footwear
+        clean = GenOutfit(items=["t", "j", "s1"], rationale=[GenRationale(text="r", cites=["L1-x"])])
+        two_shoes = GenOutfit(items=["t", "j", "s1", "s2"], rationale=[GenRationale(text="r", cites=["L1-x"])])
+        mocker.patch.object(graph, "generate", return_value=GenOutput(outfits=[clean, two_shoes]))
+
+        wardrobe = [_item("t", "top"), _item("j", "jeans"), _item("s1", "sneakers"), _item("s2", "shoes")]
+        ctx = Context(occasion="office", formality="business_casual", wardrobe=wardrobe)
+        state = {
+            "ctx": ctx,
+            "candidates": {"top": [wardrobe[0]], "bottom": [wardrobe[1]], "footwear": [wardrobe[2], wardrobe[3]]},
+            "retrieval": mocker.Mock(),
+            "refinement_deltas": [],
+            "last_result": None,
+        }
+
+        result = graph.generate_outfits(state)
+
+        kept = [frozenset(o.items) for o in result["generated"].outfits]
+        assert frozenset(["t", "j", "s1"]) in kept
+        assert frozenset(["t", "j", "s1", "s2"]) not in kept

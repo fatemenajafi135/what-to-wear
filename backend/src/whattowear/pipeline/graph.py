@@ -37,6 +37,7 @@ a `note` if a refinement's tightened bounds leave nothing (FR-015).
 from __future__ import annotations
 
 import uuid
+from collections import Counter
 from typing import Optional, TypedDict
 
 from langgraph.graph import StateGraph
@@ -156,6 +157,36 @@ def _is_slot_complete(items: list[str], wardrobe_by_id: dict[str, WardrobeItem])
     has_bottom_half = "bottom" in groups or "full_body" in groups
     has_footwear = "footwear" in groups
     return has_top_half and has_bottom_half and has_footwear
+
+
+def _is_valid_combination(items: list[str], wardrobe_by_id: dict[str, WardrobeItem]) -> bool:
+    """Deterministic coherence guard on a generated outfit (constitution
+    Principle II — the LLM proposes candidates, but Python decides what's
+    wearable, not the model). Deliberately LENIENT: it rejects only
+    combinations that are essentially never right, so it can't recreate the
+    "returns nothing" failure by over-pruning a legitimately layered look.
+
+    Rejects:
+      - more than one pair of footwear (the reported shoes+sneakers bug);
+      - two full-body pieces, or two separate bottoms (jeans+chinos);
+      - a full-body piece worn with a separate bottom (the reported dress+pants
+        bug — a dress/suit/jumpsuit is worn on its own).
+
+    Deliberately does NOT restrict (these are real, common looks):
+      - multiple tops — t-shirt + cardigan/sweater is layering, and cardigan/
+        sweater live in the 'top' group, so a top count is never capped;
+      - a top or outerwear over a full-body piece — a cardigan or blazer over a
+        dress is normal; only a separate BOTTOM with a full-body is rejected;
+      - multiple outerwear — a blazer under a coat.
+    """
+    groups = Counter(categories.group_of(wardrobe_by_id[i].category) for i in items if i in wardrobe_by_id)
+    if groups["footwear"] > 1:
+        return False
+    if groups["full_body"] > 1 or groups["bottom"] > 1:
+        return False
+    if groups["full_body"] >= 1 and groups["bottom"] >= 1:
+        return False
+    return True
 
 
 def parse_request(state: GraphState) -> dict:
@@ -325,7 +356,11 @@ def generate_outfits(state: GraphState) -> dict:
     gen = generate(pruned_ctx, state["retrieval"], profile_note=note)
 
     wardrobe_by_id = {it.id: it for it in ctx.wardrobe}
-    complete: list[GenOutfit] = [o for o in gen.outfits if _is_slot_complete(o.items, wardrobe_by_id)]
+    complete: list[GenOutfit] = [
+        o
+        for o in gen.outfits
+        if _is_slot_complete(o.items, wardrobe_by_id) and _is_valid_combination(o.items, wardrobe_by_id)
+    ]
 
     last_result = state.get("last_result")
     if "alternatives" in state.get("refinement_deltas", []) and last_result is not None:
