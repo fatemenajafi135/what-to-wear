@@ -319,20 +319,33 @@ Recommend carrying all ten into `docs/legacy-specs/` as reference. They are the 
 
 ---
 
-## 10. Open questions
+## 10. Decisions
 
-Answers needed before the constitution is written.
+Resolved 2026-07-28. Q4 was answered by inspection, the rest by the product owner.
 
-| # | Question | Recommendation |
+| # | Question | **Decision** |
 |---|---|---|
-| Q1 | You said all of `data/` goes to Supabase. But `kb/manifest.yaml` is the reproducibility contract — the rules doc requires the manifest to be **tracked**. Confirm it stays in git as `infra/corpus.yaml` while the `.jsonl` cards it points at move to Storage? | Yes — manifest tracked, contents in Storage |
-| Q2 | `golden_set.yaml` (9.9 KB) and `fixtures/wardrobe.json` (8.1 KB) are eval data, which your rules doc says is always tracked. Keep them in git? | Yes — CI has no Supabase credentials, so evals cannot run on a PR without them |
-| Q3 | Split the books by licence: the two **public-domain** texts (Chevreul, Munsell) are `ingest: true` and belong in Supabase Storage like any other corpus. Only *The Curated Closet* (Rees, 44.6 MB, copyrighted, `ingest: false`) has no reason to be uploaded — it is human reading material, not corpus. Keep that one local-only? | Yes — PD books to Storage, Rees local-only |
-| Q4 | ~~Two eval setups — which is current?~~ **Answered by inspection, no longer a question.** They are complementary, not duplicates: `src/whattowear/eval/` *runs* the pipeline and writes JSONL artifacts; `backend/evals/` *reads* those artifacts and scores them with RAGAS + openevals. It is a separate uv project on purpose — the RAGAS fork pins `langchain-community==0.3.31`, which conflicts with the `langchain-cohere>=0.4` the retrieval layer needs. | Keep both, and keep the isolation — it is a correct fix for a real dependency conflict |
-| Q5 | `retrieval/baseline.py` exists purely as an A/B control for eval comparison, not for production. Carry it forward to keep baselines meaningful, or drop it? | Carry it — the recorded baselines lose meaning without it |
-| Q6 | Which selection path is the rebuild's default: the grounded graph path, or the `engine` path (010, left opt-in)? **The comparison data answers this** — see below. | **Engine**, with two follow-ups |
+| Q1–Q3 | Where does `backend/data/` live? | **No document goes into git.** Every document — the three books, the six refined Wikipedia pages, and the three `kb/*.jsonl` card files — goes to Supabase Storage where an ingest path needs it, and a full local copy is kept at `../w2w-corpus/`, outside the repo. The per-file licence policy in the manifest is preserved as-is: the two public-domain texts stay `ingest: true`, *The Curated Closet* stays `ingest: false` and is never embedded. `kb/cache/` is discarded as regenerable. |
+| Q1–Q3 (cont.) | The three non-document files | **Tracked in git**, per the "Always committed" section of the data rules: `kb/manifest.yaml` → `infra/corpus.yaml` (the reproducibility contract), `golden_set.yaml` (the 24-case eval dataset) and `fixtures/wardrobe.json` (the fixture wardrobe). Practical driver: CI holds no Supabase credentials, so evals could not run on a pull request otherwise, and that is the gate Phase 5 depends on. |
+| Q4 | Two eval setups — which is current? | **Both. Keep the isolation.** They are complementary, not duplicates: `src/whattowear/eval/` *runs* the pipeline and writes JSONL artifacts; `backend/evals/` *reads* those artifacts and scores them with RAGAS + openevals. It is a separate uv project on purpose — the RAGAS fork pins `langchain-community==0.3.31`, which conflicts with the `langchain-cohere>=0.4` the retrieval layer needs. Correct fix for a real dependency conflict; preserve it. |
+| Q5 | Keep `retrieval/baseline.py`? | **Keep.** It is the A/B control; the recorded baselines lose meaning without it. |
+| Q6 | Default selection path | **Grounded.** The `engine` path stays in the codebase as opt-in, exactly as Feature 010 shipped it, so the recorded comparison remains meaningful and the option stays open. See the note below on what this means for the constitution. |
 
-### Q6 in detail — why `engine` should be the default
+### Q6 — consequence for the constitution
+
+With **grounded** as the default, Principle II ("Deterministic Core, LLM At The Edges")
+must be worded to match what the default path actually does: the LLM assembles the outfit
+combination, and the four deterministic scores are computed afterwards. The scoring is
+genuinely LLM-free, and the grounding guarantee (`owned_only` 1.00, `cites_grounded` 1.00)
+holds — but *selection* is not deterministic on this path.
+
+`pipeline/graph.py`'s module docstring currently claims "the LLM never ranks (constitution
+Principle II)", which the Feature 010 comparison showed is not strictly true. **Do not
+inherit that wording.** State the principle as it is actually enforced, and note that the
+opt-in engine path is the stricter one. An inaccurate principle is worse than a narrow one:
+it trains everyone to read the constitution as aspirational.
+
+### The comparison data, for the record
 
 From `docs/eval-baselines/010-engine/COMPARISON.md`, 24 golden cases, retrieval strategy
 held constant so the comparison isolates the selection approach:
@@ -364,9 +377,10 @@ Three things make this a clear call rather than a close one:
    combinations reach the shortlist at all, instead of asking an LLM to reason about warmth
    while simultaneously inventing the combination.
 
-Two follow-ups if engine becomes the default: teach the harness to treat a
-fallback-produced outfit as its own case rather than a bare failure (otherwise the metrics
-stay uninterpretable), and investigate the single `respects_exclusions` case.
+Kept because it stays relevant even with grounded as the default: the harness-metric blind
+spot around fallback-produced outfits (`every_choice_cites`, `outfit_count_in_range`) is a
+**harness** defect, not an engine defect, so it should be fixed regardless — otherwise
+those two metrics stay uninterpretable on any future comparison.
 
 ---
 
