@@ -27,11 +27,10 @@ Start from `rebuild`. Spec Kit cuts the feature branch for you.
 
 Merge back into `rebuild` by PR when done.
 
-⚠️ **Before your first `/speckit-plan`:** the three Spec Kit templates
-(`.specify/templates/{plan,spec,tasks}-template.md`) have **not** been reviewed against the
-constitution. They ship as generic defaults and probably need no edits, but confirm that
-rather than assume it. This is logged as an open item in the constitution's Sync Impact
-Report.
+The Spec Kit templates have been reviewed and corrected against the constitution — two of
+them offered a `ios/` + `android/` project layout, which Principle IX forbids. `plan-template.md`
+now carries the ten explicit Constitution Check gates and the fixed repository layout. Fill
+those gates in honestly; they are the review checklist your PR will be read against.
 
 ---
 

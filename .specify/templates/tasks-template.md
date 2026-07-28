@@ -21,10 +21,18 @@ description: "Task list template for feature implementation"
 
 ## Path Conventions
 
-- **Single project**: `src/`, `tests/` at repository root
-- **Web app**: `backend/src/`, `frontend/src/`
-- **Mobile**: `api/src/`, `ios/src/` or `android/src/`
-- Paths shown below assume single project - adjust based on plan.md structure
+The layout is fixed by the constitution. There is no project-type choice to make.
+
+- **Frontend**: `frontend/app/`, `frontend/components/`, `frontend/styles/`
+- **Backend**: `backend/src/whattowear/`, tests in `backend/tests/{unit,integration,evals}`
+- **Infra**: `infra/corpus.yaml`, `infra/supabase/migrations/`
+
+There is no mobile path. Per Principle IX, one Next.js codebase serves both the desktop web
+experience and the installed mobile PWA — `ios/`, `android/`, or a second frontend would be
+a constitutional violation.
+
+The sample tasks below use generic `src/...` paths for illustration only. **Replace every
+one with a real path from the fixed layout above.**
 
 <!--
   ============================================================================

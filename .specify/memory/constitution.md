@@ -27,17 +27,20 @@ Added (the rebuild's frontend and data concerns, absent from 1.0.0):
 
 Removed: none.
 
-Templates requiring updates:
-  - .specify/templates/plan-template.md: ⚠ NOT YET REVIEWED against this file.
-  - .specify/templates/spec-template.md: ⚠ NOT YET REVIEWED.
-  - .specify/templates/tasks-template.md: ⚠ NOT YET REVIEWED.
-    All three ship as generic Spec Kit defaults and are expected to need no
-    principle-specific edits, but that has not been verified. Check before the
-    first /speckit-plan run.
+Templates reviewed 2026-07-28. The assumption that generic defaults would need
+no edits was WRONG — two of the three actively invited a violation:
+  - .specify/templates/plan-template.md: ✅ UPDATED. Its Constitution Check was
+    the placeholder "[Gates determined based on constitution file]", which would
+    have let every plan invent its own gate list; replaced with the ten explicit
+    gates. Its Source Code section offered "Option 3: Mobile + API" with ios/ or
+    android/ directories — a direct Principle IX violation available to anyone
+    following the template correctly. Replaced with the fixed layout.
+  - .specify/templates/tasks-template.md: ✅ UPDATED. Path Conventions offered
+    "Mobile: api/src/, ios/src/ or android/src/". Same hazard, same fix.
+  - .specify/templates/spec-template.md: ✅ reviewed, no changes needed —
+    genuinely generic, no layout or platform assumptions.
 
-Follow-up TODOs:
-  - Confirm the three open product decisions in docs/design-decisions.md §11
-    (password minimum, body text size at 768px+, wardrobeMinItems).
+Follow-up TODOs: none.
 -->
 
 # What to Wear Constitution
