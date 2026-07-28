@@ -9,13 +9,17 @@ shares no history with `main`. Spec Kit will extend this file in Phase 4.
 - `rebuild` is an orphan branch with no shared history with `main`. It becomes `main` at cutover.
 - One Next.js codebase serves the desktop web experience **and** the installed mobile PWA.
   Routes are identical across form factors; only the chrome changes. There is no second app.
-- `design/design-system.md` is the only source of visual truth. Nothing visual is invented in code.
+- `design/design-system.md`, plus `docs/design-decisions.md` where it is silent or
+  self-contradictory, are the only sources of visual truth. Nothing visual is invented in code.
 
 ## Design handoff
 
 - `design/design-system.md` — the contract: tokens, components, states, copy. The single
   source of truth for every visual value. Do not invent colours, spacing, type or motion.
 - `design/known-gaps.md` — what the design deliberately leaves to be decided in code.
+- `docs/design-decisions.md` — resolutions for what the design system leaves incomplete or
+  contradicts itself on, and the form-control spec it never contains. Fills gaps only;
+  never overrides a value the design system states clearly.
 - `design/prototype/` — **reference only.** Static throwaway mockups from Claude Design.
   Read them to understand intent. **Never copy code out of this directory.**
 - `design/prototype/_scaffolding/` — prototype plumbing (`ios-frame.jsx`, `support.js`).
