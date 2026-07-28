@@ -1,0 +1,187 @@
+/* Reset + base styles. Tokens only — no raw hex/pixel values below (Principle VIII). */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family:
+    var(--font-instrument-sans),
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/*
+ * True :focus-visible rule — docs/design-decisions.md §4. Replaces the
+ * retired --shadow-focus-ring box-shadow recipe (which rendered flush /
+ * invisible against --color-primary) with a real outline + offset, so the
+ * ring only ever shows on keyboard/AT focus, never on mouse/touch activation.
+ */
+.control:focus {
+  outline: none;
+}
+.control:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/*
+ * The 44x44px hit-area pattern — design/design-system.md §3. Apply to any
+ * icon-only button, chip, switch, tab, or non-full-width text button whose
+ * visible box is under 44px in either dimension. Skip only on controls
+ * already >=44px in both dimensions.
+ */
+.hitArea {
+  position: relative;
+}
+.hitArea::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/*
+ * Skeleton pulse — design/known-gaps.md §3. Reduced-motion fallback is the
+ * static opacity, not the animation, and MUST remain the base state whether
+ * or not the media query is supported.
+ */
+.skeleton {
+  background-color: var(--color-surface-sunken);
+  opacity: 0.7;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton {
+    animation: skeletonPulse 320ms var(--motion-easing-standard) infinite;
+  }
+}
+@keyframes skeletonPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/*
+ * Type-scale utility classes — the exact style/size/line-height/weight
+ * pairings from docs/design-decisions.md §6. Font sizes read tokens; the
+ * line-height and weight pairings are decided values from that table, not
+ * invented per-component. Screen title and Display step up at 1024px by
+ * switching which font-size token they read, per tokens.css's comment.
+ */
+.textDisplay {
+  font-size: var(--font-size-3xl);
+  line-height: 34px;
+  font-weight: 700;
+}
+@media (min-width: 1024px) {
+  .textDisplay {
+    font-size: var(--font-size-4xl);
+    line-height: 36px;
+  }
+}
+
+.textScreenTitle {
+  font-size: var(--font-size-xl);
+  line-height: 28px;
+  font-weight: 700;
+}
+@media (min-width: 1024px) {
+  .textScreenTitle {
+    font-size: var(--font-size-2xl);
+    line-height: 30px;
+  }
+}
+
+.textSectionTitle {
+  font-size: var(--font-size-lg);
+  line-height: 23px;
+  font-weight: 700;
+}
+
+.textCardTitle {
+  font-size: var(--font-size-base);
+  line-height: 20px;
+  font-weight: 700;
+}
+@media (min-width: 1024px) {
+  .textCardTitle {
+    font-size: var(--font-size-md);
+    line-height: 21px;
+  }
+}
+
+.textBody {
+  font-size: var(--font-size-sm);
+  line-height: 21px;
+  font-weight: 400;
+}
+@media (min-width: 1024px) {
+  .textBody {
+    font-size: var(--font-size-base);
+    line-height: 23px;
+  }
+}
+
+.textLabel {
+  font-size: var(--font-size-xs);
+  line-height: 16px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.textCaption {
+  font-size: var(--font-size-2xs);
+  line-height: 15px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* Visually-hidden but still reachable by AT — used for e.g. Profile's <h1> */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

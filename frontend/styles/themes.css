@@ -1,0 +1,62 @@
+/*
+ * Semantic tokens + light/dark theme blocks — design/design-system.md §1.2
+ * Components read only these names, never a literal hex value. `data-theme`
+ * is set on the document root by the server (see lib/theme.ts + app/layout.tsx) —
+ * no client-side theme switch ships in this slice (research.md).
+ */
+:root,
+[data-theme="light"] {
+  --color-primary: #4b2e52;
+  --color-primary-hover: #3a2440;
+  --color-on-primary: #ffffff;
+
+  --color-text-primary: #241f2b;
+  --color-text-secondary: #69626e;
+
+  --color-background: #e6e1d6; /* app shell / screen background */
+  --color-surface: #f8f6f1; /* cards, sheets, raised rows */
+  --color-surface-sunken: #efeadd; /* wells: skeletons, chip-inactive fill, input backgrounds */
+  --color-border: #d9d2c4;
+  --color-accent-soft: #e7dee6; /* secondary-button fill, citation badge fill */
+  --color-on-accent-soft: #241f2b;
+  --color-overlay: rgba(36, 31, 43, 0.45); /* modal/sheet scrim */
+
+  --color-error: #b3261e;
+  --color-success: #386f4a;
+  --color-warning: #88590e;
+  --color-focus-ring: #4b2e52;
+
+  --shadow-color-neutral: rgba(0, 0, 0, 0.06);
+  --shadow-color-tint: rgba(75, 46, 82, 0.35);
+  --shadow-color-elevation: rgba(36, 31, 43, 0.18);
+  --shadow-xs: 0 1px 3px var(--shadow-color-neutral);
+  --shadow-sm: 0 4px 10px var(--shadow-color-tint); /* FAB / primary CTA */
+  --shadow-md: 0 8px 20px var(--shadow-color-elevation); /* menus / sheets */
+}
+
+[data-theme="dark"] {
+  --color-primary: #c9a6d6;
+  --color-primary-hover: #d9bee2;
+  --color-on-primary: #241f2b;
+
+  --color-text-primary: #f2efea;
+  --color-text-secondary: #908996;
+
+  --color-background: #1c1822;
+  --color-surface: #262130;
+  --color-surface-sunken: #201c28;
+  --color-border: #3a3440;
+  --color-accent-soft: #3a3044;
+  --color-on-accent-soft: #f2efea;
+  --color-overlay: rgba(0, 0, 0, 0.55);
+
+  --color-error: #e8998f;
+  --color-success: #8fcb9c;
+  --color-warning: #e3b166;
+  --color-focus-ring: #c9a6d6;
+
+  --shadow-color-neutral: rgba(0, 0, 0, 0.3);
+  --shadow-color-tint: rgba(0, 0, 0, 0.5);
+  --shadow-color-elevation: rgba(0, 0, 0, 0.5);
+  /* --shadow-xs/sm/md formulas are unchanged — they reference the color vars above */
+}

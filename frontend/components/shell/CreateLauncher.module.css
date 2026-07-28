@@ -1,0 +1,56 @@
+.fab {
+  composes: control hitArea from global;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-circle);
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.railButton {
+  composes: control hitArea from global;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-circle);
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.sidebarPill {
+  composes: control from global;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 44px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .fab:hover,
+  .railButton:hover,
+  .sidebarPill:hover {
+    background-color: var(--color-primary-hover);
+  }
+}
