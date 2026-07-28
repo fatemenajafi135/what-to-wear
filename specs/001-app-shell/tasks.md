@@ -174,24 +174,24 @@ files.
 
 ### Tests for User Story 2
 
-- [ ] T031 [P] [US2] Vitest state-matrix test in `frontend/components/ui/Chip/Chip.test.tsx`
-- [ ] T032 [P] [US2] Vitest state-matrix test in
+- [X] T031 [P] [US2] Vitest state-matrix test in `frontend/components/ui/Chip/Chip.test.tsx`
+- [X] T032 [P] [US2] Vitest state-matrix test in
       `frontend/components/ui/Badge/Badge.test.tsx`
-- [ ] T033 [P] [US2] Vitest test asserting `role="switch"`, `aria-checked`, keyboard
+- [X] T033 [P] [US2] Vitest test asserting `role="switch"`, `aria-checked`, keyboard
       Space/Enter toggle in `frontend/components/ui/Switch/Switch.test.tsx`
-- [ ] T034 [P] [US2] Vitest state-matrix test in
+- [X] T034 [P] [US2] Vitest state-matrix test in
       `frontend/components/ui/SegmentedControl/SegmentedControl.test.tsx`
-- [ ] T035 [P] [US2] Vitest test asserting `role="status" aria-live="polite"` and all three
+- [X] T035 [P] [US2] Vitest test asserting `role="status" aria-live="polite"` and all three
       variants in `frontend/components/ui/Banner/Banner.test.tsx`
-- [ ] T036 [P] [US2] Vitest test asserting label/error/`aria-invalid`/password-toggle
+- [X] T036 [P] [US2] Vitest test asserting label/error/`aria-invalid`/password-toggle
       behavior in `frontend/components/ui/Input/Input.test.tsx`
-- [ ] T037 [P] [US2] Vitest state-matrix test in
+- [X] T037 [P] [US2] Vitest state-matrix test in
       `frontend/components/ui/Textarea/Textarea.test.tsx`
-- [ ] T038 [P] [US2] Vitest state-matrix test in
+- [X] T038 [P] [US2] Vitest state-matrix test in
       `frontend/components/ui/Select/Select.test.tsx`
-- [ ] T039 [P] [US2] Vitest test asserting `toLocaleDateString` display formatting in
+- [X] T039 [P] [US2] Vitest test asserting `toLocaleDateString` display formatting in
       `frontend/components/ui/DatePicker/DatePicker.test.tsx`
-- [ ] T040 [P] [US2] Vitest test asserting `role="list"`/`role="listitem"`, Enter-to-commit,
+- [X] T040 [P] [US2] Vitest test asserting `role="list"`/`role="listitem"`, Enter-to-commit,
       Backspace-to-remove, and the live region in
       `frontend/components/ui/TagInput/TagInput.test.tsx`
 - [ ] T041 [P] [US2] Playwright test for `BottomSheet` focus trap, focus restore on close,
@@ -206,20 +206,20 @@ files.
 
 ### Implementation for User Story 2
 
-- [ ] T044 [P] [US2] Implement `frontend/components/ui/Chip/Chip.tsx` + `Chip.module.css`:
+- [X] T044 [P] [US2] Implement `frontend/components/ui/Chip/Chip.tsx` + `Chip.module.css`:
       active/inactive/disabled, 44px hit area
-- [ ] T045 [P] [US2] Implement `frontend/components/ui/Badge/Badge.tsx` + `Badge.module.css`:
+- [X] T045 [P] [US2] Implement `frontend/components/ui/Badge/Badge.tsx` + `Badge.module.css`:
       citation/status/muted/count tones, non-interactive
-- [ ] T046 [P] [US2] Implement `frontend/components/ui/Switch/Switch.tsx` +
+- [X] T046 [P] [US2] Implement `frontend/components/ui/Switch/Switch.tsx` +
       `Switch.module.css`: `role="switch"`, `aria-checked`, `aria-disabled`, `tabIndex`,
       Space/Enter keydown handler, reduced-motion-gated thumb-slide
-- [ ] T047 [P] [US2] Implement
+- [X] T047 [P] [US2] Implement
       `frontend/components/ui/SegmentedControl/SegmentedControl.tsx` +
       `SegmentedControl.module.css`: 2–3 options, active/inactive, control-level disabled
-- [ ] T048 [P] [US2] Implement `frontend/components/ui/Banner/Banner.tsx` +
+- [X] T048 [P] [US2] Implement `frontend/components/ui/Banner/Banner.tsx` +
       `Banner.module.css`: offline/error/info variants, `role="status" aria-live="polite"`,
       error variant's 3px inline-start border per `docs/design-decisions.md` §10
-- [ ] T049 [US2] Implement `frontend/components/ui/BottomSheet/BottomSheet.tsx` +
+- [X] T049 [US2] Implement `frontend/components/ui/BottomSheet/BottomSheet.tsx` +
       `BottomSheet.module.css` (depends on T008 for the hit-area/focus utilities): native
       `<dialog>` + `showModal()`, `aria-labelledby`, normal/loading/error/empty states,
       danger row tone, bottom-anchored <768px / centered dialog ≥768px, safe-area-aware
@@ -228,17 +228,17 @@ files.
       decelerate on open, `--motion-duration-fast` accelerate on close), gated by
       `prefers-reduced-motion` (instant show/hide fallback, no transition) — this is FR-011's
       BottomSheet clause
-- [ ] T050 [P] [US2] Implement `frontend/components/ui/Input/Input.tsx` +
+- [X] T050 [P] [US2] Implement `frontend/components/ui/Input/Input.tsx` +
       `Input.module.css`: 44px height, 16px font (iOS zoom guard), hover/focus-visible/
       error/disabled/read-only states, password show/hide `IconButton` per
       `docs/design-decisions.md` §1.2
-- [ ] T051 [P] [US2] Implement `frontend/components/ui/Textarea/Textarea.tsx` +
+- [X] T051 [P] [US2] Implement `frontend/components/ui/Textarea/Textarea.tsx` +
       `Textarea.module.css`: `min-height: 94px`, `resize: vertical`, shares Input's state
       treatment
-- [ ] T052 [P] [US2] Implement `frontend/components/ui/Select/Select.tsx` +
+- [X] T052 [P] [US2] Implement `frontend/components/ui/Select/Select.tsx` +
       `Select.module.css`: native `<select>` styled to match Input, chevron-down background
       image, `appearance: none`
-- [ ] T053 [P] [US2] Implement `frontend/components/ui/DatePicker/DatePicker.tsx` +
+- [X] T053 [P] [US2] Implement `frontend/components/ui/DatePicker/DatePicker.tsx` +
       `DatePicker.module.css`: native `input[type=date]` styled as Input,
       `toLocaleDateString` display formatting
 - [ ] T054 [US2] Implement `frontend/components/ui/TagInput/TagInput.tsx` +
