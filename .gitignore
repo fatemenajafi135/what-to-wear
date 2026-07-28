@@ -30,6 +30,12 @@ public/sw.js.map
 public/swe-worker-*.js
 public/workbox-*.js
 
+# Playwright artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
 # --- Python / uv ---
 __pycache__/
 *.py[cod]

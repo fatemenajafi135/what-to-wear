@@ -1,0 +1,22 @@
+.header {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-md) var(--space-lg);
+  padding-top: calc(var(--space-md) + env(safe-area-inset-top));
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-md);
+  padding: var(--space-3xl) var(--space-lg);
+  min-height: 50vh;
+}
+
+.body {
+  max-width: 32ch;
+  color: var(--color-text-secondary);
+}

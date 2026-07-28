@@ -131,10 +131,10 @@ changing; navigate between them and confirm focus lands on each new `<h1>`.
 
 ### Tests for User Story 1
 
-- [ ] T022 [P] [US1] Playwright test asserting correct nav markup (bar/rail/sidebar) and all
+- [X] T022 [P] [US1] Playwright test asserting correct nav markup (bar/rail/sidebar) and all
       four destinations reachable at 320/768/1024/1440px in
       `frontend/e2e/chrome-breakpoints.spec.ts`
-- [ ] T023 [P] [US1] Playwright test asserting focus moves to the new screen's `<h1>` on
+- [X] T023 [P] [US1] Playwright test asserting focus moves to the new screen's `<h1>` on
       every primary navigation in `frontend/e2e/focus-on-navigate.spec.ts`
 
 ### Implementation for User Story 1
@@ -154,7 +154,7 @@ changing; navigate between them and confirm focus lands on each new `<h1>`.
 - [X] T029 [US1] Implement `frontend/app/(app)/add/page.tsx`: overlay-launcher stub screen;
       closing with no navigation history falls back to `/closet` per
       `docs/design-decisions.md` §9
-- [ ] T030 [US1] Verify the 320/768/1024/1440 responsive breakpoints hold across
+- [X] T030 [US1] Verify the 320/768/1024/1440 responsive breakpoints hold across
       `frontend/styles/themes.css` and the Foundational chrome components; fix any layout
       break found
 

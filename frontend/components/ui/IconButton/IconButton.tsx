@@ -11,6 +11,8 @@ import {
   History,
   Plus,
   ThumbsUp,
+  Eye,
+  EyeOff,
   type LucideIcon,
 } from "lucide-react";
 import styles from "./IconButton.module.css";
@@ -27,7 +29,11 @@ export type IconKeyword =
   | "history"
   | "plus"
   | "thumbsUp"
-  | "thumbsDown";
+  | "thumbsDown"
+  // Password show/hide toggle — docs/design-decisions.md §1.2, not part of
+  // design-system.md §3's own keyword table but the same IconButton pattern.
+  | "eye"
+  | "eyeOff";
 
 const ICONS: Record<IconKeyword, LucideIcon> = {
   back: ArrowLeft,
@@ -42,6 +48,8 @@ const ICONS: Record<IconKeyword, LucideIcon> = {
   plus: Plus,
   thumbsUp: ThumbsUp,
   thumbsDown: ThumbsUp,
+  eye: Eye,
+  eyeOff: EyeOff,
 };
 
 const DEFAULT_LABELS: Record<IconKeyword, string> = {
@@ -57,6 +65,8 @@ const DEFAULT_LABELS: Record<IconKeyword, string> = {
   plus: "Add",
   thumbsUp: "Helpful",
   thumbsDown: "Not helpful",
+  eye: "Show password",
+  eyeOff: "Hide password",
 };
 
 export interface IconButtonProps
