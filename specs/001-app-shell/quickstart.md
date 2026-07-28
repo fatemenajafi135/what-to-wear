@@ -75,9 +75,15 @@ http://localhost:3000/dev/components
   `contracts/manifest.md` exactly, including the two shortcut URLs (`/add`, `/recommend`).
 - View source on `/` and confirm both `theme-color` meta tags are present with the
   `prefers-color-scheme` media queries.
-- Run a Lighthouse PWA audit (`npx lighthouse http://localhost:3000 --only-categories=pwa`
-  or Chrome DevTools' Lighthouse panel) against a production build; confirm Installable
-  passes.
+- **Lighthouse's PWA category/audits (`installable-manifest`, etc.) have been removed from
+  the tool as of the version current at this writing (13.4.1)** — `--only-categories=pwa`
+  errors with "unrecognized category." Verify installability manually instead: confirm
+  `manifest.webmanifest` has `name`, `short_name`, `icons` (192 + 512), `start_url`, and
+  `display: "standalone"` (all present per `contracts/manifest.md`), served over HTTPS (or
+  localhost). Chrome DevTools' Application → Manifest panel also flags any manifest error
+  directly. Note: this slice ships no service worker (feature 007's scope) — whether
+  `beforeinstallprompt` actually fires end-to-end depends on the browser's current
+  criteria and cannot be fully confirmed until 007 lands.
 - Navigate to `/` and confirm it redirects to `/recommend`.
 - On a real notched iPhone, install to home screen, launch standalone, and confirm the
   TabBar and any open BottomSheet clear the safe-area insets with no overlap.

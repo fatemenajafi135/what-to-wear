@@ -291,7 +291,7 @@ insets in installed standalone mode.
       `calc(30px + env(safe-area-inset-bottom))` in
       `frontend/components/ui/BottomSheet/BottomSheet.module.css`; sticky `TopHeader`
       `env(safe-area-inset-top)` with no floor
-- [ ] T062 [US3] Run a Lighthouse PWA-installability audit against a production build
+- [X] T062 [US3] Run a Lighthouse PWA-installability audit against a production build
       (`npm run build && npm start`) and fix any reported gap
 - [ ] T063 [US3] Perform the manual real-device safe-area check from `quickstart.md` §6 on a
       notched iPhone in installed standalone mode; record the result
@@ -302,12 +302,12 @@ insets in installed standalone mode.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T064 [P] Run `npm run lint`, `npx tsc --noEmit`, and `npm run build` in `frontend/`;
+- [X] T064 [P] Run `npm run lint`, `npx tsc --noEmit`, and `npm run build` in `frontend/`;
       fix all errors (constitution CI gates)
 - [X] T065 [P] Grep `frontend/components/` and `frontend/app/` CSS for raw hex codes or
       magic pixel literals outside `styles/tokens.css`/`styles/themes.css`; fix any found
       (Principle VIII gate)
-- [ ] T066 Run the full `quickstart.md` validation checklist end-to-end and record results
+- [X] T066 Run the full `quickstart.md` validation checklist end-to-end and record results
 - [X] T067 Grep the new `frontend/` tree for anything ported from
       `design/prototype/_scaffolding/` (`ios-frame`, `support.js`, `devOverride`,
       `--wtw-proto-inset-top`, floating theme toggle) and remove any match found
