@@ -1,0 +1,56 @@
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  padding-top: calc(var(--space-md) + env(safe-area-inset-top));
+  background-color: var(--color-background);
+}
+
+.titleGroup {
+  flex: 1;
+  min-width: 0;
+}
+
+.title,
+.subtitle {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.title:focus {
+  outline: none;
+}
+.title:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+}
+
+.rightSlot {
+  flex-shrink: 0;
+}
+
+.pillButton {
+  composes: control hitArea from global;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-accent-soft);
+  color: var(--color-on-accent-soft);
+  border: none;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .pillButton:hover:not(:disabled) {
+    background-color: var(--color-border);
+  }
+}

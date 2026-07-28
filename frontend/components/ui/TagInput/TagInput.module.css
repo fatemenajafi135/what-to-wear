@@ -1,0 +1,66 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.label {
+  color: var(--color-text-secondary);
+}
+
+.container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+}
+
+.container:focus-within {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  border-radius: var(--radius-pill);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.remove {
+  composes: control hitArea from global;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.textInput {
+  flex: 1;
+  min-width: 80px;
+  border: none;
+  background: none;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+.textInput:focus {
+  outline: none;
+}

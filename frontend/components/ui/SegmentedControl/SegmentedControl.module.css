@@ -1,0 +1,35 @@
+.group {
+  display: inline-flex;
+  background-color: var(--color-surface-sunken);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.option {
+  composes: control hitArea from global;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.option[aria-selected="true"] {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+@media (hover: hover) {
+  .option:hover:not([aria-selected="true"]):not(:disabled) {
+    color: var(--color-text-primary);
+  }
+}
+
+.group[data-disabled="true"] .option {
+  opacity: 0.5;
+  pointer-events: none;
+}

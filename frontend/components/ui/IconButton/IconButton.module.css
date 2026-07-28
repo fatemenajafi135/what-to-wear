@@ -1,0 +1,25 @@
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-circle);
+  background-color: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: background-color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background-color: var(--color-border);
+  }
+}
+.iconButton:active:not(:disabled) {
+  background-color: var(--color-border);
+}
+
+.iconButton:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}

@@ -1,0 +1,55 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.label {
+  color: var(--color-text-secondary);
+}
+
+.input {
+  width: 100%;
+  height: 44px;
+  padding: 11px var(--space-md);
+  font-size: var(--font-size-md);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+@media (hover: hover) {
+  .input:hover:not(:disabled) {
+    border-color: var(--color-text-secondary);
+  }
+}
+
+.input:focus {
+  outline: none;
+}
+.input:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.input:disabled {
+  opacity: 0.5;
+}
+
+.errorInput {
+  border-color: var(--color-error);
+}
+
+.helpText {
+  color: var(--color-text-secondary);
+}
+
+.errorText {
+  color: var(--color-error);
+}
+
+.display {
+  color: var(--color-text-secondary);
+}

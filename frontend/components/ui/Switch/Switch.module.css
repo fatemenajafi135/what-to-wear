@@ -1,0 +1,43 @@
+.switch {
+  composes: control hitArea from global;
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-border);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.switch[aria-checked="true"] {
+  background-color: var(--color-primary);
+}
+
+.switch:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.thumb {
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-circle);
+  background-color: var(--color-surface);
+  transition: inset-inline-start var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.switch[aria-checked="true"] .thumb {
+  inset-inline-start: 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb {
+    transition: none;
+  }
+}

@@ -1,0 +1,39 @@
+.chip {
+  composes: control hitArea from global;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  background-color: var(--color-surface-sunken);
+  color: var(--color-text-primary);
+  transition: background-color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.active {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+@media (hover: hover) {
+  .chip:hover:not(:disabled) {
+    background-color: var(--color-border);
+  }
+  .active:hover:not(:disabled) {
+    background-color: var(--color-primary-hover);
+  }
+}
+.chip:active:not(:disabled) {
+  background-color: var(--color-border);
+}
+.active:active:not(:disabled) {
+  background-color: var(--color-primary-hover);
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}

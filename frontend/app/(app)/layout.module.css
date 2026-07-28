@@ -1,0 +1,18 @@
+.content {
+  min-height: 100dvh;
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 22px));
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .content {
+    padding-inline-start: 76px;
+    padding-bottom: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .content {
+    padding-inline-start: 240px;
+    padding-bottom: 0;
+  }
+}

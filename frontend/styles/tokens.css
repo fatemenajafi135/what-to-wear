@@ -1,0 +1,68 @@
+/*
+ * System tokens (theme-independent) — design/design-system.md §1.1
+ * Identical in light and dark; these are structural, not thematic.
+ */
+:root {
+  /* motion */
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 200ms;
+  --motion-duration-slow: 320ms;
+  --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --motion-easing-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  /* z-index scale */
+  --z-sticky: 10;
+  --z-dropdown: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-tooltip: 60;
+
+  /*
+   * UI font-size scale — rebuilt per docs/design-decisions.md §6.
+   * Supersedes design-system.md §2's untokenized display scale and the
+   * original §1.1 sizes, which fall below the iOS 11pt / Material 14sp floors.
+   * Two tiers only, breaking at 1024px (see styles/themes.css for the
+   * >=1024px overrides of the sizes that step up).
+   */
+  --font-size-2xs: 11px; /* Caption */
+  --font-size-xs: 12px; /* Label, meta lines */
+  --font-size-sm: 14px; /* Body, mobile + tablet */
+  --font-size-base: 15px; /* Body desktop; Card title mobile + tablet */
+  --font-size-md: 16px; /* Card title, desktop */
+  --font-size-lg: 18px; /* Section title */
+  --font-size-xl: 22px; /* Screen title, mobile + tablet */
+  --font-size-2xl: 24px; /* Screen title, desktop */
+  --font-size-3xl: 28px; /* Display, mobile + tablet */
+  --font-size-4xl: 30px; /* Display, desktop */
+
+  /* radius */
+  --radius-sm: 8px; /* controls: buttons, inputs, chips-square */
+  --radius-md: 14px; /* cards */
+  --radius-lg: 20px; /* sheets/modals */
+  --radius-pill: 999px; /* chips, pills, switch track */
+  --radius-circle: 50%; /* avatars, icon buttons, FAB */
+
+  /* spacing */
+  --space-xs: 4px; /* tight icon gaps */
+  --space-sm: 8px; /* chip/icon gaps */
+  --space-md: 12px; /* card internal gaps */
+  --space-lg: 16px; /* card padding */
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 40px;
+  --space-4xl: 48px;
+  --space-5xl: 56px;
+
+  --focus-ring-offset: 2px;
+}
+
+/*
+ * Ten distinct type-scale tokens exist simultaneously (not two that swap value at
+ * a breakpoint) — --font-size-xl (22px) and --font-size-2xl (24px) are both always
+ * defined; a component picks which one to read per breakpoint via its own media
+ * query, e.g. TopHeader's <h1> reads --font-size-xl below 1024px and
+ * --font-size-2xl at 1024px+. Same pattern for --font-size-3xl / --font-size-4xl
+ * (Display). See docs/design-decisions.md §6.
+ */
