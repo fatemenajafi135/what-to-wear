@@ -194,12 +194,12 @@ files.
 - [X] T040 [P] [US2] Vitest test asserting `role="list"`/`role="listitem"`, Enter-to-commit,
       Backspace-to-remove, and the live region in
       `frontend/components/ui/TagInput/TagInput.test.tsx`
-- [ ] T041 [P] [US2] Playwright test for `BottomSheet` focus trap, focus restore on close,
+- [X] T041 [P] [US2] Playwright test for `BottomSheet` focus trap, focus restore on close,
       and Escape-to-close in `frontend/e2e/bottom-sheet-focus-trap.spec.ts`
-- [ ] T042 [P] [US2] Playwright test asserting the focus ring shows on keyboard Tab and is
+- [X] T042 [P] [US2] Playwright test asserting the focus ring shows on keyboard Tab and is
       absent on mouse click, across Button/IconButton/Chip/Switch/Input, in
       `frontend/e2e/focus-visible.spec.ts`
-- [ ] T043 [P] [US2] Playwright test asserting `prefers-reduced-motion: reduce` disables the
+- [X] T043 [P] [US2] Playwright test asserting `prefers-reduced-motion: reduce` disables the
       skeleton pulse, Switch thumb-slide, boot logo pulse (T013's `loading.tsx`), and
       BottomSheet's open/close backdrop-fade/panel-translate transition (replaced by an
       instant show/hide) in `frontend/e2e/reduced-motion.spec.ts`
@@ -241,11 +241,11 @@ files.
 - [X] T053 [P] [US2] Implement `frontend/components/ui/DatePicker/DatePicker.tsx` +
       `DatePicker.module.css`: native `input[type=date]` styled as Input,
       `toLocaleDateString` display formatting
-- [ ] T054 [US2] Implement `frontend/components/ui/TagInput/TagInput.tsx` +
+- [X] T054 [US2] Implement `frontend/components/ui/TagInput/TagInput.tsx` +
       `TagInput.module.css` (depends on T044): Input-shaped growing container, committed
       values rendered as active `Chip`s with a trailing `×` remove button, Enter-to-commit /
       Backspace-to-remove, `role="list"`/`role="listitem"`, visually-hidden live region
-- [ ] T055 [US2] Implement `frontend/app/dev/components/page.tsx` (depends on all sixteen
+- [X] T055 [US2] Implement `frontend/app/dev/components/page.tsx` (depends on all sixteen
       components existing): catalog rendering every state of all sixteen components in both
       themes side by side; calls `notFound()` when `process.env.NODE_ENV === "production"`
 
@@ -265,10 +265,10 @@ insets in installed standalone mode.
 
 ### Tests for User Story 3
 
-- [ ] T056 [P] [US3] Playwright test asserting `manifest.webmanifest` matches
+- [X] T056 [P] [US3] Playwright test asserting `manifest.webmanifest` matches
       `contracts/manifest.md` exactly (including `/add`/`/recommend` shortcut URLs) in
       `frontend/e2e/manifest.spec.ts`
-- [ ] T057 [P] [US3] Playwright test in `frontend/e2e/theme-boot.spec.ts` asserting (a) a
+- [X] T057 [P] [US3] Playwright test in `frontend/e2e/theme-boot.spec.ts` asserting (a) a
       `wtw-theme=dark` cookie produces `data-theme="dark"` in the raw server-rendered HTML
       response body (checked before any script runs, not just the final DOM) regardless of
       OS `prefers-color-scheme`, and (b) with no cookie set and OS forced to dark, the served
@@ -276,16 +276,16 @@ insets in installed standalone mode.
       flip to dark — this is the mechanism SC-005's "0 flashes across 20 reloads" actually
       depends on, so covering both branches once is the automated equivalent of the manual
       repeat-reload pass in `quickstart.md` §5
-- [ ] T058 [P] [US3] Playwright test asserting `/` redirects to `/recommend` in
+- [X] T058 [P] [US3] Playwright test asserting `/` redirects to `/recommend` in
       `frontend/e2e/root-redirect.spec.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T059 [US3] Implement `frontend/app/manifest.ts` per `contracts/manifest.md` (name,
+- [X] T059 [US3] Implement `frontend/app/manifest.ts` per `contracts/manifest.md` (name,
       icons, shortcuts pointing at `/add` and `/recommend`, `start_url: "/?source=pwa"`)
-- [ ] T060 [US3] Cross-check `frontend/app/layout.tsx` (T012) against `contracts/manifest.md`
+- [X] T060 [US3] Cross-check `frontend/app/layout.tsx` (T012) against `contracts/manifest.md`
       for the dual `theme-color` meta tags and `viewport-fit=cover`; add anything missing
-- [ ] T061 [US3] Apply safe-area inset CSS to every edge-docked element: `TabBar` bottom
+- [X] T061 [US3] Apply safe-area inset CSS to every edge-docked element: `TabBar` bottom
       padding `env(safe-area-inset-bottom, 22px)` in
       `frontend/components/ui/TabBar/TabBar.module.css`; `BottomSheet` bottom padding
       `calc(30px + env(safe-area-inset-bottom))` in
@@ -304,11 +304,11 @@ insets in installed standalone mode.
 
 - [ ] T064 [P] Run `npm run lint`, `npx tsc --noEmit`, and `npm run build` in `frontend/`;
       fix all errors (constitution CI gates)
-- [ ] T065 [P] Grep `frontend/components/` and `frontend/app/` CSS for raw hex codes or
+- [X] T065 [P] Grep `frontend/components/` and `frontend/app/` CSS for raw hex codes or
       magic pixel literals outside `styles/tokens.css`/`styles/themes.css`; fix any found
       (Principle VIII gate)
 - [ ] T066 Run the full `quickstart.md` validation checklist end-to-end and record results
-- [ ] T067 Grep the new `frontend/` tree for anything ported from
+- [X] T067 Grep the new `frontend/` tree for anything ported from
       `design/prototype/_scaffolding/` (`ios-frame`, `support.js`, `devOverride`,
       `--wtw-proto-inset-top`, floating theme toggle) and remove any match found
 - [ ] T068 Open the PR from `001-app-shell` into `rebuild` per

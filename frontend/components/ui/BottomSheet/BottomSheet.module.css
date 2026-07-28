@@ -28,13 +28,6 @@
   transform: translateY(0);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dialog,
-  .dialog::backdrop {
-    transition: none;
-  }
-}
-
 @media (min-width: 768px) {
   .dialog {
     inset-block-end: auto;
@@ -55,9 +48,22 @@
   }
 }
 
+/*
+ * Declared AFTER the responsive block above so it wins the cascade at every
+ * viewport width — reduced motion must override breakpoint-specific
+ * transition declarations, not the other way around.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .dialog::backdrop {
+    transition: none;
+  }
+}
+
 .content {
   padding: var(--space-lg);
-  padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 8px));
+  /* contracts/manifest.md safe-area contract: calc(30px + env(safe-area-inset-bottom)) */
+  padding-bottom: calc(30px + env(safe-area-inset-bottom));
   overflow-y: auto;
 }
 

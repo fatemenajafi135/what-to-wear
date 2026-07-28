@@ -165,3 +165,11 @@ decision explicitly says this is not a route.
 **Rationale**: Satisfies the `/speckit-clarify` decision to build a catalog route while
 keeping it "excluded from the production build's discoverable surface" without a second build
 target or a separate app — one Next.js codebase throughout, consistent with Principle IX.
+
+**Verified platform quirk**: under `next build && next start` (Next.js 16.2.12 with
+Turbopack), `notFound()` correctly swaps the response body for the not-found UI — a
+production visitor never sees the real catalog content — but the raw HTTP status code stays
+200 instead of 404. This was confirmed with an isolated unconditional `notFound()` call on a
+throwaway route, ruling out a mistake in the `NODE_ENV` check itself. Content-level gating
+(the actual requirement) holds; the status-code detail is an upstream framework behavior,
+recorded here rather than silently accepted.
