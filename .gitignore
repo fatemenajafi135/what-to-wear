@@ -50,6 +50,25 @@ coverage.xml
 .tox/
 .nox/
 
+# --- Data, corpora and built artifacts (see notes/data-and-file-rules.md) ---
+# Documents are data, not code: they live in Supabase Storage and are described
+# by infra/corpus.yaml. If a command can regenerate it, it does not belong here.
+data/
+.cache/
+tmp/
+storage/
+outputs/
+*.faiss
+*.index
+*.pkl
+*.npy
+*.parquet
+*.db
+*.sqlite
+*.sqlite3
+# The one exception: the tiny, license-clean fixture corpus used by tests and CI.
+!evals/fixtures/**
+
 # --- Env files (commit only .env.example) ---
 .env
 .env.*
