@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:{{ dim }}px;height:{{ dim }}px;border-radius:var(--radius-circle);background:var(--color-primary);color:var(--color-on-primary);display:flex;align-items:center;justify-content:center;font-size:{{ fontSize }}px;font-weight:700;flex-shrink:0;font-family:'Instrument Sans',sans-serif;">{{ initial }}</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:60,&quot;height&quot;:60},&quot;personName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Maya&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:48,&quot;min&quot;:32,&quot;max&quot;:72,&quot;tsType&quot;:&quot;number&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const size = this.props.size || 48;
+    return {
+      dim: size,
+      fontSize: Math.round(size * 0.37),
+      initial: (this.props.personName || '?').charAt(0).toUpperCase()
+    };
+  }
+}
+</script>
+</body>
+</html>

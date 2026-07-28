@@ -1,0 +1,1 @@
+`design-system.md` is the single source of truth for tokens, components, states and copy. `known-gaps.md` lists what must be decided in code. Everything in `prototype/` is a throwaway static mockup — read it to understand intent, never copy code from it. `_scaffolding/` is prototype plumbing and must not appear in the product.

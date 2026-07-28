@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+@media (hover:hover){
+  .wtw-iconbtn:hover{ background:var(--color-border); }
+}
+</style>
+</helmet>
+<button aria-label="{{ ariaLabel }}" class="wtw-iconbtn" onClick="{{ handleClick }}" disabled="{{ isDisabled }}" style-active="background:var(--color-border);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;width:{{ dim }}px;height:{{ dim }}px;border-radius:var(--radius-circle);background:var(--color-surface-sunken);border:1px solid var(--color-border);display:flex;align-items:center;justify-content:center;color:var(--color-primary);cursor:pointer;flex-shrink:0;padding:0;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ disabledOpacity }};">
+  <sc-if value="{{ isBack }}" hint-placeholder-val="{{ true }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></sc-if>
+  <sc-if value="{{ isClose }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></sc-if>
+  <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></sc-if>
+  <sc-if value="{{ isDots }}" hint-placeholder-val="{{ false }}"><span style="font-size:16px;font-weight:700;letter-spacing:1px;line-height:1;">⋯</span></sc-if>
+  <sc-if value="{{ isHeart }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.4 2.2 5 5.6 4.3 8 3.8 10 5 12 7.5 14 5 16 3.8 18.4 4.3 21.8 5 23.4 8.4 22 11.7 19.5 16.4 12 21 12 21z"/></svg></sc-if>
+  <sc-if value="{{ isHeartFilled }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.4 2.2 5 5.6 4.3 8 3.8 10 5 12 7.5 14 5 16 3.8 18.4 4.3 21.8 5 23.4 8.4 22 11.7 19.5 16.4 12 21 12 21z"/></svg></sc-if>
+  <sc-if value="{{ isFilter }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg></sc-if>
+  <sc-if value="{{ isCalendar }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></sc-if>
+  <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg></sc-if>
+  <sc-if value="{{ isPlus }}" hint-placeholder-val="{{ false }}"><span style="font-size:22px;font-weight:300;line-height:1;">+</span></sc-if>
+  <sc-if value="{{ isSquarePen }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg></sc-if>
+</button>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:60,&quot;height&quot;:60},&quot;icon&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;back&quot;,&quot;options&quot;:[&quot;back&quot;,&quot;close&quot;,&quot;settings&quot;,&quot;dots&quot;,&quot;heart&quot;,&quot;heartFilled&quot;,&quot;filter&quot;,&quot;calendar&quot;,&quot;history&quot;,&quot;plus&quot;,&quot;squarePen&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:34,&quot;min&quot;:28,&quot;max&quot;:48,&quot;tsType&quot;:&quot;number&quot;},&quot;disabled&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onClick&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const icon = this.props.icon || 'back';
+    const disabled = !!this.props.disabled;
+    const DEFAULT_LABELS = { back: 'Back', close: 'Close', settings: 'Settings', dots: 'More options', heart: 'Save outfit', heartFilled: 'Unsave outfit', filter: 'Filter', calendar: 'Calendar', history: 'Chat history', plus: 'Add', squarePen: 'New chat' };
+    return {
+      ariaLabel: this.props.label || DEFAULT_LABELS[icon] || icon,
+      dim: this.props.size || 34,
+      isBack: icon === 'back', isClose: icon === 'close', isSettings: icon === 'settings',
+      isDots: icon === 'dots', isHeart: icon === 'heart', isHeartFilled: icon === 'heartFilled',
+      isFilter: icon === 'filter', isCalendar: icon === 'calendar', isHistory: icon === 'history', isPlus: icon === 'plus',
+      isSquarePen: icon === 'squarePen',
+      isDisabled: disabled, disabledOpacity: disabled ? 0.5 : 1,
+      handleClick: (e) => { if (!disabled && this.props.onClick) { this.props.onClick(e); } }
+    };
+  }
+}
+</script>
+</body>
+</html>

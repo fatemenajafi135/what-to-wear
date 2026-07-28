@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<sc-if value="{{ checked }}" hint-placeholder-val="{{ true }}">
+  <div role="switch" aria-checked="{{ checked }}" aria-disabled="{{ ariaDisabled }}" tabIndex="{{ tabIndexVal }}" onClick="{{ handleClick }}" onKeyDown="{{ handleKeyDown }}" style-active="background:var(--color-primary-hover);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="width:42px;height:24px;border-radius:var(--radius-pill);background:var(--color-primary);position:relative;cursor:pointer;flex-shrink:0;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ disabledOpacity }};pointer-events:{{ disabledPointerEvents }};">
+    <div style="width:18px;height:18px;border-radius:var(--radius-circle);background:var(--color-surface);position:absolute;top:3px;inset-inline-end:3px;transition:inset-inline-end var(--motion-duration-fast) var(--motion-easing-standard);"></div>
+  </div>
+</sc-if>
+<sc-if value="{{ notChecked }}" hint-placeholder-val="{{ false }}">
+  <div role="switch" aria-checked="{{ checked }}" aria-disabled="{{ ariaDisabled }}" tabIndex="{{ tabIndexVal }}" onClick="{{ handleClick }}" onKeyDown="{{ handleKeyDown }}" style-active="background:var(--color-text-secondary);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="width:42px;height:24px;border-radius:var(--radius-pill);background:var(--color-border);position:relative;cursor:pointer;flex-shrink:0;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ disabledOpacity }};pointer-events:{{ disabledPointerEvents }};">
+    <div style="width:18px;height:18px;border-radius:var(--radius-circle);background:var(--color-surface);position:absolute;top:3px;inset-inline-start:3px;transition:inset-inline-start var(--motion-duration-fast) var(--motion-easing-standard);"></div>
+  </div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:60,&quot;height&quot;:40},&quot;checked&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;disabled&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onChange&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(next: boolean) =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const checked = !!this.props.checked;
+    const disabled = !!this.props.disabled;
+    const toggle = () => { if (!disabled && this.props.onChange) { this.props.onChange(!checked); } };
+    return {
+      checked, notChecked: !checked,
+      disabledOpacity: disabled ? 0.5 : 1,
+      disabledPointerEvents: disabled ? 'none' : 'auto',
+      tabIndexVal: disabled ? -1 : 0,
+      ariaDisabled: disabled,
+      handleClick: toggle,
+      handleKeyDown: (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } }
+    };
+  }
+}
+</script>
+</body>
+</html>

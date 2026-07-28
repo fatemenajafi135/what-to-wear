@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;}</style>
+</helmet>
+<div style="min-height:100vh;background:#F4F1E9;padding:48px;box-sizing:border-box;font-family:'Instrument Sans',sans-serif;color:#241F2B;">
+  <div style="max-width:920px;margin:0 auto;">
+    <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#A39CA8;margin:0 0 6px;">What to Wear: Design System</div>
+    <div style="font-size:30px;font-weight:700;margin:0 0 8px;">Design Tokens</div>
+    <div style="font-size:13px;color:#6B6470;margin:0 0 40px;max-width:640px;line-height:1.6;">Single source of truth for color, type, spacing, radius and shadow values. Every shared component (Button, Chip, Badge, TopHeader, TabBar, BottomSheet, Switch, SegmentedControl, AvatarInitial) and every screen in the app draws from these exact values; never invent a new hex or px size inline.</div>
+
+    <div style="font-size:14px;font-weight:700;margin:0 0 14px;">Color: Core</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:36px;">
+      <div><div style="height:64px;border-radius:12px;background:#4B2E52;border:1px solid rgba(0,0,0,0.06);margin-bottom:8px;"></div><div style="font-size:11px;font-weight:700;">Primary</div><div style="font-size:10px;color:#6B6470;">#4B2E52</div></div>
+      <div><div style="height:64px;border-radius:12px;background:#E7DEE6;border:1px solid rgba(0,0,0,0.06);margin-bottom:8px;"></div><div style="font-size:11px;font-weight:700;">Primary Soft</div><div style="font-size:10px;color:#6B6470;">#E7DEE6</div></div>
+      <div><div style="height:64px;border-radius:12px;background:#E6E1D6;border:1px solid rgba(0,0,0,0.06);margin-bottom:8px;"></div><div style="font-size:11px;font-weight:700;">Background</div><div style="font-size:10px;color:#6B6470;">#E6E1D6</div></div>
+      <div><div style="height:64px;border-radius:12px;background:#EFEADD;border:1px solid rgba(0,0,0,0.06);margin-bottom:8px;"></div><div style="font-size:11px;font-weight:700;">Surface Raised</div><div style="font-size:10px;color:#6B6470;">#EFEADD</div></div>
+      <div><div style="height:64px;border-radius:12px;background:#F8F6F1;border:1px solid rgba(0,0,0,0.06);margin-bottom:8px;"></div><div style="font-size:11px;font-weight:700;">Card</div><div style="font-size:10px;color:#6B6470;">#F8F6F1</div></div>
+    </div>
+
+    <div style="font-size:14px;font-weight:700;margin:0 0 14px;">Color: Text &amp; Border</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:36px;">
+      <div><div style="height:64px;border-radius:12px;background:#241F2B;margin-bottom:8px;"></div><div style="font-size:11px;font-weight:700;">Text Primary</div><div style="font-size:10px;color:#6B6470;">#241F2B</div></div>
+      <div><div style="height:64px;border-radius:12px;background:#6B6470;margin-bottom:8px;"></div><div style="font-size:11px;font-weight:700;">Text Muted</div><div style="font-size:10px;color:#6B6470;">#6B6470</div></div>
+      <div><div style="height:64px;border-radius:12px;background:#A39CA8;margin-bottom:8px;"></div><div style="font-size:11px;font-weight:700;">Text Faint</div><div style="font-size:10px;color:#6B6470;">#A39CA8</div></div>
+      <div><div style="height:64px;border-radius:12px;background:#D9D2C4;margin-bottom:8px;"></div><div style="font-size:11px;font-weight:700;">Border</div><div style="font-size:10px;color:#6B6470;">#D9D2C4</div></div>
+    </div>
+
+    <div style="font-size:14px;font-weight:700;margin:0 0 14px;">Typography: Instrument Sans</div>
+    <div style="background:#F8F6F1;border:1px solid #D9D2C4;border-radius:14px;padding:20px;margin-bottom:36px;display:flex;flex-direction:column;gap:14px;">
+      <div><span style="font-size:26px;font-weight:700;">Display 26 / 700</span><span style="font-size:10.5px;color:#A39CA8;margin-left:10px;">Hero title (Recommend empty state)</span></div>
+      <div><span style="font-size:20px;font-weight:700;">Screen Title 20 / 700</span><span style="font-size:10.5px;color:#A39CA8;margin-left:10px;">Closet / Outfits / Profile headers</span></div>
+      <div><span style="font-size:16px;font-weight:700;">Section Title 16 / 700</span><span style="font-size:10.5px;color:#A39CA8;margin-left:10px;">Sub-page headers (Item details, Settings)</span></div>
+      <div><span style="font-size:13px;font-weight:700;">Card Title 13 / 700</span><span style="font-size:10.5px;color:#A39CA8;margin-left:10px;">Outfit card / list titles</span></div>
+      <div><span style="font-size:12.5px;font-weight:400;">Body 12.5 / 400</span><span style="font-size:10.5px;color:#A39CA8;margin-left:10px;">Chat bubbles, descriptions</span></div>
+      <div><span style="font-size:10.5px;font-weight:700;color:#6B6470;">Label 10.5 / 700 (muted)</span><span style="font-size:10.5px;color:#A39CA8;margin-left:10px;">Field labels, eyebrow text</span></div>
+      <div><span style="font-size:10px;font-weight:600;color:#A39CA8;">Caption 10 / 600 (faint)</span><span style="font-size:10.5px;color:#A39CA8;margin-left:10px;">Timestamps, meta text</span></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-bottom:36px;">
+      <div>
+        <div style="font-size:14px;font-weight:700;margin:0 0 14px;">Spacing scale (px)</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:10px;"><div style="width:4px;height:14px;background:#4B2E52;"></div><span style="font-size:11px;color:#6B6470;">4, tight icon gaps</span></div>
+          <div style="display:flex;align-items:center;gap:10px;"><div style="width:8px;height:14px;background:#4B2E52;"></div><span style="font-size:11px;color:#6B6470;">8, chip/icon gaps</span></div>
+          <div style="display:flex;align-items:center;gap:10px;"><div style="width:12px;height:14px;background:#4B2E52;"></div><span style="font-size:11px;color:#6B6470;">12, card internal gaps</span></div>
+          <div style="display:flex;align-items:center;gap:10px;"><div style="width:16px;height:14px;background:#4B2E52;"></div><span style="font-size:11px;color:#6B6470;">16, card padding</span></div>
+          <div style="display:flex;align-items:center;gap:10px;"><div style="width:20px;height:14px;background:#4B2E52;"></div><span style="font-size:11px;color:#6B6470;">20, screen edge padding</span></div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:700;margin:0 0 14px;">Radius scale</div>
+        <div style="display:flex;align-items:flex-end;gap:14px;">
+          <div><div style="width:44px;height:44px;background:#EFEADD;border:1px solid #D9D2C4;border-radius:8px;"></div><div style="font-size:10px;color:#6B6470;margin-top:6px;">8 control</div></div>
+          <div><div style="width:44px;height:44px;background:#EFEADD;border:1px solid #D9D2C4;border-radius:14px;"></div><div style="font-size:10px;color:#6B6470;margin-top:6px;">14 card</div></div>
+          <div><div style="width:44px;height:44px;background:#EFEADD;border:1px solid #D9D2C4;border-radius:20px;"></div><div style="font-size:10px;color:#6B6470;margin-top:6px;">20 sheet</div></div>
+          <div><div style="width:44px;height:44px;background:#4B2E52;border-radius:999px;"></div><div style="font-size:10px;color:#6B6470;margin-top:6px;">pill</div></div>
+          <div><div style="width:44px;height:44px;background:#4B2E52;border-radius:50%;"></div><div style="font-size:10px;color:#6B6470;margin-top:6px;">circle</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size:14px;font-weight:700;margin:0 0 14px;">Elevation</div>
+    <div style="display:flex;gap:24px;margin-bottom:40px;">
+      <div style="width:160px;height:70px;background:#F8F6F1;border-radius:14px;box-shadow:0 8px 20px rgba(36,31,43,0.18);display:flex;align-items:center;justify-content:center;font-size:10.5px;color:#6B6470;">Menu / Sheet</div>
+      <div style="width:160px;height:70px;background:#4B2E52;border-radius:14px;box-shadow:0 4px 10px rgba(75,46,82,0.35);display:flex;align-items:center;justify-content:center;font-size:10.5px;color:#F8F6F1;">FAB / Primary CTA</div>
+    </div>
+
+    <div style="font-size:14px;font-weight:700;margin:0 0 14px;">Shared components</div>
+    <div style="font-size:11.5px;color:#6B6470;line-height:1.8;">
+      Button.dc.html · IconButton.dc.html · Chip.dc.html · Badge.dc.html · Switch.dc.html · SegmentedControl.dc.html · TopHeader.dc.html · TabBar.dc.html · BottomSheet.dc.html · AvatarInitial.dc.html, each importable via <code>&lt;dc-import name="…"&gt;</code>. See readme.md for the full usage guide.
+    </div>
+  </div>
+</div>
+
+</x-dc>
+</body>
+</html>

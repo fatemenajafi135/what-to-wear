@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<sc-if value="{{ hasAction }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-md);padding:var(--space-sm) var(--space-lg);background:{{ bg }};box-sizing:border-box;width:100%;">
+    <div style="font-size:var(--font-size-xs);font-weight:600;color:{{ fg }};line-height:1.4;">{{ message }}</div>
+    <button onClick="{{ handleAction }}" style-active="opacity:0.7;" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;flex-shrink:0;background:transparent;border:none;color:{{ fg }};font-weight:700;font-size:var(--font-size-xs);font-family:'Instrument Sans',sans-serif;cursor:pointer;white-space:nowrap;text-decoration:underline;">{{ actionLabel }}</button>
+  </div>
+</sc-if>
+<sc-if value="{{ hasNoAction }}" hint-placeholder-val="{{ true }}">
+  <div style="padding:var(--space-sm) var(--space-lg);background:{{ bg }};box-sizing:border-box;width:100%;">
+    <div style="font-size:var(--font-size-xs);font-weight:600;color:{{ fg }};line-height:1.4;">{{ message }}</div>
+  </div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:44},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;offline&quot;,&quot;options&quot;:[&quot;offline&quot;,&quot;error&quot;,&quot;info&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;message&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;You're offline. Some actions are unavailable.&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;actionLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onAction&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const variant = this.props.variant || 'info';
+    const bgMap = { offline: 'var(--color-surface-sunken)', error: 'var(--color-surface-sunken)', info: 'var(--color-accent-soft)' };
+    const fgMap = { offline: 'var(--color-text-secondary)', error: 'var(--color-error)', info: 'var(--color-on-accent-soft)' };
+    const hasAction = !!this.props.actionLabel && !!this.props.onAction;
+    return {
+      bg: bgMap[variant] || bgMap.info,
+      fg: fgMap[variant] || fgMap.info,
+      message: this.props.message ?? '',
+      actionLabel: this.props.actionLabel ?? '',
+      hasAction, hasNoAction: !hasAction,
+      handleAction: (e) => { if (this.props.onAction) { this.props.onAction(e); } }
+    };
+  }
+}
+</script>
+</body>
+</html>

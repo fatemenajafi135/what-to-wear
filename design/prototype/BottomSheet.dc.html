@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+button{ display:inline-flex; align-items:center; justify-content:center; }
+button.wtw-btn-list{ display:block; text-align:start; }
+@keyframes wtwSkelPulse { 0%,100% { opacity:0.55; } 50% { opacity:1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .wtw-skel { animation:wtwSkelPulse var(--motion-duration-slow) var(--motion-easing-standard) infinite; }
+}
+@container (min-width:768px){
+  .wtw-sheet-overlay{ align-items:center !important; justify-content:center !important; }
+  .wtw-sheet-panel{ border-radius:var(--radius-lg) !important; max-width:420px !important; width:90% !important; }
+}
+@media (hover:hover){
+  .wtw-sheet-row:hover{ background:var(--color-surface-sunken); }
+}
+</style>
+</helmet>
+<sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ handleClose }}" class="wtw-sheet-overlay" style="position:absolute;inset:0;background:var(--color-overlay);z-index:var(--z-modal);display:flex;align-items:flex-end;">
+    <div onClick="{{ stopClick }}" class="wtw-sheet-panel" style="background:var(--color-surface);border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding:var(--space-xl) var(--space-xl) max(30px, env(safe-area-inset-bottom));width:100%;box-sizing:border-box;max-height:80%;overflow:auto;">
+      <div style="width:36px;height:4px;border-radius:var(--radius-pill);background:var(--color-border);margin:0 auto var(--space-lg);"></div>
+      <sc-if value="{{ hasTitle }}" hint-placeholder-val="{{ true }}">
+        <div style="font-size:var(--font-size-md);font-weight:700;color:var(--color-text-primary);margin:0 0 4px;">{{ title }}</div>
+      </sc-if>
+      <sc-if value="{{ hasSubtitle }}" hint-placeholder-val="{{ false }}">
+        <div style="font-size:var(--font-size-xs);color:var(--color-text-secondary);margin:0 0 var(--space-lg);">{{ subtitle }}</div>
+      </sc-if>
+      <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:var(--space-md);padding:var(--space-sm) 4px var(--space-lg);">
+          <div class="wtw-skel" style="height:14px;width:85%;border-radius:var(--radius-pill);background:var(--color-surface-sunken);opacity:0.7;"></div>
+          <div class="wtw-skel" style="height:14px;width:65%;border-radius:var(--radius-pill);background:var(--color-surface-sunken);opacity:0.7;"></div>
+          <div class="wtw-skel" style="height:14px;width:75%;border-radius:var(--radius-pill);background:var(--color-surface-sunken);opacity:0.7;"></div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ isErrorState }}" hint-placeholder-val="{{ false }}">
+        <div style="text-align:center;padding:var(--space-xl) 0;">
+          <div style="color:var(--color-error);font-size:var(--font-size-base);margin-bottom:var(--space-md);">{{ errorMessage }}</div>
+          <sc-if value="{{ hasRetry }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ handleRetry }}" style-active="background:var(--color-primary-hover);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;background:var(--color-primary);color:var(--color-on-primary);border:none;border-radius:var(--radius-sm);padding:11px 18px;font-weight:700;font-size:var(--font-size-sm);cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);">Try again</button>
+          </sc-if>
+        </div>
+      </sc-if>
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="text-align:center;color:var(--color-text-secondary);font-size:var(--font-size-base);padding:var(--space-xl) 0;">{{ emptyLabel }}</div>
+      </sc-if>
+      <sc-if value="{{ isNotEmpty }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ sectionsView }}" as="sec" hint-placeholder-count="1">
+          <sc-if value="{{ sec.hasHeading }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:var(--font-size-xs);font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--color-text-secondary);margin:var(--space-lg) 0 var(--space-sm);">{{ sec.heading }}</div>
+          </sc-if>
+          <div style="display:flex;flex-direction:column;">
+            <sc-for list="{{ sec.rowsView }}" as="row" hint-placeholder-count="2">
+              <sc-if value="{{ row.isDisabled }}" hint-placeholder-val="{{ false }}">
+                <button disabled class="wtw-btn-list" style="width:100%;background:transparent;border:none;border-bottom:{{ row.borderStyle }};padding:15px 4px;font-size:var(--font-size-sm);font-weight:600;color:var(--color-text-secondary);font-family:'Instrument Sans',sans-serif;pointer-events:none;">{{ row.label }}</button>
+              </sc-if>
+              <sc-if value="{{ row.isEnabled }}" hint-placeholder-val="{{ true }}">
+                <sc-if value="{{ row.isDanger }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ row.onClick }}" class="wtw-sheet-row wtw-btn-list" style-active="background:var(--color-surface-sunken);" style-focus="box-shadow:var(--shadow-focus-ring);" style="width:100%;background:transparent;border:none;border-bottom:{{ row.borderStyle }};padding:15px 4px;font-size:var(--font-size-sm);font-weight:600;color:var(--color-error);font-family:'Instrument Sans',sans-serif;cursor:pointer;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);">{{ row.label }}</button>
+                </sc-if>
+                <sc-if value="{{ row.isDefault }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ row.onClick }}" class="wtw-sheet-row wtw-btn-list" style-active="background:var(--color-surface-sunken);" style-focus="box-shadow:var(--shadow-focus-ring);" style="width:100%;background:transparent;border:none;border-bottom:{{ row.borderStyle }};padding:15px 4px;font-size:var(--font-size-sm);font-weight:600;color:var(--color-text-primary);font-family:'Instrument Sans',sans-serif;cursor:pointer;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);">{{ row.label }}</button>
+                </sc-if>
+              </sc-if>
+            </sc-for>
+          </div>
+        </sc-for>
+      </sc-if>
+    </div>
+  </div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:380,&quot;height&quot;:260},&quot;open&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;title&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Sheet title&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;subtitle&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;loading&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;error&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;emptyLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Nothing here yet&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sections&quot;:{&quot;editor&quot;:null,&quot;default&quot;:[{&quot;rows&quot;:[{&quot;label&quot;:&quot;Edit&quot;,&quot;onClick&quot;:null},{&quot;label&quot;:&quot;Delete&quot;,&quot;onClick&quot;:null,&quot;tone&quot;:&quot;danger&quot;}]}],&quot;tsType&quot;:&quot;{heading?:string,rows:{label:string,tone?:'default'|'danger',disabled?:boolean,onClick:()=&gt;void}[]}[]&quot;},&quot;onClose&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onRetry&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const sections = this.props.sections || [];
+    const loading = !!this.props.loading;
+    const error = !!this.props.error && !loading;
+    const isEmpty = !loading && !error && (sections.length === 0 || sections.every(s => (s.rows || []).length === 0));
+    return {
+      open: !!this.props.open,
+      title: this.props.title ?? '', hasTitle: !!this.props.title,
+      subtitle: this.props.subtitle ?? '', hasSubtitle: !!this.props.subtitle,
+      isLoading: loading,
+      isErrorState: error,
+      errorMessage: this.props.error || '',
+      hasRetry: !!this.props.onRetry,
+      handleRetry: () => { if (this.props.onRetry) { this.props.onRetry(); } },
+      isEmpty, isNotEmpty: !loading && !error && !isEmpty,
+      emptyLabel: this.props.emptyLabel ?? 'Nothing here yet',
+      sectionsView: sections.map(sec => ({
+        hasHeading: !!sec.heading, heading: sec.heading ?? '',
+        rowsView: (sec.rows || []).map((row, i, arr) => ({
+          ...row, isDanger: row.tone === 'danger', isDefault: row.tone !== 'danger',
+          isDisabled: !!row.disabled, isEnabled: !row.disabled,
+          borderStyle: i === arr.length - 1 ? 'none' : '1px solid var(--color-border)'
+        }))
+      })),
+      handleClose: () => { if (this.props.onClose) { this.props.onClose(); } },
+      stopClick: (e) => e.stopPropagation()
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+button{ display:inline-flex; align-items:center; justify-content:center; }
+@keyframes wtwSkelPulse { 0%,100% { opacity:0.55; } 50% { opacity:1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .wtw-skel { animation: wtwSkelPulse var(--motion-duration-slow) var(--motion-easing-standard) infinite; }
+}
+@container (min-width:768px){
+  .wtw-fw-btn{ width:auto !important; min-width:140px; align-self:flex-start; display:inline-flex !important; }
+  .wtw-btn-secondary.wtw-fw-btn, .wtw-btn-outline.wtw-fw-btn{ min-width:100px; }
+  .wtw-fw-btn.wtw-stretch{ width:100% !important; min-width:0 !important; align-self:stretch !important; }
+}
+@media (hover:hover){
+  .wtw-btn-primary:hover{ background:var(--color-primary-hover); }
+  .wtw-btn-secondary:hover{ background:var(--color-border); }
+  .wtw-btn-outline:hover{ background:var(--color-surface-sunken); }
+}
+</style>
+</helmet>
+<sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+  <sc-if value="{{ isFullWidth }}" hint-placeholder-val="{{ true }}">
+    <div style="width:100%;background:var(--color-surface-sunken);border-radius:var(--radius-sm);padding:12px 0;display:flex;align-items:center;justify-content:center;box-sizing:border-box;">
+      <div class="wtw-skel" style="width:40%;height:10px;border-radius:var(--radius-pill);background:var(--color-border);opacity:0.7;"></div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isNotFullWidth }}" hint-placeholder-val="{{ false }}">
+    <div style="width:90px;background:var(--color-surface-sunken);border-radius:var(--radius-sm);padding:11px 0;display:flex;align-items:center;justify-content:center;box-sizing:border-box;">
+      <div class="wtw-skel" style="width:44px;height:10px;border-radius:var(--radius-pill);background:var(--color-border);opacity:0.7;"></div>
+    </div>
+  </sc-if>
+</sc-if>
+<sc-if value="{{ isErrorState }}" hint-placeholder-val="{{ false }}">
+  <sc-if value="{{ isFullWidth }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ handleClick }}" style-active="opacity:0.8;" style-focus="box-shadow:var(--shadow-focus-ring);" style="width:100%;background:transparent;color:var(--color-error);border:1px solid var(--color-error);border-radius:var(--radius-sm);padding:12px 0;font-weight:700;font-size:var(--font-size-sm);cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:opacity var(--motion-duration-fast) var(--motion-easing-standard);">{{ errorLabel }}</button>
+  </sc-if>
+  <sc-if value="{{ isNotFullWidth }}" hint-placeholder-val="{{ false }}">
+    <button onClick="{{ handleClick }}" style-active="opacity:0.8;" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;background:transparent;color:var(--color-error);border:1px solid var(--color-error);border-radius:var(--radius-sm);padding:11px 18px;font-weight:700;font-size:var(--font-size-sm);cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:opacity var(--motion-duration-fast) var(--motion-easing-standard);">{{ errorLabel }}</button>
+  </sc-if>
+</sc-if>
+<sc-if value="{{ isDefaultState }}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{ isFullWidth }}" hint-placeholder-val="{{ true }}">
+  <sc-if value="{{ isPrimary }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ handleClick }}" disabled="{{ isDisabled }}" class="wtw-fw-btn wtw-btn-primary {{ stretchClass }}" style-active="background:var(--color-primary-hover);" style-focus="box-shadow:var(--shadow-focus-ring);" style="width:100%;background:var(--color-primary);color:var(--color-on-primary);border:none;border-radius:var(--radius-sm);padding:12px 0;font-weight:700;font-size:var(--font-size-sm);cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ disabledOpacity }};">{{ label }}</button>
+  </sc-if>
+  <sc-if value="{{ isSecondary }}" hint-placeholder-val="{{ false }}">
+    <button onClick="{{ handleClick }}" disabled="{{ isDisabled }}" class="wtw-fw-btn wtw-btn-secondary {{ stretchClass }}" style-active="background:var(--color-border);" style-focus="box-shadow:var(--shadow-focus-ring);" style="width:100%;background:var(--color-accent-soft);color:var(--color-on-accent-soft);border:none;border-radius:var(--radius-sm);padding:12px 0;font-weight:700;font-size:var(--font-size-sm);cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ disabledOpacity }};">{{ label }}</button>
+  </sc-if>
+  <sc-if value="{{ isOutline }}" hint-placeholder-val="{{ false }}">
+    <button onClick="{{ handleClick }}" disabled="{{ isDisabled }}" class="wtw-fw-btn wtw-btn-outline {{ stretchClass }}" style-active="background:var(--color-surface-sunken);" style-focus="box-shadow:var(--shadow-focus-ring);" style="width:100%;background:transparent;color:var(--color-primary);border:1px solid var(--color-primary);border-radius:var(--radius-sm);padding:12px 0;font-weight:700;font-size:var(--font-size-sm);cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ disabledOpacity }};">{{ label }}</button>
+  </sc-if>
+</sc-if>
+<sc-if value="{{ isNotFullWidth }}" hint-placeholder-val="{{ false }}">
+  <sc-if value="{{ isPrimary }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ handleClick }}" disabled="{{ isDisabled }}" style-active="background:var(--color-primary-hover);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;background:var(--color-primary);color:var(--color-on-primary);border:none;border-radius:var(--radius-sm);padding:11px 18px;font-weight:700;font-size:var(--font-size-sm);cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ disabledOpacity }};">{{ label }}</button>
+  </sc-if>
+  <sc-if value="{{ isSecondary }}" hint-placeholder-val="{{ false }}">
+    <button onClick="{{ handleClick }}" disabled="{{ isDisabled }}" style-active="background:var(--color-border);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;background:var(--color-accent-soft);color:var(--color-on-accent-soft);border:none;border-radius:var(--radius-sm);padding:11px 18px;font-weight:700;font-size:var(--font-size-sm);cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ disabledOpacity }};">{{ label }}</button>
+  </sc-if>
+  <sc-if value="{{ isOutline }}" hint-placeholder-val="{{ false }}">
+    <button onClick="{{ handleClick }}" disabled="{{ isDisabled }}" style-active="background:var(--color-surface-sunken);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;background:transparent;color:var(--color-primary);border:1px solid var(--color-primary);border-radius:var(--radius-sm);padding:11px 18px;font-weight:700;font-size:var(--font-size-sm);cursor:pointer;font-family:'Instrument Sans',sans-serif;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ disabledOpacity }};">{{ label }}</button>
+  </sc-if>
+</sc-if>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:220,&quot;height&quot;:50},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Continue&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;primary&quot;,&quot;options&quot;:[&quot;primary&quot;,&quot;secondary&quot;,&quot;outline&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;fullWidth&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;stretch&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;disabled&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;loading&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;error&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;errorLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Try again&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onClick&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const variant = this.props.variant || 'primary';
+    const disabled = !!this.props.disabled;
+    const loading = !!this.props.loading;
+    const error = !!this.props.error && !loading;
+    return {
+      label: this.props.label ?? 'Button',
+      errorLabel: this.props.errorLabel ?? 'Try again',
+      isPrimary: variant === 'primary',
+      isSecondary: variant === 'secondary',
+      isOutline: variant === 'outline',
+      isFullWidth: this.props.fullWidth !== false,
+      isNotFullWidth: this.props.fullWidth === false,
+      stretchClass: this.props.stretch ? 'wtw-stretch' : '',
+      isDisabled: disabled,
+      disabledOpacity: disabled ? 0.5 : 1,
+      isLoading: loading,
+      isErrorState: error,
+      isDefaultState: !loading && !error,
+      handleClick: (e) => { if (!disabled && this.props.onClick) { this.props.onClick(e); } }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+# --- Local scratch (never commit) ---
+notes/
+.claude/settings.local.json
+
+# --- Node / Next.js ---
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/versions
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+.turbo/
+.vercel/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Service worker artifacts (Serwist — Phase 6)
+public/sw.js
+public/sw.js.map
+public/swe-worker-*.js
+public/workbox-*.js
+
+# --- Python / uv ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+.uv/
+*.egg-info/
+.eggs/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# --- Env files (commit only .env.example) ---
+.env
+.env.*
+!.env.example
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

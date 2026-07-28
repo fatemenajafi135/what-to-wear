@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+button{ display:inline-flex; align-items:center; justify-content:center; }
+@media (hover:hover){
+  .wtw-chip-active:hover{ background:var(--color-primary-hover); }
+  .wtw-chip-inactive:hover{ background:var(--color-border); }
+}
+</style>
+</helmet>
+<sc-if value="{{ isDisabled }}" hint-placeholder-val="{{ false }}">
+  <button disabled style="position:relative;font-size:var(--font-size-sm);font-weight:600;padding:var(--space-sm) var(--space-md);border-radius:var(--radius-pill);border:1px solid var(--color-border);background:var(--color-surface-sunken);color:var(--color-text-primary);font-family:'Instrument Sans',sans-serif;cursor:default;white-space:nowrap;pointer-events:none;opacity:0.5;">{{ label }}</button>
+</sc-if>
+<sc-if value="{{ isEnabled }}" hint-placeholder-val="{{ true }}">
+  <sc-if value="{{ isActive }}" hint-placeholder-val="{{ false }}">
+    <button onClick="{{ handleClick }}" class="wtw-chip-active" style-active="background:var(--color-primary-hover);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;font-size:var(--font-size-sm);font-weight:700;padding:var(--space-sm) var(--space-md);border-radius:var(--radius-pill);border:1px solid var(--color-primary);background:var(--color-primary);color:var(--color-on-primary);font-family:'Instrument Sans',sans-serif;cursor:pointer;white-space:nowrap;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);">{{ label }}</button>
+  </sc-if>
+  <sc-if value="{{ isInactive }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ handleClick }}" class="wtw-chip-inactive" style-active="background:var(--color-border);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;font-size:var(--font-size-sm);font-weight:600;padding:var(--space-sm) var(--space-md);border-radius:var(--radius-pill);border:1px solid var(--color-border);background:var(--color-surface-sunken);color:var(--color-text-primary);font-family:'Instrument Sans',sans-serif;cursor:pointer;white-space:nowrap;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);">{{ label }}</button>
+  </sc-if>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:100,&quot;height&quot;:40},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Tops&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;active&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;disabled&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onClick&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const active = !!this.props.active;
+    const disabled = !!this.props.disabled;
+    return {
+      label: this.props.label ?? '',
+      isActive: active, isInactive: !active,
+      isDisabled: disabled, isEnabled: !disabled,
+      handleClick: (e) => { if (this.props.onClick) { this.props.onClick(e); } }
+    };
+  }
+}
+</script>
+</body>
+</html>

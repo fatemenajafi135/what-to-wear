@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<sc-if value="{{ isCitation }}" hint-placeholder-val="{{ true }}">
+  <span style="display:inline-flex;align-items:center;background:var(--color-accent-soft);color:var(--color-primary);font-weight:700;font-size:var(--font-size-xs);padding-block:2px;padding-inline:var(--space-sm);border-radius:var(--radius-pill);position:relative;top:-1px;margin:0 1px;">{{ label }}</span>
+</sc-if>
+<sc-if value="{{ isStatus }}" hint-placeholder-val="{{ false }}">
+  <span style="font-size:var(--font-size-xs);font-weight:700;color:var(--color-primary);background:var(--color-accent-soft);padding:var(--space-xs) var(--space-md);border-radius:var(--radius-pill);">{{ label }}</span>
+</sc-if>
+<sc-if value="{{ isMuted }}" hint-placeholder-val="{{ false }}">
+  <span style="font-size:var(--font-size-xs);font-weight:700;color:var(--color-text-secondary);background:var(--color-surface-sunken);padding:var(--space-xs) var(--space-md);border-radius:var(--radius-pill);">{{ label }}</span>
+</sc-if>
+<sc-if value="{{ isCount }}" hint-placeholder-val="{{ false }}">
+  <span style="width:18px;height:18px;border-radius:var(--radius-circle);background:var(--color-primary);color:var(--color-on-primary);font-size:var(--font-size-xs);display:inline-flex;align-items:center;justify-content:center;">{{ label }}</span>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:110,&quot;height&quot;:34},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;1&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;tone&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;citation&quot;,&quot;options&quot;:[&quot;citation&quot;,&quot;status&quot;,&quot;muted&quot;,&quot;count&quot;],&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const tone = this.props.tone || 'citation';
+    return {
+      label: this.props.label ?? '',
+      isCitation: tone === 'citation', isStatus: tone === 'status', isMuted: tone === 'muted', isCount: tone === 'count'
+    };
+  }
+}
+</script>
+</body>
+</html>
