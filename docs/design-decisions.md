@@ -10,7 +10,7 @@ that disagreement is called out explicitly below with a decision and a reason.
 
 Every value here is derived from tokens already defined in §1.1/§1.2. Nothing is invented.
 
-Items marked **NEEDS YOUR CALL** are product decisions left open.
+Every item in this document is decided. Nothing is left open.
 
 ---
 
@@ -29,10 +29,12 @@ every section of Settings. This is the largest gap in the handoff.
 Every form field is a vertical stack with `--space-xs` (4px) between label and control:
 
 ```
-Label            10.5px / 700, --color-text-secondary, sentence case
+Label            --font-size-xs (12px) / 700, --color-text-secondary, sentence case
 [ Control ]      44px min height
-Help or error    10.5px / 400, --color-text-secondary or --color-error
+Help or error    --font-size-xs (12px) / 400, --color-text-secondary or --color-error
 ```
+
+(Sizes follow the rebuilt scale in §6, not `design-system.md` §2.)
 
 Fields within a form are separated by `--space-lg` (16px). Help text and error text occupy
 the same slot — an error replaces help text, never stacks below it, so field height stays
@@ -47,7 +49,7 @@ form-button rule requires this).
 |---|---|
 | Height | `44px` — satisfies the §3 hit-target minimum without a pseudo-element |
 | Padding | `11px --space-md` (12px horizontal) |
-| Font | `--font-size-base` (15px) / 22px line-height, weight 400 |
+| Font | **`--font-size-md` (16px)** / 22px line-height, weight 400 — see the iOS note below |
 | Radius | `--radius-sm` (8px) — per the token's own comment |
 | Background | `--color-surface-sunken` — per the token's own comment |
 | Border | `1px solid --color-border` |
@@ -65,6 +67,13 @@ form-button rule requires this).
 | Disabled | `opacity: 0.5` + `disabled` attribute, per §3's single disabled convention |
 | Read-only | `--color-background` fill, no border-hover, still focusable and copyable |
 
+**⚠ Input text is 16px at every breakpoint, and this is not negotiable.** iOS Safari
+auto-zooms the page whenever a focused input has a font-size below 16px, then leaves the
+viewport scaled — which in an installed PWA with no URL bar gives the user no obvious way
+back. This is the single most common mobile web-form bug, and it silently breaks the app
+shell's layout. It is the one place a control deviates from the body scale, and the reason
+is mechanical, not aesthetic. Height math still resolves to exactly 44px: `11 + 22 + 11`.
+
 **Password fields** carry a show/hide toggle: an `IconButton` at `size=28` inset at the
 trailing edge, Lucide `eye` / `eye-off`, `aria-label` "Show password" / "Hide password",
 `aria-pressed` reflecting state. The 44px hit-area pseudo-element applies and may overlap
@@ -72,7 +81,8 @@ the input's padding box.
 
 ### 1.3 `Textarea`
 
-Identical to `Input` except: `min-height: 88px` (two rows), `padding: 11px 12px`,
+Identical to `Input` except: `min-height: 94px` (three rows at 16px/24px, plus the 11px
+padding pair), `padding: 11px 12px`,
 `resize: vertical`, line-height 1.5 to match the design system's stated treatment of the
 Notes field. Used for Add-item **Notes** only.
 
@@ -130,8 +140,9 @@ Validation fires on blur, never on keystroke, and re-validates on every change o
 has already errored. Form-level errors (the existing `auth.*.error.body` strings) render in
 a `Banner` with `variant="error"` above the first field.
 
-**NEEDS YOUR CALL:** the 8-character minimum is a placeholder. Supabase Auth's default is 6.
-Confirm the real rule before feature 002.
+**Confirmed:** the minimum is **8 characters**, not Supabase Auth's default of 6. Supabase's
+`password_min_length` must be raised to 8 in project config so the server enforces what the
+client claims — a client-only rule is not a rule.
 
 ---
 
@@ -207,28 +218,69 @@ struck. Disabled styling everywhere remains the opacity convention.
 
 ---
 
-## 6. The type scale and the token scale barely intersect
+## 6. The type scale — rebuilt
 
-Tokens are 11/13/15/17/20/24/28px. Actual screen text is 26/16/13/12.5/10.5/10px. Only 13
-and 20 overlap, so body copy, labels and captions have no token — which makes §1's *"every
-component reads only these names"* false for typography.
+Two separate problems. First, the token scale (11/13/15/17/20/24/28) and the actual screen
+text (26/16/13/12.5/10.5/10) share only two values, so body copy, labels and captions have
+no token at all — making §1's *"every component reads only these names"* false for
+typography. Second, the absolute sizes are too small.
 
-**Decision:** tokenize the display scale rather than restyle the app, so the claim becomes
-true with zero visual change:
+**Evidence on the second point.** The prototype's device bezel (`ios-frame.jsx`) is
+**402 × 874** — the iPhone 15 Pro logical viewport. So the type was authored at true device
+scale; it was not shrunk by a simulator. That means 12.5px body and 10px caption are what a
+real phone renders, and both fall below the platform floors:
+
+- iOS HIG: avoid text below **11 pt** (1 pt = 1 CSS px at standard viewport scale). Caption
+  at 10px and Label at 10.5px are below it.
+- Material: body is **14 sp**; 12 sp is the caption floor. Body at 12.5px is below it.
+
+There is also no responsive step anywhere — the same 12.5px serves a 402px phone and a
+560px column on a 1440px monitor.
+
+**Decision: apply a uniform ×1.12 multiplier to the whole scale, rounded to whole pixels,
+then add one step at desktop.** A single multiplier preserves every ratio the designer
+chose, so the visual hierarchy is unchanged — it is the same design, legible.
+
+| Style | Design | **0–1023px** | **≥1024px** | Line height |
+|---|---:|---:|---:|---|
+| Display | 26 / 700 | **28** | **30** | 34 / 36 |
+| Screen title `<h1>` | 20 / 700 | **22** | **24** | 28 / 30 |
+| Section title `<h2>` | 16 / 700 | **18** | 18 | 23 |
+| Card title | 13 / 700 | **15** | **16** | 20 / 21 |
+| Body | 12.5 / 400 | **14** | **15** | 21 / 23 (1.5) |
+| Label | 10.5 / 700 | **12** | 12 | 16 |
+| Caption | 10 / 600 | **11** | 11 | 15 |
+
+This replaces both the old UI scale and the untokenized display scale with one scale:
 
 ```css
---font-size-2xs: 10px;    /* Caption */
---font-size-xs2: 10.5px;  /* Label, meta lines */
---font-size-sm2: 12.5px;  /* Body */
---font-size-md2: 16px;    /* Section title */
---font-size-3xl: 26px;    /* Display */
+--font-size-2xs:  11px;   /* Caption */
+--font-size-xs:   12px;   /* Label, meta lines */
+--font-size-sm:   14px;   /* Body, mobile + tablet */
+--font-size-base: 15px;   /* Body desktop; Card title mobile + tablet */
+--font-size-md:   16px;   /* Card title, desktop */
+--font-size-lg:   18px;   /* Section title */
+--font-size-xl:   22px;   /* Screen title, mobile + tablet */
+--font-size-2xl:  24px;   /* Screen title, desktop */
+--font-size-3xl:  28px;   /* Display, mobile + tablet */
+--font-size-4xl:  30px;   /* Display, desktop */
 ```
 
-**NEEDS YOUR CALL, separately:** 12.5px body text and a stated 10px floor are small for a
-real viewport. These values came from a mockup rendered inside a fixed phone bezel; at true
-desktop width they will read tiny, and §8 already flags that contrast must be re-verified
-*"once real type is set"*. I would raise body to 13px and the floor to 11px at 768px+ via a
-single scale step, leaving mobile untouched. This is a visual change, so it is your call.
+The old `13px`, `17px` and `20px` steps are dropped — nothing used them. §2's statement
+*"minimum body text anywhere is 10px"* is superseded: **the floor is 11px.**
+
+**Two tiers only**, breaking at 1024px. Tablet shares the mobile scale deliberately — a
+768px tablet is held at roughly phone distance, so it needs phone sizing, and fewer
+breakpoints means fewer things to get wrong.
+
+**Layout risk is low.** Every fixed-pixel box in the design (120px closet tile, 220px photo,
+56px thumbnail, the skeleton blocks) contains an image or a placeholder, not text. The
+text-bearing surfaces — Outfits cards, Calendar rows, Chat history rows, chat bubbles — are
+all auto-height in the spec, so they absorb the change. The one visible consequence is that
+`TopHeader` titles ellipsis-truncate slightly earlier, which is acceptable.
+
+Per §8 of the design system, re-verify contrast numerically once this is set, especially
+`--color-text-secondary` on `--color-surface-sunken`.
 
 ---
 
@@ -299,12 +351,49 @@ result lands in.
 
 ---
 
-## 11. Still open
+## 11. Closet sufficiency — a count is the wrong gate
 
-| # | Question | Why it needs you |
+`wardrobeMinItems = 5` blocks the styling request below five items. The concern raised
+against it is correct: **five items does not guarantee an outfit can be built.** A closet of
+five tops produces nothing, and the user would be let through the gate only to hit a failure
+they cannot diagnose.
+
+The count is measuring the wrong thing. From the salvaged enumerator, an outfit skeleton is
+`top × bottom × footwear`, or `full_body × footwear`, optionally crossed with `outerwear`
+when it is cold. So the real precondition is **slot coverage**, not volume:
+
+```
+(≥1 top AND ≥1 bottom AND ≥1 footwear)  OR  (≥1 full_body AND ≥1 footwear)
+```
+
+**Decision — three bands, not one threshold:**
+
+| Band | Condition | Behaviour |
 |---|---|---|
-| 1 | Password minimum length (§1.7) | Supabase default is 6; I assumed 8 |
-| 2 | Raise body text from 12.5px at 768px+ (§6) | A real visual change to the design |
-| 3 | `wardrobeMinItems = 5` | Outfits are 3–4 pieces, so five items is barely one outfit. A product threshold, not a design value. |
+| **Blocked** | fewer than 5 items **or** slot coverage unsatisfied | Styling request is blocked. Copy names *what is missing*, not a number. |
+| **Sparse** | coverage satisfied, but under 15 items | Request proceeds. A dismissible `Banner variant="info"` sets expectations. |
+| **Normal** | 15 items or more | No banner. |
 
-Everything else above is decided and ready to implement.
+Both conditions must pass to leave the Blocked band — the five-item floor is kept
+deliberately, coverage is added alongside it.
+
+New copy, replacing `recommend.insufficient_closet.body`:
+
+| Key | Copy |
+|---|---|
+| `recommend.insufficient_closet.body` | I can't put an outfit together yet. Add {missing} and I'll get started. |
+| `recommend.insufficient_closet.cta` | Add items to your closet |
+| `recommend.sparse_closet.hint` | I'm working with a small closet, so suggestions may repeat. Add more pieces for more variety. |
+
+`{missing}` is a natural-language list of the unsatisfied slots — "a pair of shoes", "a top
+and a pair of shoes". Naming the gap is actionable in a way that "add at least 5 items"
+never is, and it removes the em dash the original string carried (§7).
+
+The sparse banner is dismissible per session and must not reappear until the next session,
+so it never becomes nagging.
+
+**Both thresholds — 5 and 15 — are config values, not literals in copy.**
+
+---
+
+*All items in this document are decided. Nothing is left open.*
