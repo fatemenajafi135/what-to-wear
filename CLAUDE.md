@@ -39,3 +39,28 @@ shares no history with `main`. Spec Kit will extend this file in Phase 4.
 
 - Conventional Commits (`docs(design):`, `chore(ai):`, `feat(001):` …).
 - No secrets in the repo. Commit only `.env.example`.
+
+## Branches
+
+Spec Kit creates `###-slug`. **Rename it immediately** — the repo also holds the old
+prototype's branches, which share the same numbers (`003-mvp-app` is *legacy*, not this
+rebuild), so an unprefixed number is ambiguous:
+
+```bash
+git branch -m feat/003-auth      # right after /speckit-specify cuts 003-auth
+```
+
+| Kind | Format |
+|---|---|
+| Feature | `feat/###-slug` |
+| Follow-up fix | `fix/###-slug` |
+| Docs only | `docs/slug` |
+
+The spec directory keeps Spec Kit's own name (`specs/003-auth/`) — only the branch is
+prefixed. Renaming is safe: Spec Kit resolves the feature directory from
+`.specify/feature.json`, never by parsing the branch name.
+
+- Branch off `rebuild`; merge back into it by PR. Never commit directly to `rebuild`, and
+  never push it from an agent session — unpushed local commits on `rebuild` are what cause
+  duplicate merge commits.
+- Never rename or delete any branch you did not create.
