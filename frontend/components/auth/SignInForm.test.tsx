@@ -6,19 +6,21 @@ import { SignInForm } from "./SignInForm";
 const push = vi.fn();
 const refresh = vi.fn();
 const signInWithPassword = vi.fn();
+const signInWithOAuth = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh }),
 }));
 
 vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { signInWithPassword } }),
+  createClient: () => ({ auth: { signInWithPassword, signInWithOAuth } }),
 }));
 
 beforeEach(() => {
   push.mockClear();
   refresh.mockClear();
   signInWithPassword.mockClear();
+  signInWithOAuth.mockClear();
 });
 
 describe("SignInForm", () => {
@@ -54,5 +56,15 @@ describe("SignInForm", () => {
     render(<SignInForm />);
     expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute("href", "/forgot-password");
     expect(screen.getByRole("link", { name: "Sign up" })).toHaveAttribute("href", "/signup");
+  });
+
+  it("calls signInWithOAuth with the google provider and an /auth/callback redirect when the Google button is clicked", async () => {
+    render(<SignInForm />);
+    await userEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+
+    expect(signInWithOAuth).toHaveBeenCalledWith({
+      provider: "google",
+      options: { redirectTo: expect.stringContaining("/auth/callback") },
+    });
   });
 });

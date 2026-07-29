@@ -6,19 +6,21 @@ import { SignUpForm } from "./SignUpForm";
 const push = vi.fn();
 const refresh = vi.fn();
 const signUp = vi.fn();
+const signInWithOAuth = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh }),
 }));
 
 vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { signUp } }),
+  createClient: () => ({ auth: { signUp, signInWithOAuth } }),
 }));
 
 beforeEach(() => {
   push.mockClear();
   refresh.mockClear();
   signUp.mockClear();
+  signInWithOAuth.mockClear();
 });
 
 describe("SignUpForm", () => {
@@ -67,6 +69,16 @@ describe("SignUpForm", () => {
   it("links to /signin for an existing account", () => {
     render(<SignUpForm />);
     expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/signin");
+  });
+
+  it("calls signInWithOAuth with the google provider and an /auth/callback redirect when the Google button is clicked", async () => {
+    render(<SignUpForm />);
+    await userEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+
+    expect(signInWithOAuth).toHaveBeenCalledWith({
+      provider: "google",
+      options: { redirectTo: expect.stringContaining("/auth/callback") },
+    });
   });
 
   it("blocks submission and shows all field errors when the passwords don't match", async () => {

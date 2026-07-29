@@ -51,9 +51,13 @@ export function SignUpForm() {
     router.refresh();
   }
 
-  // Implemented in full in Phase 7 (US4) — supabase.auth.signInWithOAuth,
-  // redirecting through /auth/callback.
-  function handleGoogleClick() {}
+  function handleGoogleClick() {
+    const supabase = createClient();
+    supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+  }
 
   return (
     <form className={styles.form} onSubmit={handleSubmit} noValidate>
