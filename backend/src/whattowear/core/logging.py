@@ -27,9 +27,7 @@ class JSONFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
-        extras = {
-            key: value for key, value in record.__dict__.items() if key not in _RESERVED_LOG_RECORD_ATTRS
-        }
+        extras = {key: value for key, value in record.__dict__.items() if key not in _RESERVED_LOG_RECORD_ATTRS}
         if extras:
             payload.update(extras)
         return json.dumps(payload)

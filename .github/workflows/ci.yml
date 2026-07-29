@@ -65,6 +65,10 @@ jobs:
         working-directory: backend
         run: uv run ruff check .
 
+      - name: Format check (ruff)
+        working-directory: backend
+        run: uv run ruff format --check .
+
       - name: Type-check (mypy)
         working-directory: backend
         run: uv run mypy src
