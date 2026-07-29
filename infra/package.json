@@ -1,0 +1,9 @@
+{
+  "name": "whattowear-infra",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local Supabase tooling only — no application code. See specs/002-backend-foundation/research.md §4.",
+  "devDependencies": {
+    "supabase": "2.110.0"
+  }
+}
