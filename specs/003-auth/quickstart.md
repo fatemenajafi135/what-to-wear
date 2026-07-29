@@ -96,3 +96,28 @@ Steps under "needs §Prerequisites" require a real Docker daemon that can pull S
 images from Docker Hub. See `research.md` §5 if that pull is blocked by network policy —
 in that case, run these steps on a machine with normal Docker Hub access instead, and report
 which ones were actually run versus only wired (handoff §12's reporting requirement).
+
+### What was actually run, building this feature
+
+The session that built this feature had a Docker daemon but no Docker Hub access
+(`research.md` §5), so `npx supabase start` never completed. What was verified instead:
+
+- **Backend — fully run, fast section**: `uv run pytest`, `ruff check`, `ruff format --check`,
+  `mypy`, `lint-imports` — all clean, including the mocked JWT unit and integration tests.
+- **Frontend — fully run**: `npm run lint`, `npm run typecheck`, `npm run build`, `npm test`
+  (Vitest — 65 tests, including every auth component's blur-validation, submit, and error
+  paths, all mocked). `next build` emits all four auth routes plus `/auth/callback` at their
+  expected static/dynamic shapes.
+- **Frontend — manually run against `next dev`, no live Supabase**: confirmed `/signin`,
+  `/signup`, `/forgot-password` render 200 (not 500), the wordmark renders as a focusable
+  `<h1>`, keyboard tab order reaches every control on `/signin` in the expected sequence, the
+  password show/hide toggle and Sign in button both take real keyboard focus, and the desktop
+  (1024px+) panel picks up its `--color-surface` background per design-decisions §13.
+  `/reset-password/some-bad-token` correctly falls through to the error state when `verifyOtp`
+  fails against an unreachable Supabase.
+- **Not run at all**: every scenario requiring a live Supabase response — real sign-up/sign-in,
+  the password-reset email round trip, Google OAuth against a real provider, and all four
+  Playwright specs that depend on any of those (`auth-flow.spec.ts`, `root-redirect.spec.ts`'s
+  signed-in case, `route-protection.spec.ts`, `password-reset.spec.ts`). These are believed
+  correct by code review and by the manual checks above, but **unverified** — run them for real
+  on a machine with Docker Hub access before calling this feature done.
