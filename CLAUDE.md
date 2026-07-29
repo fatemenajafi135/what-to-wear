@@ -60,7 +60,10 @@ The spec directory keeps Spec Kit's own name (`specs/003-auth/`) — only the br
 prefixed. Renaming is safe: Spec Kit resolves the feature directory from
 `.specify/feature.json`, never by parsing the branch name.
 
-- Branch off `rebuild`; merge back into it by PR. Never commit directly to `rebuild`, and
-  never push it from an agent session — unpushed local commits on `rebuild` are what cause
-  duplicate merge commits.
+- **Code** — feature and fix work — branches off `rebuild` and merges back by PR.
+- **Docs-only changes** may be committed straight to `rebuild`; a branch and a PR for a
+  markdown file is ceremony without benefit.
+- **Never `git push` from an agent session.** The human pushes. Local `pull.rebase true` is
+  what keeps history linear when they pull after a PR merge — without it, unpushed commits
+  on `rebuild` produce duplicate merge commits.
 - Never rename or delete any branch you did not create.
