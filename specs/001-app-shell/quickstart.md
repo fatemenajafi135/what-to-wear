@@ -33,9 +33,9 @@ http://localhost:3000/dev/components
 ```
 
 - Confirm this route 404s when built with `NODE_ENV=production` (`npm run build && npm start`).
-- In dev mode, cycle every state of all 16 components in both themes (toggle via the
-  `wtw-theme` cookie, or your browser's dark-mode emulation plus reloading once with no
-  cookie set). Confirm no state is visually broken and nothing reads a raw color/pixel value
+- In dev mode, cycle every state of all 16 components in both themes (toggle via your
+  browser's dark-mode emulation, or by setting `data-theme="light"`/`"dark"` on `<html>` in
+  devtools). Confirm no state is visually broken and nothing reads a raw color/pixel value
   (spot-check by searching component CSS for hex codes or bare `px` literals outside the
   token files).
 - Confirm every control smaller than 44×44px still has a 44×44px click/tap target (browser
@@ -59,15 +59,22 @@ http://localhost:3000/dev/components
 - Throttle the network (devtools) to force `app/loading.tsx` to appear on a navigation, and
   confirm the mark/wordmark render correctly on the background token in both themes.
 
-## 5. Theme boot (Clarifications session 2026-07-28, FR-005, SC-005)
+## 5. Theme boot (corrected by `docs/handoffs/001-app-shell-fix-theme.md`, FR-005, SC-005)
 
-- Clear the `wtw-theme` cookie, force the OS to dark mode, reload: confirm the light default
-  renders (documented consequence in `research.md` — no client `matchMedia` fallback ships
-  this slice).
-- Set the `wtw-theme` cookie to `dark` manually (devtools), reload with any OS preference:
-  confirm dark renders immediately in the first server response (view source — `data-theme`
-  should already be `dark` in the raw HTML, not set after hydration).
-- Repeat 20 cold reloads split across forced light/dark; confirm 0 show a flash.
+- Force the OS/browser to dark mode with no `data-theme` override set anywhere: reload and
+  confirm dark renders on the very first frame — this is a pure CSS `light-dark()` resolution
+  (`styles/themes.css`) against `prefers-color-scheme`, so there is no server call or script
+  to wait on.
+- Force the OS/browser to light mode the same way: confirm light renders.
+- In devtools, set `data-theme="dark"` on `<html>` while the OS is light (and the reverse):
+  confirm the explicit attribute wins both times — this is the override a future theme
+  toggle depends on.
+- Repeat several cold reloads split across forced light/dark; confirm 0 show a flash. Since
+  the whole mechanism is CSS with no script involved, there is no code path left that *could*
+  flash — this is a sanity check, not a search for a bug.
+- Run `npm run build` and confirm the stub routes (`/recommend`, `/closet`, `/outfits`,
+  `/profile`, `/profile/settings`, `/add`) report `○ (Static)`, not `ƒ (Dynamic)` — the root
+  layout no longer calls `cookies()`.
 
 ## 6. PWA basics (FR-012, FR-013, FR-014, FR-015, SC-004, SC-006)
 

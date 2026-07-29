@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { instrumentSans } from "@/lib/fonts";
-import { resolveTheme } from "@/lib/theme";
 import "@/styles/tokens.css";
 import "@/styles/themes.css";
 import "@/styles/globals.css";
@@ -24,13 +23,19 @@ export const viewport: Viewport = {
   ],
 };
 
-export default async function RootLayout({
+/**
+ * No `data-theme` is set here — there is no override source yet (no theme
+ * toggle ships in this slice). Boot theme resolves entirely in CSS via
+ * `light-dark()` against the OS's `prefers-color-scheme`
+ * (styles/themes.css), which is why this can stay a plain, static
+ * component: no cookies(), no per-request work, so `next build` emits
+ * these stub routes as ○ (Static) rather than ƒ (Dynamic).
+ */
+export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const { theme } = await resolveTheme();
-
   return (
-    <html lang="en" data-theme={theme} className={instrumentSans.variable}>
+    <html lang="en" className={instrumentSans.variable}>
       <body>{children}</body>
     </html>
   );

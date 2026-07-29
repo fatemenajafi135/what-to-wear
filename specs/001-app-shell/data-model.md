@@ -6,26 +6,23 @@ recorded here as the TypeScript types other tasks and future features will impor
 
 ## Theme preference
 
-Not stored server-side, not associated with a user record (no auth exists yet). Represented
-purely as a cookie value plus a resolved value used for rendering.
+**Corrected by `docs/handoffs/001-app-shell-fix-theme.md` — this section previously described
+a cookie-backed model; see `research.md`'s amended "Boot-time theme" decision for the full
+history.** There is no stored value and no per-request resolution at all — theme is not data,
+it is a pure CSS computation.
 
 ```ts
-type ThemeName = "light" | "dark";
-
-const THEME_COOKIE = "wtw-theme"; // values: ThemeName only
-
-interface ResolvedTheme {
-  theme: ThemeName;       // what actually renders this request
-  source: "cookie" | "default"; // where it came from — no client matchMedia fallback (see research.md)
-}
+type ThemeName = "light" | "dark"; // still the vocabulary; not backed by any stored value
 ```
 
 **Rules**:
-- If the `wtw-theme` cookie is present and is exactly `"light"` or `"dark"`, it wins.
-- Otherwise `theme` resolves to the fixed default `"light"` (matches the manifest's
-  `background_color` approximation).
-- No lifecycle/transition beyond "set" — nothing in this slice writes the cookie; the read
-  path exists for a future theme-toggle feature to use (see `research.md`).
+- Every themed token is a `light-dark()` pair (`styles/themes.css`); the browser picks the
+  matching value from the OS's `prefers-color-scheme` before first paint. No cookie, no
+  server call, no per-request state.
+- An explicit `data-theme="light"` / `data-theme="dark"` attribute on `<html>` — which a
+  future theme-toggle feature would set client-side — overrides the OS preference in both
+  directions (forces `color-scheme`, which `light-dark()` resolves against). Nothing in this
+  slice sets that attribute; no toggle exists yet.
 
 ## Navigation destination
 

@@ -45,7 +45,12 @@ config glue than Vitest for no behavioral gain here. Cypress overlaps with Playw
 role but has a weaker multi-browser/CI story for this project's needs (no Cypress-specific
 requirement exists anywhere in the constitution or handoff).
 
-## Boot-time theme: server-read cookie, no client script
+## Boot-time theme: server-read cookie, no client script — AMENDED, see below
+
+**This decision shipped a real defect and has been superseded. The original reasoning below
+is kept verbatim for the record; the amendment at the end explains what it missed, why the
+conclusion changed, and what replaced it. Do not read the "Decision" line below as current —
+read the amendment.**
 
 **Decision**: A single cookie (`wtw-theme`, values `light` | `dark`) is read in the root
 `layout.tsx` via `next/headers`'s `cookies()`. If present, it wins outright. If absent, the
@@ -82,6 +87,63 @@ before paint on the client; also reintroduces a hand-written script the cookie a
 unnecessary. `next-themes` (or similar) library — pulls in a dependency for logic small enough
 to hand-write in `lib/theme.ts`, and most such libraries default to the client-script pattern
 this decision explicitly rejects.
+
+---
+
+### Amendment (`docs/handoffs/001-app-shell-fix-theme.md`, 2026-07-29): the option set was incomplete
+
+**What shipped, and what it broke.** `DEFAULT_THEME = "light"` with `prefers-color-scheme`
+read nowhere meant a first-time visitor whose OS was in dark mode saw the light theme, with
+no mechanism to ever correct it — no toggle ships in this slice to write the override cookie.
+This is the exact bug `design/known-gaps.md` §-2 names in the prototype, reproduced faithfully
+in the rebuild. It shipped because "no flash" was verified (correctly) while "renders the
+OS-preferred theme for a visitor with no cookie" was never separately checked — the two are
+not the same claim, and only the first was tested.
+
+**What the reasoning above missed.** "Alternatives considered" weighed exactly two options —
+an inline blocking script, and `next-themes` — and rejected both correctly. It never evaluated
+**pure CSS**. A `light-dark()` value (or an equivalent `@media (prefers-color-scheme)` block)
+resolves before first paint by definition: there is no script in the loop, so there is nothing
+to flash and nothing that can race hydration. A sound argument against the two options
+considered reached the wrong overall conclusion because a third, better option was never on
+the table.
+
+Two specific claims above do not hold for CSS and should be read as scoped to the script-based
+options only, not as general truths:
+
+- *"a client-side `matchMedia` read reintroduces the exact flash"* — true of JavaScript,
+  irrelevant to a CSS media query, which the rendering engine resolves as part of computing
+  styles for the first frame, not as a subsequent script-driven correction.
+- *"cannot help SSR'd content match on the very first response byte"* — this conflates the
+  HTML with the custom-property values computed from it. The markup this slice serves is
+  identical regardless of theme; only which branch of `light-dark()` a themed CSS variable
+  resolves to differs, and that resolution happens in the same paint as everything else.
+  There was never a byte of HTML to mismatch, and therefore no hydration risk to guard
+  against with a cookie in the first place.
+
+**Corrected decision**: every themed token in `styles/themes.css` is a `color()` value, so
+each becomes a `light-dark(light-value, dark-value)` pair under a single `color-scheme: light
+dark` declaration on `:root`. The browser picks the branch matching `prefers-color-scheme`
+before first paint — no cookie, no server read, no client script. An explicit `data-theme`
+attribute on `<html>` (what a future theme toggle would set) still overrides the system
+preference in both directions, by forcing `color-scheme` to a single value that `light-dark()`
+resolves against — this is the same override guarantee the cookie used to provide, just
+supplied by CSS cascade instead of a request-time read.
+
+**Consequence recovered, not just avoided**: `resolveTheme()`'s `cookies()` call in the root
+layout had opted every route in this slice out of static rendering (`next build` reported
+every stub route as `ƒ Dynamic`) to solve a problem CSS solves for free. Removing it restores
+`○ Static` output for routes with no per-request data — which is all of them, today.
+
+**Disposition of `lib/theme.ts`**: removed outright rather than left in place unused. Nothing
+imports it once `layout.tsx` no longer calls `resolveTheme()`, and an orphaned module with no
+call sites is exactly the kind of thing that misleads the next reader into thinking a cookie
+mechanism is still live. If a future theme-toggle feature needs a place to persist an
+override, it should be designed against that feature's actual requirements rather than
+resurrecting this one — the `light-dark()` + `data-theme` override contract in
+`styles/themes.css` is what it needs to target; how the override gets *set* (cookie,
+`localStorage`, a server-known preference) is that feature's decision to make, not a
+constraint this fix should pre-suppose.
 
 ## Overlay dialog semantics: native `<dialog>`
 
