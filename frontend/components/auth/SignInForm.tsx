@@ -8,20 +8,19 @@ import { Button } from "@/components/ui/Button/Button";
 import { Banner } from "@/components/ui/Banner/Banner";
 import { GoogleButton } from "@/components/auth/GoogleButton";
 import { createClient } from "@/lib/supabase/client";
-import { useValidatedField, validateEmail, validatePassword, validateConfirmPassword } from "@/lib/auth-validation";
+import { useValidatedField, validateEmail, validatePassword } from "@/lib/auth-validation";
 import { authCopy } from "@/lib/auth-copy";
 import styles from "./AuthForm.module.css";
 
 /**
- * spec.md US1 (FR-002). Field errors beneath their own field, form-level
- * errors in a Banner above the form (FR-018) — two different mechanisms,
- * per handoff trap #2.
+ * spec.md US2 (FR-003). Deliberately doesn't distinguish "no such email"
+ * from "wrong password" in its error copy — auth.signin.error.body reads
+ * the same either way, so this never has to make that distinction itself.
  */
-export function SignUpForm() {
+export function SignInForm() {
   const router = useRouter();
   const email = useValidatedField(validateEmail);
   const password = useValidatedField(validatePassword);
-  const confirmPassword = useValidatedField((value) => validateConfirmPassword(password.value, value));
   const [formError, setFormError] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
 
@@ -31,19 +30,17 @@ export function SignUpForm() {
 
     const emailError = validateEmail(email.value);
     const passwordError = validatePassword(password.value);
-    const confirmError = validateConfirmPassword(password.value, confirmPassword.value);
     email.onBlur();
     password.onBlur();
-    confirmPassword.onBlur();
-    if (emailError || passwordError || confirmError) return;
+    if (emailError || passwordError) return;
 
     setSubmitting(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({ email: email.value, password: password.value });
+    const { error } = await supabase.auth.signInWithPassword({ email: email.value, password: password.value });
     setSubmitting(false);
 
     if (error) {
-      setFormError(authCopy.signup.error.body);
+      setFormError(authCopy.signin.error.body);
       return;
     }
 
@@ -66,28 +63,25 @@ export function SignUpForm() {
         onBlur={email.onBlur}
         error={email.error}
       />
-      <Input
-        type="password"
-        label="Password"
-        value={password.value}
-        onChange={password.onChange}
-        onBlur={password.onBlur}
-        error={password.error}
-      />
-      <Input
-        type="password"
-        label="Confirm password"
-        value={confirmPassword.value}
-        onChange={confirmPassword.onChange}
-        onBlur={confirmPassword.onBlur}
-        error={confirmPassword.error}
-      />
+      <div>
+        <Input
+          type="password"
+          label="Password"
+          value={password.value}
+          onChange={password.onChange}
+          onBlur={password.onBlur}
+          error={password.error}
+        />
+        <p className={`textCaption ${styles.forgotLink}`}>
+          <Link href="/forgot-password">Forgot password?</Link>
+        </p>
+      </div>
       <Button type="submit" width="stretch" state={submitting ? "loading" : "default"}>
-        Create account
+        Sign in
       </Button>
       <GoogleButton onClick={handleGoogleClick} />
       <p className={`textBody ${styles.hint}`}>
-        Already have an account? <Link href="/signin">Sign in</Link>
+        Don&apos;t have an account? <Link href="/signup">Sign up</Link>
       </p>
     </form>
   );
