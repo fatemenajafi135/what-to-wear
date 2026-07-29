@@ -76,9 +76,13 @@ outputs/
 !evals/fixtures/**
 
 # --- Env files (commit only .env.example) ---
+# `.env` alone does NOT match `legacy.env`, `prod.env`, `local.env` — a real
+# secret leak got through on exactly that gap. `*.env` catches every variant.
 .env
 .env.*
+*.env
 !.env.example
+!*.env.example
 
 # --- OS / editor ---
 .DS_Store

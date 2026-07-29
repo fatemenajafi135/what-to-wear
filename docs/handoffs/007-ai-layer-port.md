@@ -14,11 +14,33 @@ Backend only. No UI. It runs in parallel with feature 003 and shares no files wi
 ## 1. Mission
 
 Port the salvaged AI pipeline out of `../app-legacy` into `backend/src/whattowear/`,
-**preserving behaviour exactly**, and prove it with evals against the recorded baselines.
+**preserving behaviour** — and prove it with evals against the recorded baselines.
 
-Refactoring is expected and welcome. **Regenerating is prohibited** (Constitution Principle
-I). If you find yourself writing a scorer from scratch, stop — that code exists, it was
-evaluated, and rewriting it discards the evidence.
+### Port with understanding, not transcription
+
+**This is not a copy-paste job.** Read each module and understand why it exists before you
+move it. A file that lands here unchanged because nobody looked at it is a worse outcome
+than one that lands here improved.
+
+The line to hold is precise:
+
+| | |
+|---|---|
+| **Behaviour** — what the code computes, what it returns, how it ranks and scores | **Must not change** without an eval run proving it. Principle I. |
+| **Everything else** — structure, naming, typing, tests, docstrings, dead code, duplication | **Should improve.** You are expected to leave it better. |
+
+So: fix the coupling defects, extract the prompts, add the type hints that are missing, write
+the unit test the module never had, delete the dead branch, rename the variable that lies.
+Do **not** rewrite a scorer because you would have written it differently — that code was
+evaluated, and replacing it discards the evidence without replacing it.
+
+**Do not inherit stale claims.** Legacy docstrings cite the prototype's constitution, and at
+least one is measurably false: `pipeline/graph.py` claims *"the LLM never ranks (constitution
+Principle II)"*, which the Feature 010 comparison disproved for the grounded path — the path
+this rebuild uses by default. Carrying that comment forward propagates a documented
+falsehood. Check the claims you copy.
+
+**Report what you improved and what you deliberately left alone.** Both are decisions.
 
 ---
 
