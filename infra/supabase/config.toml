@@ -253,6 +253,13 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# Custom recovery link, using Supabase's own {{ .TokenHash }} template variable, so the link
+# lands on our real /reset-password/:token route (design-system.md §4) instead of Supabase's
+# default query-string redirect shape — see specs/003-auth/research.md §6.
+[auth.email.template.recovery]
+subject = "Reset your What to Wear password"
+content_path = "./supabase/templates/recovery.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true

@@ -14,8 +14,14 @@ import { updateSession } from "@/lib/supabase/middleware";
  * `/` is handled by app/page.tsx itself (T025), not here — it needs to pick
  * a destination rather than just allow/deny, so it's simpler as a plain
  * Server Component redirect using the same session check.
+ *
+ * `/reset-password/:token` is deliberately NOT in AUTH_STACK_PREFIXES's
+ * signed-in redirect: verifyOtp (ResetPasswordForm) briefly establishes its
+ * own recovery session, and a visitor who already has an ordinary session in
+ * the same browser must still be able to complete the flow rather than
+ * being bounced to /recommend before the page ever runs (FR-007).
  */
-const AUTH_STACK_PREFIXES = ["/signin", "/signup", "/forgot-password", "/reset-password"];
+const AUTH_STACK_PREFIXES = ["/signin", "/signup", "/forgot-password"];
 
 function isAuthStackPath(pathname: string): boolean {
   return AUTH_STACK_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -24,8 +30,9 @@ function isAuthStackPath(pathname: string): boolean {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // The OAuth return route and the root redirect are handled elsewhere.
-  if (pathname === "/" || pathname.startsWith("/auth/callback")) {
+  // The OAuth return route, the reset-password link target, and the root
+  // redirect are all handled elsewhere / always pass through.
+  if (pathname === "/" || pathname.startsWith("/auth/callback") || pathname.startsWith("/reset-password")) {
     return NextResponse.next();
   }
 

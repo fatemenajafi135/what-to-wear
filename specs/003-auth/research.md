@@ -104,3 +104,31 @@ Docker Hub access (the handoff's own "fresh machine" setup path in §2 already a
 "verify against a running stack" tasks (recorded as manual follow-up, per the handoff's own
 Definition of Done in §10, which already anticipates this distinction by asking for what was
 "actually tested" versus "only wired").
+
+## 6. Making `/reset-password/:token` a real path segment
+
+**Decision**: Customize the recovery email template
+(`infra/supabase/templates/recovery.html`, wired via
+`[auth.email.template.recovery]` in `config.toml`) to link to
+`{{ .SiteURL }}/reset-password/{{ .TokenHash }}`, and on that page call
+`supabase.auth.verifyOtp({ token_hash: token, type: 'recovery' })` to establish the recovery
+session, rather than `resetPasswordForEmail`'s default `redirectTo` handling.
+
+**Rationale**: design-system.md §4 specifies the route literally as `/reset-password/:token`
+— a path segment. Supabase's *default* recovery flow doesn't produce one: it redirects to
+whatever `redirectTo` you pass with either `?code=` (PKCE) or `#access_token=...`
+(implicit) appended as query/hash, never as a path segment, because the token is generated
+server-side at send-time and the client has no way to predict it into a URL ahead of time.
+Supabase's email templates expose `{{ .TokenHash }}` specifically so a project can build its
+own link shape instead of accepting the default — which is exactly this case, not a hack
+around the SDK.
+
+**Alternatives considered**:
+- Accept Supabase's default shape and reinterpret the spec's `:token` as "whatever query
+  string is present" (i.e. route stays `/reset-password`, no dynamic segment) — rejected:
+  contradicts design-system.md §4's literal route, and Principle VIII treats that document as
+  binding, not advisory.
+- Have `/reset-password` (no segment) receive the default redirect, then client-side
+  `router.replace` to `/reset-password/<something>` — rejected: there is no real token
+  distinct from Supabase's own session artifacts to put there; the "something" would be
+  invented, which is worse than not having a dynamic segment at all.
