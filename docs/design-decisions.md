@@ -492,4 +492,40 @@ follow-on, not as a special case tied to this decision.
 
 ---
 
+## 14. Auth screen navigation copy — submit labels and cross-links
+
+`design-system.md` §6's Auth copy table has error/sent copy for all four screens, but no
+copy for the ordinary controls a working auth flow needs and none of the four routes can
+function without: each screen's submit-button label, the Sign in ↔ Sign up cross-link, and
+`/forgot-password`'s only entry point (nothing links to it from `known-gaps.md` or the route
+table either — §4 lists the route but never says what triggers it).
+
+### Decision
+
+Sourced from `design/prototype/`'s own copy (reference-only per the ground rules, read for
+intent — not code, just the strings its author already chose for this exact problem):
+
+| Screen | Element | Copy |
+|---|---|---|
+| Sign in | Submit button | Sign in |
+| Sign in | Link below password field | Forgot password? → `/forgot-password` |
+| Sign in | Cross-link | Don't have an account? **Sign up** → `/signup` |
+| Sign up | Submit button | Create account |
+| Sign up | Cross-link | Already have an account? **Sign in** → `/signin` |
+
+"Create account" rather than repeating "Sign up" as both the screen's own name and its
+button label — the prototype's own reasoning, and it reads better than the stutter.
+
+### Alternatives considered
+
+- Inventing new copy instead of using the prototype's — rejected: the prototype already
+  solved this exact problem, its copy fits the same sentence-case/no-em-dash rules §9
+  requires everywhere else, and re-deriving it from scratch risks a worse answer to a
+  solved question for no benefit.
+- Leaving `/forgot-password` with no in-app entry point — rejected: the spec requires the
+  route to be reachable (User Story 3), and the prototype's placement (a small link directly
+  under the password field) is the only entry point it defines anywhere.
+
+---
+
 *All items in this document are decided. Nothing is left open.*
