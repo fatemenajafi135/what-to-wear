@@ -24,8 +24,11 @@ No auth, no real data, no service worker — those belong to features 002 and 00
 explicitly by the design system), `next/font/google` for Instrument Sans — no CSS framework,
 no CSS-in-JS runtime, no component library beyond what this feature builds
 
-**Storage**: N/A for persisted data. One first-party cookie (`wtw-theme`) carries a person's
-theme override so the server can render the correct `data-theme` with zero client JS
+**Storage**: N/A. Boot theme is not stored or read per-request at all — it resolves entirely
+in CSS via `light-dark()` against `prefers-color-scheme`, so the stub routes stay statically
+rendered. (Originally specified as a first-party cookie read via `cookies()`; corrected by
+`docs/handoffs/001-app-shell-fix-theme.md` — see `research.md`'s amended "Boot-time theme"
+decision.)
 
 **Testing**: Vitest + React Testing Library for component state-matrix unit tests; Playwright
 for browser-only behavior (real `:focus-visible`, `prefers-reduced-motion` emulation, viewport
@@ -118,8 +121,9 @@ specs/001-app-shell/
 ```text
 frontend/
 ├── app/
-│   ├── layout.tsx                 # root layout: cookie theme read, <html data-theme>,
-│   │                               # Instrument Sans via next/font, dual theme-color metas
+│   ├── layout.tsx                 # root layout: no per-request work (static) — theme
+│   │                               # resolves in CSS; Instrument Sans via next/font, dual
+│   │                               # theme-color metas
 │   ├── page.tsx                   # "/" → redirect("/recommend") (no real auth this slice)
 │   ├── loading.tsx                 # boot/splash pre-hydration state (design-decisions.md §10)
 │   ├── manifest.ts                # PWA manifest (known-gaps.md §-2 JSON, shortcuts per
@@ -145,8 +149,8 @@ frontend/
 │   ├── tokens.css                 # §1.1 system tokens (theme-independent)
 │   ├── themes.css                 # §1.2 semantic tokens + light/dark [data-theme] blocks
 │   └── globals.css                # reset, base element styles, font fallback stack
-├── lib/
-│   └── theme.ts                   # cookie name/helpers, server-side theme resolution
+├── lib/                            # (no theme.ts — removed, see fix-theme handoff: theme
+│                                   # resolution is pure CSS with nothing to compute in JS)
 ├── e2e/                           # Playwright: breakpoints, keyboard pass, focus, motion
 └── public/                        # icons/ + logo.svg already exist; untouched
 
