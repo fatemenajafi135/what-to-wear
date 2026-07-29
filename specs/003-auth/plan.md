@@ -127,7 +127,7 @@ backend/
 │   └── api/v1/routes/                # NEW dir — the protected example route
 └── tests/
     ├── unit/test_auth.py             # NEW — valid/missing/invalid/expired token cases
-    └── integration/test_protected_route.py  # NEW
+    └── integration/test_whoami.py    # NEW
 
 infra/supabase/
 └── config.toml                       # CHANGED — minimum_password_length=8, [auth.external.google] wired
