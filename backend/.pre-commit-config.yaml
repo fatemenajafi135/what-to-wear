@@ -1,0 +1,18 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: local
+    hooks:
+      - id: lint-imports
+        name: lint-imports (AI-independence contract)
+        entry: bash -c 'cd backend && uv run lint-imports'
+        language: system
+        files: ^backend/src/
+        pass_filenames: false
