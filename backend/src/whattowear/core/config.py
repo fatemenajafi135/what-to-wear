@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     database_url: str
     log_level: str = "INFO"
     environment: str = "development"
+    supabase_url: str
+    supabase_jwt_aud: str = "authenticated"
 
 
 @lru_cache
