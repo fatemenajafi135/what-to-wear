@@ -456,4 +456,40 @@ possible place to notice it.
 
 ---
 
+## 13. Auth panel's desktop treatment — radius and internal padding
+
+§5's content-width-caps table says the desktop auth panel gains a `--color-surface` fill and
+a 400px max-width, but specifies no radius, padding, or shadow for it — the only container in
+the whole system introduced without one. No `--shadow-*` token exists anywhere in
+`tokens.css`, so inventing one here would be the exact violation Principle VIII exists to
+prevent.
+
+### Decision
+
+`--radius-md` (14px, "cards" per its own token comment) and `--space-2xl` (32px) internal
+padding. No border, no shadow.
+
+**Radius**: the panel is a static, non-modal content container — closer to a card than to a
+sheet/modal (`--radius-lg`, reserved for those per its comment) or a control
+(`--radius-sm`, buttons/inputs). `--radius-md` is the only token whose own stated purpose
+matches what this panel actually is.
+
+**Padding**: `--space-2xl` sits between the form's own `--space-lg` field gaps and the
+screen-level `--space-xl` mobile padding — enough to read as a distinct raised surface
+around the form rather than a tight inset.
+
+**No shadow**: adding one would be inventing a value with no token to read it from. If a
+future design pass adds `--shadow-*` tokens, this panel should pick one up as a normal
+follow-on, not as a special case tied to this decision.
+
+### Alternatives considered
+
+- `--radius-lg` (sheets/modals) — rejected: this panel isn't a dismissible overlay, and using
+  the modal radius would visually conflate two different kinds of container.
+- A border (`1px solid --color-border`) instead of/alongside the surface fill — rejected: no
+  other card-like container in the system pairs the surface fill with a border; adding one
+  here would be a second invented value, not a resolution of the first.
+
+---
+
 *All items in this document are decided. Nothing is left open.*

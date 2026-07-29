@@ -69,12 +69,13 @@ duplicating the rule six times.
       (`createServerClient` bound to the middleware `request`/`response` pair, calling
       `getUser()` so the refresh token rotates on every request) — depends on T007/T008's
       established client-construction pattern
-- [ ] T010 Create `frontend/middleware.ts` — classifies each request path as auth-stack
-      (`/signin`, `/signup`, `/forgot-password`, `/reset-password/*`) or authenticated-app
-      (everything else except `/auth/callback`, which passes through), and redirects per
-      FR-010/FR-011: signed-out + authenticated-app → `/signin`; signed-in + auth-stack →
-      `/recommend`. Matcher excludes `_next/static`, `_next/image`, and files with an
-      extension. Depends on T009.
+- [ ] T010 Create `frontend/proxy.ts` (Next 16's current file convention — `middleware.ts` is
+      deprecated in this version, same request lifecycle) — classifies each request path as
+      auth-stack (`/signin`, `/signup`, `/forgot-password`, `/reset-password/*`) or
+      authenticated-app (everything else except `/auth/callback`, which passes through), and
+      redirects per FR-010/FR-011: signed-out + authenticated-app → `/signin`; signed-in +
+      auth-stack → `/recommend`. Matcher excludes `_next/static`, `_next/image`, and files
+      with an extension. Depends on T009.
 - [ ] T011 [P] Create `frontend/components/auth/AuthShell.tsx` + `.module.css` — the shared
       auth-screen chrome: `role="main"`, full-bleed `max-width: 360px` mobile → centred
       tablet → `--color-surface` panel `max-width: 400px` desktop (design-system §5), slot

@@ -117,7 +117,8 @@ frontend/
 │   └── ui/                           # UNCHANGED — Input/Textarea/Select/Button/Banner reused as-is
 ├── lib/
 │   └── supabase/                     # NEW — browser client, server client, middleware helper
-├── middleware.ts                     # NEW — route protection
+├── proxy.ts                          # NEW — route protection (Next 16's file convention;
+│                                      #   "middleware.ts" is deprecated in this version)
 └── e2e/                              # sign-up → sign-in → sign-out → sign-in Playwright spec
 
 backend/
