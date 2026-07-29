@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [rebuild]
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.5.x"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync --all-extras
+
+      # Trap 1's regression test, run standalone before anything else so a
+      # broken import fails loudly and first — see
+      # specs/002-backend-foundation/research.md §1.
+      - name: Import-safety check (zero environment variables)
+        working-directory: backend
+        # Calls the venv's python binary directly (not `uv run`), so `env -i`
+        # clearing every variable doesn't also strip what `uv` itself needs
+        # (PATH, HOME) to locate the project. Same check as
+        # tests/unit/test_import_safety.py, run standalone as a fast early
+        # gate — see research.md §1.
+        run: env -i .venv/bin/python -c "import whattowear"
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.110.0
+
+      - name: Start local Supabase
+        working-directory: infra
+        run: supabase start
+
+      # The real reproducibility test (brief trap 4): a reset from empty,
+      # not "applied once when the containers were created."
+      - name: Reset database from empty
+        working-directory: infra
+        run: supabase db reset
+
+      - name: Export DATABASE_URL
+        run: echo "DATABASE_URL=postgresql://postgres.pooler-dev:postgres@127.0.0.1:54329/postgres" >> "$GITHUB_ENV"
+
+      - name: Run tests
+        working-directory: backend
+        run: uv run pytest
+
+      - name: Lint (ruff)
+        working-directory: backend
+        run: uv run ruff check .
+
+      - name: Type-check (mypy)
+        working-directory: backend
+        run: uv run mypy src
+
+      - name: AI-independence import contract
+        working-directory: backend
+        run: uv run lint-imports
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Type-check
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
