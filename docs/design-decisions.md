@@ -396,4 +396,64 @@ so it never becomes nagging.
 
 ---
 
+## 12. Auth flow
+
+**Android is the platform we can test. iOS is built blind and verified later** — see
+`docs/ios-verification-backlog.md`. This section decides the flow; everything
+iOS-specific that cannot be checked without a device lives in that backlog.
+
+### Decision
+
+**Email + password is the primary flow, exactly as the design system specifies. Google
+OAuth is the secondary. No magic link is ever sent for sign-in.**
+
+That is not a compromise for iOS — it is what the design already specifies
+(`auth.signin.error.body`: *"That email and password don't match"*, plus a Google button on
+Sign in and Sign up). **The design system contains no magic-link sign-in anywhere;** the only
+emailed link in the whole product is the password *reset* link. Nothing needed redesigning.
+
+### Android: no special handling required
+
+An installed PWA on Android is a WebAPK that **shares Chrome's storage and cookies**. There
+is no separate container, OAuth returns to the app normally, and a session established in
+the browser is visible in the installed app. Everything in the design works as written.
+
+The requirements below are ordinary good practice, not Android workarounds:
+
+1. Supabase client configured with `flowType: 'pkce'`.
+2. Redirect to an **app route** — `/auth/callback` — never a Supabase-hosted page.
+3. Every redirect URL on Supabase's allow-list.
+4. Manifest `scope` must contain the redirect target. `scope: "/"` is already set by feature
+   001, so any app route qualifies.
+
+Requirement 4 does nothing on Android. **It is what makes the flow work on iOS**, so it is
+built now even though its effect cannot be observed yet.
+
+### Why no magic link, even though it works on Android
+
+On iOS an installed PWA gets storage isolated from Safari. A magic link opens from Mail into
+Safari, the session is written to Safari's container, and the installed app never sees it —
+the user signs in successfully and returns to an app that says they are logged out. This is
+**not fixable by configuration**; Supabase's own maintainers conclude a typed OTP code is the
+only workaround.
+
+Since the design never specified magic links, this costs nothing today. It is recorded so
+nobody adds one later as a convenience and quietly breaks iOS. If a passwordless option is
+ever wanted it is **email OTP** — a typed code, which keeps the user inside the app — and
+that needs a code-entry screen the design system does not contain, making it a design
+change rather than an implementation detail.
+
+### Password reset — do not "improve" it
+
+The reset link opens in the browser, the user sets a new password there, and
+`auth.reset.success.cta` sends them to `/signin` rather than into the app. **No session
+crosses a storage boundary**, so this works identically on both platforms.
+
+Keep it exactly as specified. Signing the user in automatically after a successful reset
+would create precisely the cross-container handoff described above — and it would work fine
+on Android and every desktop browser, failing only on installed iOS, which is the hardest
+possible place to notice it.
+
+---
+
 *All items in this document are decided. Nothing is left open.*
