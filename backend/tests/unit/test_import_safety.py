@@ -69,6 +69,13 @@ REGRESSION_SURFACE_MODULES = [
     "whattowear.eval.harness",
     "whattowear.eval.test_users",
     "whattowear.eval.vision_harness",
+    "whattowear.logging_utils",
+    "whattowear.ingest.chunkers",
+    "whattowear.ingest.loaders",
+    "whattowear.ingest.wiki_refine",
+    "whattowear.ingest.build_kb",
+    "whattowear.ingest.cli",
+    "whattowear.kb",
 ]
 
 

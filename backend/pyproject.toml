@@ -84,6 +84,13 @@ no_implicit_optional = true
 module = "psycopg.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# No py.typed marker / stub package published for these (feature 007's
+# ingest/ package: markdownify wraps wiki_refine.py's HTML->MD conversion,
+# ebooklib parses the two public-domain EPUB sources).
+module = ["markdownify.*", "ebooklib.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

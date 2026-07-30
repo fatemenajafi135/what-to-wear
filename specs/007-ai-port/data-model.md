@@ -84,24 +84,41 @@ Two implementations exist by the end of this feature:
 
 ## `infra/corpus.yaml` entry (one per KB source)
 
+**Correction after reading the real manifest** (this section originally sketched an
+idealized schema before the actual `../w2w-corpus/kb/manifest.yaml` had been read in full;
+the implementation carries the manifest's real field vocabulary forward unchanged rather
+than inventing a new one):
+
 ```yaml
-- name: chevreul-laws-of-contrast
-  layer: l1
+- name: "Chevreul: Principles of Harmony & Contrast of Colours"
+  layer: L1                # L1 | L2 | L3 | L4 — matches schema.py's Layer literal, not lowercased
+  status: have              # have | fetch | distill | want-later — the manifest's real vocabulary
+  license: PD                # PD | CC-BY-SA | own | copyrighted | paid — not "public-domain"
   loader: epub
-  status: active           # active | want-later
-  ingest: true
-  license: public-domain
-  path: books/laws-of-contrast-of-colour.epub   # relative to $CORPUS_LOCAL_DIR
-  sha256: <populated by ingest CLI on first run>
+  path: "books/The laws of contrast of colour.epub"   # relative to $CORPUS_LOCAL_DIR
+  url: "https://www.gutenberg.org/ebooks/76939"
   chunker: section
   chunker_options: {}
-  url: null
+  ingest: true
+  sha256: null              # populated by the ingest CLI on first run
 ```
 
-`ingest: false` entries (the copyrighted book) keep every field except `sha256`, which is
-never populated — the file is never read into memory by the ingestion CLI at all beyond a
-manifest existence check, matching `ingest/build_kb.py::ingest_all`'s existing `if not
-source.get("ingest"): continue` behaviour.
+`ingest: false` entries (the copyrighted books, and every `status: want-later` entry) keep
+every field except `sha256`, which is never populated — the file is never read into memory
+by the ingestion CLI at all beyond a manifest existence check, matching
+`ingest/build_kb.py::ingest_all`'s `if not source.get("ingest"): continue` behaviour.
+
+**Second correction, made while implementing T049**: `corpus.yaml`'s `sha256` field is
+documentation-only (always `null` in the tracked file) — the CLI does **not** write back
+into `infra/corpus.yaml` on every run. `corpus.yaml` is authored by a person and carries
+the licence-policy comments verbatim from the prototype's manifest (§ above); PyYAML's
+`safe_dump` is not comment-preserving, so writing computed hashes back into it would
+silently strip that documentation on the very first `ingest` run. The real hash-tracking
+state instead lives in `$CORPUS_LOCAL_DIR/.ingest_state.json` (`{source_name: sha256}`) —
+outside the repo entirely (same directory as the documents themselves), so it is
+automatically covered by constitution Principle X's "regenerable artifacts don't belong in
+git" without needing its own `.gitignore` entry. `infra/corpus.yaml` stays exactly what a
+person wrote; the CLI's own idempotency bookkeeping never touches it.
 
 ## Golden-set case (from `eval/golden_set.py`, unchanged)
 

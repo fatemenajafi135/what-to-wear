@@ -1,0 +1,246 @@
+# What to Wear — knowledge-base source registry (constitution Principle X).
+#
+# `ingest/cli.py` reads this and ingests every source with `ingest: true`,
+# resolving every `path` relative to `$CORPUS_LOCAL_DIR` (never a path inside
+# this repo, never an absolute path or `~`). `sha256` is populated by the CLI
+# on first run and checked on every later run — a source whose hash hasn't
+# changed is not re-embedded (idempotent by content hash).
+#
+# Translated from the prototype's data/kb/manifest.yaml (docs/legacy-ai-
+# inventory.md §5), field vocabulary and per-file licence policy carried
+# forward unchanged: only `path` changed (repo-relative "data/..." -> corpus-
+# root-relative, since $CORPUS_LOCAL_DIR IS the data root here) and `sha256`
+# was added.
+#
+# status:  have | fetch | distill | want-later
+#   have        - file already present locally (see path)
+#   fetch       - pulled live at build time (Wikipedia, uncached)
+#   distill     - our own/authored or LLM-distilled cards stored as jsonl
+#   want-later  - logged, NOT ingested this phase (acquisition pending)
+# license: PD | CC-BY-SA | own | copyrighted
+# chunker: atomic (one rule/concept per chunk) | section (long articles)
+#
+# Legal policy: PD + CC-BY-SA + own + API data are ingestable. Copyrighted
+# books are REFERENCE-ONLY: a human/LLM distills rules in our own words into
+# jsonl cards; the book text itself is never stored -> ingest: false on the
+# book, ingest: true on the distilled card file.
+
+sources:
+  # ---------------- L1 Static (harmony / proportion) ----------------
+  - name: "Wikipedia: Color theory"
+    layer: L1
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "wikipedia/Color theory - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/Color_theory"
+    chunker: section
+    chunker_options: {}
+    ingest: true
+    sha256: null
+
+  - name: "Wikipedia: Color harmony"
+    layer: L1
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "wikipedia/Harmony (color) - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/Harmony_(color)"
+    chunker: section
+    chunker_options: {}
+    ingest: true
+    sha256: null
+
+  - name: "Wikipedia: Complementary colors"
+    layer: L1
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "wikipedia/Complementary colors - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/Complementary_colors"
+    chunker: section
+    chunker_options: {}
+    ingest: true
+    sha256: null
+
+  - name: "Chevreul: Principles of Harmony & Contrast of Colours"
+    layer: L1
+    status: have
+    license: PD
+    loader: epub
+    path: "books/The laws of contrast of colour.epub"
+    url: "https://www.gutenberg.org/ebooks/76939"
+    chunker: section
+    chunker_options: {}
+    ingest: true
+    sha256: null
+    notes: "19th-c prose - raw ingest is deliberate; raw-vs-distilled is a measured experiment."
+
+  - name: "Munsell: A Color Notation"
+    layer: L1
+    status: have
+    license: PD
+    loader: epub
+    path: "books/A Color Notation by A. H. Munsell.epub"
+    url: "https://www.gutenberg.org/ebooks/26054"
+    chunker: section
+    chunker_options: {}
+    ingest: true
+    sha256: null
+
+  - name: "Distilled L1 rules (harmony/proportion, our words)"
+    layer: L1
+    status: distill
+    license: own
+    loader: cards
+    path: "kb/l1_rules.jsonl"
+    url: "internal://l1_rules"
+    chunker: atomic
+    chunker_options: {}
+    ingest: true
+    sha256: null
+    notes: "Includes rules distilled REFERENCE-ONLY from Dressing the Man & The Curated Closet."
+
+  # book sources kept for provenance ONLY - never raw-ingested
+  - name: "Dressing the Man (Flusser)"
+    layer: L1
+    status: have
+    license: copyrighted
+    loader: reference_only
+    path: "books/Alan Flusser - Dressing the Man_ Mastering the Art of Permanent Fashion (2002, HarperCollins).pdf"
+    url: "reference-only://dressing-the-man"
+    ingest: false
+    sha256: null
+    notes: "REFERENCE-ONLY. Distilled into l1_rules.jsonl. Text never stored. File itself absent from the local corpus checkout (inventory §5) — ingest:false means this is never read regardless."
+
+  - name: "The Curated Closet (Rees)"
+    layer: L1
+    status: have
+    license: copyrighted
+    loader: reference_only
+    path: "books/Rees, Anuschka - The curated closet _ a simple system for discovering your personal style and building your dream wardrobe (2016, Ten Speed Press).epub"
+    url: "reference-only://curated-closet"
+    ingest: false
+    sha256: null
+    notes: "REFERENCE-ONLY. Distilled into l1_rules.jsonl."
+
+  # ---------------- L2 Seasonal (INGESTED but GATED) ----------------
+  - name: "Wikipedia: Color analysis"
+    layer: L2
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "wikipedia/Color analysis - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/Color_analysis"
+    chunker: section
+    chunker_options: {}
+    ingest: true
+    sha256: null
+    notes: >
+      Indexed with layer:L2 but the router NEVER selects L2 (no user coloring
+      captured) — a future soft rerank/boost over already-valid L4/L1
+      combinations, never a hard filter, since the wardrobe is finite.
+
+  # ---------------- L3 Trendy (dense-retrieval showcase) ----------------
+  - name: "Wikipedia: 2020s in fashion"
+    layer: L3
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "wikipedia/2020s in fashion - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/2020s_in_fashion"
+    chunker: section
+    chunker_options: {}
+    ingest: true
+    sha256: null
+
+  - name: "Distilled trend cards (Who What Wear / Vogue / Refinery29 / GQ)"
+    layer: L3
+    status: distill
+    license: own
+    loader: cards
+    path: "kb/l3_trend_cards.jsonl"
+    url: "internal://l3_trend_cards"
+    chunker: atomic
+    chunker_options: {}
+    ingest: true
+    sha256: null
+    notes: "Distilled+linked only, full article text never stored. Refresh via external/trends.py (Tavily)."
+
+  # ---------------- L4 Occasion + Weather (structured filter) ----------------
+  - name: "Our dress-code definitions"
+    layer: L4
+    status: distill
+    license: own
+    loader: cards
+    path: "kb/l4_dresscodes.jsonl"
+    url: "internal://l4_dresscodes"
+    chunker: atomic
+    chunker_options: {}
+    ingest: true
+    sha256: null
+    notes: "In-house occasion->formality->garment-band rules + temp_band garment guidance."
+
+  - name: "Wikipedia: Dress code"
+    layer: L4
+    status: have
+    license: CC-BY-SA
+    loader: wiki_md
+    path: "wikipedia/Dress code - Wikipedia.md"
+    url: "https://en.wikipedia.org/wiki/Dress_code"
+    chunker: section
+    chunker_options: {}
+    ingest: true
+    sha256: null
+    notes: >
+      Covers Business casual, Formal wear, and Weddings as subsections already
+      — Black tie, Cocktail attire, and Semi-formal wear are separate articles
+      not yet downloaded (see want-later below).
+
+  # ---------------- want-later (logged, NOT ingested) ----------------
+  - name: "Wikipedia: Black tie"
+    layer: L4
+    status: want-later
+    license: CC-BY-SA
+    ingest: false
+    sha256: null
+    notes: "Download complete + refine with wiki_refine.py, same as the other Wikipedia sources, then flip loader: wiki_md."
+  - name: "Wikipedia: Cocktail attire"
+    layer: L4
+    status: want-later
+    license: CC-BY-SA
+    ingest: false
+    sha256: null
+  - name: "Wikipedia: Semi-formal wear"
+    layer: L4
+    status: want-later
+    license: CC-BY-SA
+    ingest: false
+    sha256: null
+  - name: "Color With Style (inclusivity: non-white skin tones)"
+    layer: L1
+    status: want-later
+    license: copyrighted
+    ingest: false
+    sha256: null
+    notes: "KEY inclusivity ref - open sources under-cover non-white palettes. Acquire licensed/open substitute."
+  - name: "Science of Sexy (body proportion)"
+    layer: L1
+    status: want-later
+    license: copyrighted
+    ingest: false
+    sha256: null
+    notes: "Body-proportion/silhouette open coverage is thin (a known gap)."
+  - name: "Color Me Beautiful"
+    layer: L2
+    status: want-later
+    license: copyrighted
+    ingest: false
+    sha256: null
+  - name: "WGSN / Heuritech / Lyst (paid trend feeds)"
+    layer: L3
+    status: want-later
+    license: paid
+    ingest: false
+    sha256: null
+    notes: "Legal only if licensed. Post-MVP."

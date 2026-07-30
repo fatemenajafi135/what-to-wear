@@ -30,6 +30,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from langchain_core.documents import Document
+from qdrant_client.models import Filter
 
 if TYPE_CHECKING:
     # Type-checking only — ports.py must import cleanly before schema.py or
@@ -46,9 +47,14 @@ if TYPE_CHECKING:
 class VectorStore(Protocol):
     """Structurally satisfied by `langchain_qdrant.QdrantVectorStore` today —
     see `retrieval/base.py`'s `RetrievalResult` for how callers consume the
-    `Document`s this returns."""
+    `Document`s this returns. `filter` is a real `qdrant_client.models.
+    Filter` (`retrieval/hybrid.py::_l1_semantic_filter` builds one) — an
+    earlier draft of this Protocol typed it as a plain `dict`, which
+    doesn't structurally match `QdrantVectorStore`'s actual signature;
+    caught by mypy once `kb.py` (Phase 11) made this Protocol's one real
+    binding type-checkable for the first time."""
 
-    def similarity_search(self, query: str, k: int, filter: dict[str, Any] | None = None) -> list[Document]: ...
+    def similarity_search(self, query: str, k: int = 4, filter: Filter | None = None) -> list[Document]: ...
 
 
 @runtime_checkable

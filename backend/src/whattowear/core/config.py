@@ -68,9 +68,16 @@ class Settings(BaseSettings):
 
     # --- Qdrant (vector store) -------------------------------------------------
     wtw_qdrant_url: str | None = "http://localhost:6333"
+    # Unset locally (infra/docker-compose.yml's container needs no auth); a
+    # production cloud instance would set this.
+    wtw_qdrant_api_key: str | None = None
 
     # --- Corpus ingestion (constitution X: no absolute path, no `~`) ---------
     corpus_local_dir: str | None = None
+    wtw_chunk_size: int = 900
+    wtw_chunk_overlap: int = 120
+    wtw_qdrant_timeout: int = 120
+    wtw_qdrant_batch_size: int = 32
 
     # --- LangGraph checkpointer pool (memory/store.py) ------------------------
     wtw_checkpointer_pool_max: int = 5
