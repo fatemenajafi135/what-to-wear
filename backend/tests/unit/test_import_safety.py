@@ -54,6 +54,14 @@ REGRESSION_SURFACE_MODULES = [
     "whattowear.memory.store",
     "whattowear.external.weather",
     "whattowear.external.trends",
+    "whattowear.pipeline.query_builder",
+    "whattowear.pipeline.validity",
+    "whattowear.pipeline.grounding",
+    "whattowear.pipeline.cite",
+    "whattowear.pipeline.generator",
+    "whattowear.pipeline.engine",
+    "whattowear.pipeline.context_assembler",
+    "whattowear.pipeline.graph",
 ]
 
 

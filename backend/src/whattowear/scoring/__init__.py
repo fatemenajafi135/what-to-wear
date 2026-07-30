@@ -10,7 +10,7 @@ reimplemented in either caller.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Protocol
 
 from ..schema import Context, Rationale, ScoredOutfit, WardrobeItem
@@ -21,13 +21,23 @@ DIMENSION_SCORERS = (color_harmony, formality_coherence, weather_fitness, silhou
 
 
 class _RationaleLike(Protocol):
-    text: str
-    cites: list[str]
+    # @property, not a plain attribute: score_outfits only ever reads these
+    # fields, and a plain Protocol attribute is checked invariantly by
+    # mypy — pipeline/generator.py's GenRationale (cites: list[str]) would
+    # then fail to structurally satisfy a Sequence[str]-typed attribute
+    # even though list[str] is perfectly readable as one. A property makes
+    # the member covariant, matching the actual (read-only) usage here.
+    @property
+    def text(self) -> str: ...
+    @property
+    def cites(self) -> Sequence[str]: ...
 
 
 class _GenOutfitLike(Protocol):
-    items: list[str]
-    rationale: list[_RationaleLike]
+    @property
+    def items(self) -> Sequence[str]: ...
+    @property
+    def rationale(self) -> Sequence[_RationaleLike]: ...
 
 
 def score_outfits(
@@ -39,8 +49,8 @@ def score_outfits(
     node and `eval/harness.py` (constitution Principle V)."""
     candidates = [
         ScoredOutfit(
-            items=o.items,
-            rationale=[Rationale(text=r.text, cites=r.cites) for r in o.rationale],
+            items=list(o.items),
+            rationale=[Rationale(text=r.text, cites=list(r.cites)) for r in o.rationale],
             scores=[
                 s.score([wardrobe_by_id[i] for i in o.items if i in wardrobe_by_id], ctx) for s in DIMENSION_SCORERS
             ],
