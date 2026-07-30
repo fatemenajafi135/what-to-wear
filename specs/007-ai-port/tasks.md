@@ -155,8 +155,8 @@ renumbering the whole document after the fact.
 
 ## Phase 12: `backend/evals` second `uv` project (US4)
 
-- [ ] T051 Create `backend/evals/pyproject.toml` (pinned `langchain-community==0.3.31`, `package = false`) + copy `common.py`, `judge.py`, `score_ragas.py` from legacy, adjusted only for the new JSONL row shape (`prompt_versions`) if `score_ragas.py` enumerates row keys explicitly
-- [ ] T052 Verify isolation per `quickstart.md`: `backend/`'s own `uv sync` never resolves `langchain-community==0.3.31`
+- [x] T051 Created `backend/evals/pyproject.toml` (pinned `langchain-community==0.3.31`, `package = false`, unchanged from legacy); copied `common.py`, `judge.py`, `score_ragas.py` — no adaptation needed to row-handling (neither enumerates all JSONL keys exhaustively, so the new `prompt_versions` field is simply extra data they ignore). `judge.py`'s `COHERENCE_PROMPT` deliberately stays inline, not extracted to `whattowear/prompts/` — this project never imports from `whattowear` (the isolation itself), and the inventory's 5-prompt census (§4) scoped to the main package only; noted in the file's own docstring.
+- [x] T052 Verified isolation for real: `uv sync` inside `backend/evals/` (own venv, own lockfile) resolves `langchain_community==0.3.31`; the main `backend/` project resolves `langchain_community==0.4.2` (transitively, via its own `langchain-community>=0.4.0,<1.0.0` pin) with `langchain_cohere` importing cleanly — the two never touch each other's dependency tree. `discover_strategies()` correctly found the T043 smoke-test artifacts (`advanced.jsonl`, `advanced-engine.jsonl`) on disk.
 
 ## Phase 13: Qdrant index build (US3)
 
