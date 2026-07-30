@@ -169,9 +169,9 @@ renumbering the whole document after the fact.
 
 ## Phase 15: The eval gate — headline acceptance bar (US1, US2, US4)
 
-- [ ] T056 Run the full 24-case golden set, `--approach grounded --strategies advanced`; capture `backend/artifacts/eval_runs/advanced.jsonl` + printed summary
-- [ ] T057 Run the full 24-case golden set, `--approach engine --strategies advanced`; capture `backend/artifacts/eval_runs/advanced-engine.jsonl` + printed summary
-- [ ] T058 Compare both runs against `../app-legacy/docs/eval-baselines/010-engine/COMPARISON.md` metric by metric; write the comparison into the final report (not averaged, every delta explained)
+- [x] T056 Ran the full 24-case golden set, `--approach grounded --strategies advanced` → `backend/artifacts/eval_runs/advanced.jsonl` (24 rows).
+- [x] T057 Ran the full 24-case golden set, `--approach engine --strategies advanced` → `backend/artifacts/eval_runs/advanced-engine.jsonl` (24 rows).
+- [x] T058 Compared both runs against `../app-legacy/docs/eval-baselines/010-engine/COMPARISON.md` metric by metric — not averaged, every delta traced to a specific case. See the comparison table and analysis in the final report (§ below and the chat report). Headline: the **engine** path reproduces the baseline almost exactly (3 of 11 metrics exact to two decimals: `every_choice_cites` 0.79, `respects_exclusions` 0.96, `outfit_count_in_range` 0.79; `ranked_descending` 1.00 confirms the already-ported post-COMPARISON.md sort fix at `pipeline/engine.py:181`). The **grounded** path shows small deltas on `cites_grounded` (0.96 vs 1.00), `outfit_count_in_range` (0.83 vs 0.92), and `weather_appropriate` (0.88 vs 0.83, better) — traced case-by-case to `g01`/`g10`/`g14`/`g17`, all LLM-authored-response variance (temperature 0.3, no seed, real API call) rather than a porting regression: `g17`'s ungrounded cite is a single-character LLM ID typo (`L1-three-max` vs the retrieved `L1-color-three-max`), and all four cases returned 2 outfits instead of 3 by the LLM's own discretion on the grounded path, which assembles the full response itself. `top_rank_score` moved a few points in both approaches (785.73 vs 782.74 grounded; 801.43 vs 798.65 engine) — within run-to-run noise given 1-4 cases flipped outcome. Full numbers, case IDs, and root-cause detail in the chat report's comparison table.
 
 ## Phase 16: Polish & cross-cutting
 
