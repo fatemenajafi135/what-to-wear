@@ -144,7 +144,9 @@ backend/
 │   │   ├── graph.py                  # DI-fixed; docstring corrected; imports scoring.properties
 │   │   ├── engine.py                 # prompt extracted to prompts/engine_system.md
 │   │   ├── generator.py              # prompt extracted to prompts/generator_system.md
-│   │   ├── context_assembler.py  query_builder.py  cite.py  validity.py  grounding.py  cache.py
+│   │   ├── context_assembler.py  query_builder.py  cite.py  validity.py  grounding.py
+│   │   # cache.py NOT ported — needs Redis directly; brief Trap 5 defers Redis/the
+│   │   # suggestion cache to a later slice. graph.py never imports it.
 │   ├── ingest/
 │   │   ├── build_kb.py  chunkers.py  loaders.py  wiki_refine.py
 │   │   └── cli.py                    # NEW — the ingestion CLI entry point (FR-011)

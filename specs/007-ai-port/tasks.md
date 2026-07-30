@@ -92,7 +92,7 @@ T059's whole-tree lint pass, which is inherently cross-cutting).
 - [ ] T029 [P] Port `pipeline/validity.py` + test
 - [ ] T030 [P] Port `pipeline/grounding.py` + test
 - [ ] T031 [P] Port `pipeline/cite.py` + test
-- [ ] T032 [P] Port `pipeline/cache.py` + test
+- [x] T032 ~~Port `pipeline/cache.py`~~ — **descoped**: `cache.py` imports `redis` directly (per-user suggestion cache, Feature 005). Brief Trap 5 explicitly excludes Redis/the suggestion cache from this slice ("belong to a later slice. Do not drag them in"), overriding the inventory's "keep" suggestion for this one module. Confirmed safe to defer: `graph.py` never imports `cache.py` — it's wired at the API layer (out of scope, feature 003+), not the pipeline itself. Not ported; left in `../app-legacy` for whichever feature adds caching back.
 - [ ] T033 Port `pipeline/generator.py` — extract `SYSTEM_PROMPT` to `prompts/generator_system.md` + test
 - [ ] T034 Port `pipeline/engine.py` — extract `_ENGINE_SYSTEM_PROMPT` to `prompts/engine_system.md` + test
 - [ ] T035 Port `pipeline/graph.py` — replace `from ..db import SessionLocal` in `verify_grounding` with injected `ClosetRepository.list_catalog_items` (Research §1); replace `from ..eval.properties import weather_appropriate` with `from ..scoring.properties import weather_appropriate` (Research §2); correct the module docstring and `engine_enumerate_and_score`'s docstring per Research §3 — do not carry forward "the LLM never ranks" unqualified + test
