@@ -63,6 +63,12 @@ REGRESSION_SURFACE_MODULES = [
     "whattowear.pipeline.context_assembler",
     "whattowear.pipeline.graph",
     "whattowear.vision",
+    "whattowear.eval.golden_set",
+    "whattowear.eval.properties",
+    "whattowear.eval.judge",
+    "whattowear.eval.harness",
+    "whattowear.eval.test_users",
+    "whattowear.eval.vision_harness",
 ]
 
 
