@@ -69,10 +69,10 @@ T059's whole-tree lint pass, which is inherently cross-cutting).
 **Goal**: preference derivation and the LangGraph checkpointer, with the DB read routed through `ClosetRepository`.
 **Independent test**: `memory.store.get_profile(user_id)` returns `None`/empty against a `FixtureClosetRepository`, with no `whattowear.core.db` import at module scope.
 
-- [ ] T023 Port `memory/preferences.py` (pure signal derivation) + test
-- [ ] T024 Port `memory/store.py` — replace `from ..db import SessionLocal` + `crud.get_derivation_inputs` with an injected `ClosetRepository.get_derivation_inputs` (Research §1); leave `get_checkpointer()`'s raw `DATABASE_URL_DIRECT`/`DATABASE_URL` psycopg pool construction as-is (LangGraph's own storage backend, not a `SessionLocal`/ORM concern) + test with `FixtureClosetRepository`
+- [x] T023 Port `memory/preferences.py` (pure signal derivation, unchanged logic; `key_of` param now properly typed `Callable[[ItemSnapshot], list[str]]` — was untyped in legacy) + test (new — never had one)
+- [x] T024 Port `memory/store.py` — `get_profile`/`profile_note` now take an injected `repo: ClosetRepository` param instead of opening `SessionLocal()` + calling `crud.get_derivation_inputs` (Research §1). Deliberately NOT threaded through `GraphState` — a `ClosetRepository` object in LangGraph checkpointed state risks breaking `PostgresSaver` serialization; wiring happens via closure when `pipeline/graph.py` builds its nodes (Phase 7). `get_checkpointer()`'s raw psycopg pool left as-is (LangGraph's own storage backend, not `SessionLocal`/ORM), but now reads `core.config.get_settings()` instead of raw `os.environ` (added `database_url_direct`, `wtw_checkpointer_pool_max` to `Settings`) — consolidating into the one config layer per Research §10. Fixed two real mypy gaps while typing this: `connect_timeout` needed `int()` (psycopg stub is stricter than the float the legacy code passed), and `ConnectionPool`'s generic needed an explicit `Connection[dict[str, object]]` param to match its actual `row_factory=dict_row` runtime behavior. + test with a fake `ClosetRepository` (new — never had one)
 
-**Checkpoint**: no `from ..db import` or `from .. import crud` anywhere in `memory/`. Extend `test_import_safety.py` with `memory.preferences`, `memory.store` (SC-003).
+**Checkpoint**: verified — no `from ..db import` or `from .. import crud` anywhere in `memory/` (grepped). `whattowear.memory.preferences`/`.store` import with zero env vars (24/24 import-safety cases pass). 22 memory tests pass, `ruff`/`ruff format` clean, `mypy src` clean except the two still-expected Phase 6/11 gaps (`whattowear.kb`, `whattowear.external.trends`).
 
 ## Phase 6: `external/` package (US1)
 

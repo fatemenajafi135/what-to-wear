@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str
+    # Direct connection (session mode, port 5432), preferred by LangGraph's
+    # PostgresSaver checkpointer over the transaction-mode pooler (feature
+    # 007's memory/store.py) — optional escape hatch, not required for the
+    # app to boot.
+    database_url_direct: str | None = None
     log_level: str = "INFO"
     environment: str = "development"
     supabase_url: str
@@ -65,6 +70,9 @@ class Settings(BaseSettings):
 
     # --- Corpus ingestion (constitution X: no absolute path, no `~`) ---------
     corpus_local_dir: str | None = None
+
+    # --- LangGraph checkpointer pool (memory/store.py) ------------------------
+    wtw_checkpointer_pool_max: int = 5
 
     @property
     def judge_model(self) -> str:

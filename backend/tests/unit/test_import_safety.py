@@ -50,6 +50,8 @@ REGRESSION_SURFACE_MODULES = [
     "whattowear.retrieval.baseline",
     "whattowear.retrieval.hybrid",
     "whattowear.retrieval.advanced",
+    "whattowear.memory.preferences",
+    "whattowear.memory.store",
 ]
 
 
