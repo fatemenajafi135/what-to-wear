@@ -175,8 +175,8 @@ renumbering the whole document after the fact.
 
 ## Phase 16: Polish & cross-cutting
 
-- [ ] T059 `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src`, `uv run pytest`, `uv run lint-imports` — all clean across all of `backend/`; additionally confirm FR-016 (no live LLM/embedding/rerank/web-search call in CI) by grepping `tests/` for un-mocked gateway/Tavily/Cohere client construction
-- [ ] T060 Reconcile `backend/.env.example` against every env var actually read (no missed/no unused entries)
+- [x] T059 Full-tree gate on `backend/`: `ruff check .` — all checks passed; `ruff format --check .` — 118 files already formatted; `mypy src` — success, no issues in 57 source files; `pytest` — 445 passed; `lint-imports` — 1 kept, 0 broken (98 files, 314 dependencies). FR-016 check: `grep -rn "ChatLiteLLM(\|TavilyClient(\|CohereRerank(\|ChatOpenAI(\|OpenAIEmbeddings(\|QdrantClient(" tests/` — zero matches; no un-mocked gateway/Tavily/Cohere/Qdrant client construction anywhere in the test suite.
+- [x] T060 Reconciled `backend/.env.example` against `core/config.py`'s `Settings` fields — 9 vars were read but missing from the example file (`DATABASE_URL_DIRECT`, `VERCEL_OIDC_TOKEN`, `WTW_VISION_MODEL`, `WTW_QDRANT_API_KEY`, `WTW_QDRANT_TIMEOUT`, `WTW_QDRANT_BATCH_SIZE`, `WTW_CHUNK_SIZE`, `WTW_CHUNK_OVERLAP`, `WTW_CHECKPOINTER_POOL_MAX`), all confirmed genuinely consumed (not dead fields) via grep before adding. `backend/evals/common.py`'s independent `os.environ` reads (its own isolated project, by design) are a strict subset of vars already covered. No unused entries found in the other direction.
 - [ ] T061 Write the final report: what was ported vs. improved vs. deliberately left alone, the eval comparison table, unmet Constitution Check gates, and any decision the inventory didn't cover (Research §5's fixture-repository call, in particular); confirm via `git status`/`git diff --stat` that no path under `$CORPUS_LOCAL_DIR` was ever staged (SC-006)
 
 ## Dependencies
