@@ -40,15 +40,15 @@ T059's whole-tree lint pass, which is inherently cross-cutting).
 **Goal**: deterministic outfit scoring, importable and unit-tested standalone.
 **Independent test**: `uv run pytest backend/tests/unit/test_scoring*.py` — all four dimension scorers + combine produce the same values as the legacy code on fixed inputs, no LLM call, no DB.
 
-- [ ] T012 Create `backend/src/whattowear/scoring/properties.py` — move `owned_only`, `weather_appropriate`, `occasion_fit`, `respects_exclusions`, `check_outfit` from legacy `eval/properties.py` verbatim (Research §2) + `backend/tests/unit/test_scoring_properties.py`
-- [ ] T013 [P] Port `scoring/color_harmony.py` + test
-- [ ] T014 [P] Port `scoring/combine.py` + test
-- [ ] T015 [P] Port `scoring/formality_coherence.py` + test
-- [ ] T016 [P] Port `scoring/silhouette_balance.py` + test
-- [ ] T017 Port `scoring/weather_fitness.py` — imports `scoring.properties.weather_appropriate`, not `eval.properties` (defect fix) + test
-- [ ] T018 Port `scoring/__init__.py` (`rank_outfits`, `score_outfits`) + test
+- [x] T012 Create `backend/src/whattowear/scoring/properties.py` — move `owned_only`, `weather_appropriate`, `occasion_fit`, `respects_exclusions`, `check_outfit` from legacy `eval/properties.py` verbatim (Research §2) + `backend/tests/unit/scoring/test_properties.py` (ported from legacy `test_eval_properties.py`, import updated)
+- [x] T013 [P] Port `scoring/color_harmony.py` (unchanged — three evaluated iterations, verified all 12 legacy tests pass) + test
+- [x] T014 [P] Port `scoring/combine.py` (unchanged) + test
+- [x] T015 [P] Port `scoring/formality_coherence.py` (unchanged) + test
+- [x] T016 [P] Port `scoring/silhouette_balance.py` (unchanged) + test
+- [x] T017 Port `scoring/weather_fitness.py` — imports `scoring.properties.weather_appropriate`, not `eval.properties` (defect fix) + test
+- [x] T018 Port `scoring/__init__.py` (`rank_outfits`, `score_outfits`) — improved: `_GenOutfitLike.rationale` now typed `list[_RationaleLike]` instead of bare `list` (mypy strict mode caught this was previously untyped); `Iterable`/`Callable` moved to `collections.abc` per project convention. New test — `score_outfits` never had a direct unit test in the legacy suite despite 2 call sites.
 
-**Checkpoint**: `whattowear.scoring` imports with zero env vars; no `eval` import anywhere in `scoring/`. Extend `test_import_safety.py`'s parametrised list with every `scoring.*` module landed above (SC-003).
+**Checkpoint**: verified — `whattowear.scoring` (+ all 6 submodules) import with zero env vars (18/18 import-safety cases pass). No `eval` import anywhere in `scoring/` (grepped). 49 scoring tests pass, `ruff`/`ruff format` clean, `mypy` clean except the expected `memory.preferences` gap (Phase 5).
 
 ## Phase 4: `retrieval/` package (US1, US4)
 

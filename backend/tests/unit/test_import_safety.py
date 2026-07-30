@@ -39,6 +39,13 @@ REGRESSION_SURFACE_MODULES = [
     "whattowear.colors",
     "whattowear.categories",
     "whattowear.adapters.closet_fixture",
+    "whattowear.scoring",
+    "whattowear.scoring.properties",
+    "whattowear.scoring.color_harmony",
+    "whattowear.scoring.combine",
+    "whattowear.scoring.formality_coherence",
+    "whattowear.scoring.silhouette_balance",
+    "whattowear.scoring.weather_fitness",
 ]
 
 
