@@ -79,10 +79,10 @@ T059's whole-tree lint pass, which is inherently cross-cutting).
 **Goal**: weather lookup (no key) and trend search + distillation, prompt extracted.
 **Independent test**: `weather.py` unit tests against a stubbed HTTP client; `trends.py` unit test against a recorded Tavily fixture, no live call.
 
-- [ ] T025 [P] Port `external/weather.py` (Open-Meteo geocode + forecast) + test
-- [ ] T026 Port `external/trends.py` — extract `_DISTILL_PROMPT` to `prompts/trends_distill.md` (`load_prompt("trends_distill")`) + test against a recorded fixture response
+- [x] T025 [P] Port `external/weather.py` (Open-Meteo geocode + forecast, unchanged logic; fixed a real mypy gap — geocode `params` dict had mixed int/str values, requests' stub wants a narrower type, fixed by passing `"1"` not `1`, zero behavior change since requests URL-encodes both identically) + test (new — never had one)
+- [x] T026 Port `external/trends.py` — extracted `_DISTILL_PROMPT` to `prompts/trends_distill.md` (`load_prompt("trends_distill")`); `..config.get_chat_model` → `..adapters.llm_gateway.get_chat_model`; `refresh_trend_cards`'s `L3_CARDS_PATH` (was `REPO_ROOT / "data" / "kb" / ...`, a path inside the repo) now resolves from `core.config.get_settings().corpus_local_dir` at call time, not a module-level constant — constitution Principle X, and the legacy path scheme doesn't exist in this rebuild's corpus model anyway. Also fixed a real mypy gap: `.content` on a chat message is typed `str | list[str | dict]` (multimodal responses); added an explicit `isinstance` guard that degrades to the same "malformed response" `None` return the code already had, rather than crashing on the untyped case. + test against mocked Tavily/gateway responses, no live call (new — never had one)
 
-**Checkpoint**: no inline prompt string remains in `trends.py`. Extend `test_import_safety.py` with `external.weather`, `external.trends` (SC-003).
+**Checkpoint**: verified — no inline prompt string remains in `trends.py` (grepped). `whattowear.external.weather`/`.trends` import with zero env vars (26/26 import-safety cases pass). 34 external tests pass; `retrieval/test_hybrid.py`'s 4 previously-skipped `TestRetrieveL3Live` cases now run and pass (20/20 in `tests/unit/retrieval/`, no skips). `ruff`/`ruff format` clean. `mypy src` clean except the one remaining expected gap (`whattowear.kb`, Phase 11).
 
 ## Phase 7: `pipeline/` package (US1, US2, US4) — DB coupling fix #1 and #3 of 3, docstring fix
 

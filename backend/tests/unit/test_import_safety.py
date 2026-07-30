@@ -52,6 +52,8 @@ REGRESSION_SURFACE_MODULES = [
     "whattowear.retrieval.advanced",
     "whattowear.memory.preferences",
     "whattowear.memory.store",
+    "whattowear.external.weather",
+    "whattowear.external.trends",
 ]
 
 

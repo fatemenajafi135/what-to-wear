@@ -12,17 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from unittest.mock import patch
 
-import pytest
 from langchain_core.documents import Document
 
 from whattowear.retrieval import hybrid
 from whattowear.schema import Context
-
-# retrieve_l3 lazy-imports whattowear.external.trends, which doesn't land
-# until specs/007-ai-port/tasks.md Phase 6 — these patch that dotted path,
-# so they can't run until then. Remove this skip once external/trends.py
-# ports.
-_needs_external_trends = pytest.mark.skip(reason="whattowear.external.trends not ported yet (Phase 6)")
 
 
 def _doc(rule_id: str, layer: str, granularity: str, text: str = "text") -> Document:
@@ -131,7 +124,6 @@ class TestRetrieveL1:
         assert "L1-navy" in rule_ids
 
 
-@_needs_external_trends
 class TestRetrieveL3Live:
     def test_maps_tavily_results_into_citable_documents(self):
         fake_results = [
