@@ -19,6 +19,7 @@ from ..prompts import load_prompt
 from ..retrieval.base import RetrievalResult
 from ..schema import Context, ScoredOutfit, WardrobeItem
 from .generator import GenRationale, _format_rules
+from .grounding import filter_ungrounded_cites
 from .validity import is_slot_complete, is_valid_combination
 
 # >20,000 projected combos tightens each slot to its own top-6 by slicing
@@ -167,10 +168,7 @@ def engine_write(shortlist: list[ScoredOutfit], ctx: Context, retrieval: Retriev
         selected = []
         for selection in output.selections:
             outfit = shortlist[selection.index]
-            filtered_rationale = [
-                GenRationale(text=r.text, cites=[c for c in r.cites if c in retrieved_rule_ids])
-                for r in selection.rationale
-            ]
+            filtered_rationale = filter_ungrounded_cites(selection.rationale, retrieved_rule_ids)
             selected.append(outfit.model_copy(update={"rationale": filtered_rationale}))
 
     # Principle II: the LLM chooses WHICH 3 to surface, never their order —

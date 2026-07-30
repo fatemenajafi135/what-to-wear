@@ -12,6 +12,7 @@ from langsmith import traceable
 from ..retrieval.base import RetrievalResult
 from ..schema import CitedSource, Context, Outfit, OutfitResult, Rationale
 from .generator import GenOutput
+from .grounding import filter_ungrounded_cites
 
 
 def cited_rule_ids(gen: GenOutput) -> list[str]:
@@ -43,20 +44,31 @@ def every_choice_cites(gen: GenOutput) -> bool:
 
 @traceable(name="stage.cite", run_type="chain")
 def build_result(ctx: Context, gen: GenOutput, retrieval: RetrievalResult) -> OutfitResult:
-    """Assemble the final OutfitResult with resolved source citations."""
+    """Assemble the final OutfitResult with resolved source citations.
+
+    Re-applies `filter_ungrounded_cites` as a last-mile safety net (both
+    graph paths already drop ungrounded citations at generation time — see
+    `graph.py::generate_outfits` and `engine.py::engine_write` — so this is
+    normally a no-op; it stays cheap insurance against a future response
+    path that forgets to call the upstream guard, matching
+    `verify_grounding`'s "safety net on top of, not a replacement for"
+    convention for the item-level check)."""
     meta_by_id = {d.metadata["rule_id"]: d.metadata for d in retrieval.all()}
+    retrieved_rule_ids = set(meta_by_id)
 
     outfits = [
         Outfit(
             items=o.items,
-            rationale=[Rationale(text=r.text, cites=r.cites) for r in o.rationale],
+            rationale=[
+                Rationale(text=r.text, cites=r.cites) for r in filter_ungrounded_cites(o.rationale, retrieved_rule_ids)
+            ],
         )
         for o in gen.outfits
     ]
 
     sources: dict[str, CitedSource] = {}
-    for rid in cited_rule_ids(gen):
-        if rid in sources or rid not in meta_by_id:
+    for rid in (c for outfit in outfits for r in outfit.rationale for c in r.cites):
+        if rid in sources:
             continue
         m = meta_by_id[rid]
         sources[rid] = CitedSource(rule_id=rid, source=m["source"], url=m["url"], layer=m["layer"])
