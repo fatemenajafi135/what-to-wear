@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
  * are actually configured server-side. It's the only reliable signal:
  * `signInWithOAuth()` never surfaces "provider not enabled" as a catchable
  * error (it redirects the whole page to `/authorize`, which is where that
- * error actually renders) — see docs/design-decisions.md §13. Starts
+ * error actually renders) — see docs/design-decisions.md §15. Starts
  * `false` and only flips to `true` once confirmed, so a slow or failed
  * check fails closed instead of offering a button that's about to break.
  */
