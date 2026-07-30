@@ -69,13 +69,15 @@ structural-typing relationship as `VectorStore`.
 class ClosetRepository(Protocol):
     def list_wardrobe_items(self, user_id: str) -> list[WardrobeItem]: ...
     def list_catalog_items(self) -> list[WardrobeItem]: ...
-    def get_derivation_inputs(self, user_id: str) -> tuple[list[FeedbackRecord], list[str]]: ...
+    def get_derivation_inputs(self, user_id: str) -> tuple[list[FeedbackRecord], dict[str, datetime]]: ...
 ```
 
 Two implementations exist by the end of this feature:
 - `adapters/closet_fixture.py::FixtureClosetRepository` — loads `evals/fixtures/wardrobe.json`
   once, serves it for any `user_id` and as the catalog; `get_derivation_inputs` always
-  returns `([], [])`. Used by the eval harness and unit tests.
+  returns `([], {})` (empty feedback list, empty dismissal map — dismissal map is keyed by
+  `signal_key -> dismissed_at`, matching `crud.get_derivation_inputs`). Used by the eval
+  harness and unit tests.
 - The Postgres-backed implementation does **not** land in this feature (Research §5) — no
   wardrobe/catalog schema exists yet in `infra/supabase/migrations/`. The Protocol is the
   seam a future feature implements against; nothing here blocks on it.

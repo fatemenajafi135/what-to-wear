@@ -16,15 +16,15 @@ T059's whole-tree lint pass, which is inherently cross-cutting).
 
 ## Phase 1: Setup
 
-- [ ] T001 Add AI-layer dependencies (`langgraph`, `langchain-core`, `langchain-litellm`, `langchain-openai`, `langchain-cohere`, `langchain-qdrant`, `qdrant-client`, `langsmith`, `tavily-python`, `pyyaml`, `psycopg_pool`) to `backend/pyproject.toml`; `uv sync`
-- [ ] T002 [P] Extend `backend/src/whattowear/core/config.py` with AI Gateway / Qdrant / Cohere / Tavily / LangSmith settings fields (mirrors legacy `config.py`'s env vars, lazy via existing `Settings`/`get_settings()` pattern — no module-level client construction)
-- [ ] T003 Create `backend/src/whattowear/ports.py` — `VectorStore`, `LLMClient`, `ClosetRepository` Protocols per `contracts/ports.md`
-- [ ] T004 [P] Create `backend/src/whattowear/prompts/__init__.py` with `load_prompt(name) -> tuple[str, int]` per `contracts/prompt-front-matter.md`
-- [ ] T005 [P] Copy `../app-legacy/backend/data/fixtures/wardrobe.json` → `backend/evals/fixtures/wardrobe.json` and `../app-legacy/backend/data/golden_set.yaml` → `backend/evals/golden_set.yaml` (tracked exception, constitution X)
-- [ ] T006 Create `backend/src/whattowear/adapters/closet_fixture.py::FixtureClosetRepository` implementing `ClosetRepository` from `backend/evals/fixtures/wardrobe.json` (Research §5)
-- [ ] T007 [P] Unit tests for T003/T006 in `backend/tests/unit/test_ports.py` and `backend/tests/unit/test_closet_fixture.py`
+- [x] T001 Add AI-layer dependencies (`langgraph`, `langchain-core`, `langchain-litellm`, `langchain-openai`, `langchain-cohere`, `langchain-qdrant`, `qdrant-client`, `langsmith`, `tavily-python`, `pyyaml`, `psycopg_pool`) to `backend/pyproject.toml`; `uv sync`
+- [x] T002 [P] Extend `backend/src/whattowear/core/config.py` with AI Gateway / Qdrant / Cohere / Tavily / LangSmith settings fields (mirrors legacy `config.py`'s env vars, lazy via existing `Settings`/`get_settings()` pattern — no module-level client construction); create `backend/src/whattowear/adapters/llm_gateway.py` with `get_chat_model`/`get_judge_model`/`get_embeddings`/`get_reranker` factories (legacy `config.py`'s factory half, split out so `core/config.py` stays data-only — the factories are a concrete `ports.LLMClient` binding, which belongs in `adapters/` alongside `closet_fixture.py`)
+- [x] T003 Create `backend/src/whattowear/ports.py` — `VectorStore`, `LLMClient`, `ClosetRepository` Protocols per `contracts/ports.md`
+- [x] T004 [P] Create `backend/src/whattowear/prompts/__init__.py` with `load_prompt(name) -> tuple[str, int]` per `contracts/prompt-front-matter.md`
+- [x] T005 [P] Copy `../app-legacy/backend/data/fixtures/wardrobe.json` → `backend/evals/fixtures/wardrobe.json` (40 items) and `../app-legacy/backend/data/golden_set.yaml` → `backend/evals/golden_set.yaml` (24 cases, tracked exception, constitution X)
+- [x] T006 Create `backend/src/whattowear/adapters/closet_fixture.py::FixtureClosetRepository` implementing `ClosetRepository` from `backend/evals/fixtures/wardrobe.json` (Research §5) — `FeedbackRecord` deferred to `TYPE_CHECKING` so this lands without waiting on Phase 5
+- [x] T007 [P] Unit tests for T003 in `backend/tests/unit/test_ports.py` (structural Protocol conformance) + `backend/tests/unit/test_llm_gateway.py` (factory error paths). `test_closet_fixture.py` deferred to right after T008 lands — `FixtureClosetRepository.list_wardrobe_items` needs a real `WardrobeItem` to construct against, which doesn't exist until `schema.py` ports.
 
-**Checkpoint**: `ports.py` compiles, fixture repository returns the 40-item wardrobe for any user id and as the catalog, `get_derivation_inputs` returns `([], [])`.
+**Checkpoint**: `ports.py`, `adapters/llm_gateway.py`, `adapters/closet_fixture.py`, `prompts/__init__.py` all import with zero env vars (verified — `test_import_safety.py` extended). `uv run ruff check .`, `ruff format --check .`, `uv run pytest` all clean (15 passed). `mypy` has 4 expected `import-untyped` errors on `schema`/`memory.preferences` — both don't exist until Phase 2/5, re-verify at T059.
 
 ## Phase 2: Foundational (blocks every user story)
 

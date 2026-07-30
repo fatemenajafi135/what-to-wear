@@ -1,0 +1,246 @@
+# Golden test set — 24 (occasion, mood, weather) cases with EXPECTED OUTFIT
+# PROPERTIES, not fixed outfits (an outfit problem has many right answers).
+#
+# Fields:
+#   expected.min_formality   - outfit must reach at least this formality
+#   expected.requires_outer  - cold/freezing: must include a warm/outer layer
+#   expected.max_warmth      - hot/warm: no core item warmer than this
+#   expected.forbid_categories / forbid_colors - hard exclusions
+#   relevant_rule_ids        - rules retrieval SHOULD surface (recall / context)
+#   reference                - short prose expected answer (RAGAS reference)
+
+cases:
+  - id: g01
+    occasion: wedding
+    mood: elegant
+    temp_c: 12
+    expected: {min_formality: formal, requires_outer: false, forbid_colors: [white, ivory]}
+    relevant_rule_ids: [L4-occ-wedding-evening, L4-dc-formal, L4-wx-cool]
+    reference: "A formal evening-wedding look: a dark formal dress or suit with dress shoes, avoiding white/ivory, with a light layer for cool weather."
+
+  - id: g02
+    occasion: wedding
+    mood: fresh
+    temp_c: 24
+    formality: semi_formal
+    expected: {min_formality: semi_formal, max_warmth: 2, forbid_colors: [white, ivory]}
+    relevant_rule_ids: [L4-occ-wedding-day, L4-dc-semiformal, L4-wx-warm]
+    reference: "A daytime wedding is semi-formal: a cocktail dress or dressy separates in lighter fabrics, breathable for warm weather, not white."
+
+  - id: g03
+    occasion: office
+    mood: focused
+    temp_c: 8
+    expected: {min_formality: business_casual, requires_outer: true}
+    relevant_rule_ids: [L4-occ-office, L4-dc-businesscasual, L4-wx-cold]
+    reference: "Business-casual office wear for cold weather: trousers, a shirt or knit, a blazer, and a warm outer layer."
+
+  - id: g04
+    occasion: office
+    mood: confident
+    temp_c: 20
+    expected: {min_formality: business_casual, max_warmth: 3}
+    relevant_rule_ids: [L4-occ-office, L4-dc-businesscasual, L4-wx-mild]
+    reference: "Mild-weather business casual: trousers or skirt with a blouse or shirt and an optional light blazer."
+
+  - id: g05
+    occasion: job_interview
+    mood: serious
+    temp_c: 15
+    expected: {min_formality: business_casual, requires_outer: false}
+    relevant_rule_ids: [L4-occ-interview, L4-dc-businesscasual, L4-wx-cool]
+    reference: "An interview look one notch above daily norm: conservative, well-fitted business-casual to formal tailoring in muted colors."
+
+  - id: g06
+    occasion: beach
+    mood: relaxed
+    temp_c: 31
+    expected: {min_formality: casual, max_warmth: 1, forbid_categories: [outerwear, suit, gown]}
+    relevant_rule_ids: [L4-occ-beach, L4-dc-casual, L4-wx-hot]
+    reference: "Hot beach wear: light breathable casual pieces, sandals, minimal layers, sun-appropriate."
+
+  - id: g07
+    occasion: date
+    mood: romantic
+    temp_c: 18
+    expected: {min_formality: smart_casual}
+    relevant_rule_ids: [L4-occ-date, L4-dc-smartcasual, L4-wx-mild]
+    reference: "A dinner-date smart-casual look: a polished base with one elevated piece, loafers or heels."
+
+  - id: g08
+    occasion: date
+    mood: playful
+    temp_c: 6
+    expected: {min_formality: smart_casual, requires_outer: true}
+    relevant_rule_ids: [L4-occ-date, L4-dc-smartcasual, L4-wx-cold]
+    reference: "A cold-weather date look: smart-casual layers with a warm coat, dark jeans or trousers with a knit."
+
+  - id: g09
+    occasion: brunch
+    mood: cheerful
+    temp_c: 23
+    expected: {min_formality: smart_casual, max_warmth: 2}
+    relevant_rule_ids: [L4-occ-brunch, L4-dc-smartcasual, L4-wx-warm]
+    reference: "A warm brunch look: relaxed smart-casual in a daytime palette, breathable fabrics."
+
+  - id: g10
+    occasion: funeral
+    mood: somber
+    temp_c: 10
+    expected: {min_formality: formal, forbid_colors: [tomato red, butter yellow, emerald green], requires_outer: false}
+    relevant_rule_ids: [L4-occ-funeral, L4-dc-formal, L4-wx-cool]
+    reference: "A funeral look: formal and subdued in dark muted colors, conservative coverage."
+
+  - id: g11
+    occasion: gala
+    mood: glamorous
+    temp_c: 5
+    formality: black_tie
+    expected: {min_formality: black_tie, requires_outer: false}
+    relevant_rule_ids: [L4-dc-blacktie, L4-wx-cold]
+    reference: "A black-tie gala look: a floor-length gown or tuxedo, minimal classic accessories."
+
+  - id: g12
+    occasion: party
+    mood: bold
+    temp_c: 14
+    formality: semi_formal
+    expected: {min_formality: semi_formal}
+    # L3-2025-metallic-evening dropped (Feature 007 Task B, research.md D7): L3
+    # is now a live Tavily search at request time, so a static card's rule_id
+    # can never be reproduced — recall for this case now measures L4+L1 only.
+    relevant_rule_ids: [L4-dc-semiformal, L4-wx-cool]
+    reference: "An evening party semi-formal look, with a current metallic accent for evening."
+
+  - id: g13
+    occasion: office
+    mood: minimal
+    temp_c: -3
+    expected: {min_formality: business_casual, requires_outer: true}
+    relevant_rule_ids: [L4-occ-office, L4-dc-businesscasual, L4-wx-freezing]
+    reference: "Freezing-weather office wear: layered business-casual under a heavy insulated coat with scarf."
+
+  - id: g14
+    occasion: date
+    mood: elegant
+    temp_c: 26
+    formality: semi_formal
+    expected: {min_formality: semi_formal, max_warmth: 2}
+    relevant_rule_ids: [L4-occ-date, L4-dc-semiformal, L4-wx-warm]
+    reference: "A warm-evening upscale date: a semi-formal dress or dressy separates in light fabric."
+
+  - id: g15
+    occasion: brunch
+    mood: sunny
+    temp_c: 29
+    expected: {min_formality: smart_casual, max_warmth: 1, forbid_categories: [outerwear]}
+    relevant_rule_ids: [L4-occ-brunch, L4-dc-smartcasual, L4-wx-hot]
+    reference: "A hot brunch look: airy smart-casual, linen or cotton, no heavy layers."
+
+  - id: g16
+    occasion: office
+    mood: creative
+    temp_c: 17
+    formality: smart_casual
+    expected: {min_formality: smart_casual}
+    # L3-2025-tailored-trousers dropped (Feature 007 Task B, research.md D7):
+    # see g12's note -- L3 is now live, so this static id can't recur.
+    relevant_rule_ids: [L4-dc-smartcasual, L4-wx-mild]
+    reference: "A creative-office smart-casual look with relaxed tailored trousers and a fitted top."
+
+  - id: g17
+    occasion: wedding
+    mood: classic
+    temp_c: -1
+    expected: {min_formality: formal, requires_outer: true, forbid_colors: [white, ivory]}
+    relevant_rule_ids: [L4-occ-wedding-evening, L4-dc-formal, L4-wx-freezing]
+    reference: "A freezing evening wedding: a formal dress or suit with a warm coat, not white."
+
+  - id: g18
+    occasion: interview
+    mood: prepared
+    temp_c: 22
+    formality: business_casual
+    expected: {min_formality: business_casual, max_warmth: 3}
+    relevant_rule_ids: [L4-dc-businesscasual, L4-wx-mild]
+    reference: "A warm-day interview: crisp business-casual, conservative colors, well-fitted."
+
+  - id: g19
+    occasion: party
+    mood: festive
+    temp_c: 2
+    formality: semi_formal
+    expected: {min_formality: semi_formal, requires_outer: true}
+    relevant_rule_ids: [L4-dc-semiformal, L4-wx-cold]
+    reference: "A cold evening party: semi-formal dressy separates with a warm coat over them."
+
+  - id: g20
+    occasion: beach
+    mood: easy
+    temp_c: 27
+    expected: {min_formality: casual, max_warmth: 1, forbid_categories: [suit, gown, outerwear]}
+    relevant_rule_ids: [L4-occ-beach, L4-dc-casual, L4-wx-warm]
+    reference: "A warm beach look: light casual pieces and sandals."
+
+  - id: g21
+    occasion: office
+    mood: sharp
+    temp_c: 11
+    formality: business_casual
+    expected: {min_formality: business_casual}
+    relevant_rule_ids: [L4-occ-office, L4-dc-businesscasual, L4-wx-cool]
+    reference: "A cool-weather office look: business-casual with a light jacket or blazer layer."
+
+  - id: g22
+    occasion: date
+    mood: cozy
+    temp_c: 9
+    expected: {min_formality: smart_casual, requires_outer: true}
+    relevant_rule_ids: [L4-occ-date, L4-dc-smartcasual, L4-wx-cold]
+    reference: "A cozy cold date: smart-casual knit layers with a coat, dark denim or trousers."
+
+  - id: g23
+    occasion: brunch
+    mood: chic
+    temp_c: 16
+    formality: smart_casual
+    expected: {min_formality: smart_casual}
+    # L3-2025-quiet-luxury dropped (Feature 007 Task B, research.md D7): see
+    # g12's note -- L3 is now live, so this static id can't recur.
+    relevant_rule_ids: [L4-dc-smartcasual, L4-wx-cool]
+    reference: "A chic brunch look: understated quality smart-casual basics in neutral tones with a light layer."
+
+  - id: g24
+    occasion: gala
+    mood: refined
+    temp_c: 19
+    formality: formal
+    expected: {min_formality: formal}
+    relevant_rule_ids: [L4-dc-formal, L4-wx-mild]
+    reference: "A mild-weather formal gala look: a well-tailored suit or elegant evening dress in a muted palette."
+
+# Vision golden set (Feature 003: mvp-app, US2) — a separate, independent
+# section from `cases:` above (photo -> attributes is structurally a
+# different shape than occasion/mood/weather -> outfit; see
+# specs/003-mvp-app/research.md item 6). LOOSE expected properties, not exact
+# matches -- extraction is inherently less precise than a hard constraint
+# check. Checked by `eval/vision_harness.py`, NOT the existing harness.py
+# no-regression gate.
+#
+# See data/fixtures/vision_samples/README.md: the two sample images below are
+# synthetic solid-color placeholders, not real garment photos -- replace them
+# before trusting this check for anything real.
+vision_cases:
+  - id: v01
+    image: fixtures/vision_samples/navy_top_placeholder.png
+    expected:
+      category: top
+      formality_in: [casual, smart_casual, business_casual]
+      warmth_range: [0, 3]
+
+  - id: v02
+    image: fixtures/vision_samples/beige_trousers_placeholder.png
+    expected:
+      category: bottom
+      formality_in: [casual, smart_casual, business_casual, semi_formal]
+      warmth_range: [0, 3]

@@ -22,8 +22,9 @@ ImageStore, and a repository Protocol") suggested — `ImageStore` is dropped.
   does not replace `config.py`).
 - `ClosetRepository` — `list_wardrobe_items(user_id) -> list[WardrobeItem]`,
   `list_catalog_items() -> list[WardrobeItem]`, `get_derivation_inputs(user_id) ->
-  tuple[list[FeedbackRecord], list[str]]` (feedback rows + dismissed signal keys, matching
-  `crud.get_derivation_inputs`'s return shape used by `memory/preferences.derive_signals`).
+  tuple[list[FeedbackRecord], dict[str, datetime]]` (feedback rows + a dismissal map keyed
+  `signal_key -> dismissed_at`, matching `crud.get_derivation_inputs`'s exact return shape,
+  used by `memory/preferences.derive_signals`).
 
 **Rationale**: reading `graph.py`, `context_assembler.py` and `memory/store.py` together
 shows exactly three DB touchpoints across the whole AI layer (`context_assembler.load_wardrobe`,
@@ -105,7 +106,7 @@ than attempted mid-port.
 tracked `evals/fixtures/wardrobe.json` (40 items) once and serving it as both the wardrobe
 for any user id and the shared catalog — reproducing `crud.seed_catalog` +
 `crud.seed_eval_baseline_user`'s effective behavior (both seed from the identical fixture)
-without touching Postgres. `get_derivation_inputs` returns `([], [])` unconditionally,
+without touching Postgres. `get_derivation_inputs` returns `([], {})` unconditionally,
 matching `seed_eval_baseline_user`'s documented guarantee that the eval baseline user has no
 feedback rows, so `memory.profile_note()` stays `None` — identical to today's baseline runs.
 

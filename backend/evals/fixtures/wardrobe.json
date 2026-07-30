@@ -1,0 +1,548 @@
+[
+  {
+    "id": "w01",
+    "category": "top",
+    "colors": [
+      "#ffffff"
+    ],
+    "formality": "smart_casual",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w02",
+    "category": "top",
+    "colors": [
+      "#1b2a4a"
+    ],
+    "formality": "business_casual",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w03",
+    "category": "top",
+    "colors": [
+      "#000000"
+    ],
+    "formality": "smart_casual",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "summer",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w04",
+    "category": "t-shirt",
+    "colors": [
+      "#808080"
+    ],
+    "formality": "casual",
+    "warmth": 0,
+    "season": [
+      "spring",
+      "summer"
+    ]
+  },
+  {
+    "id": "w05",
+    "category": "t-shirt",
+    "colors": [
+      "#ff6347"
+    ],
+    "formality": "casual",
+    "warmth": 0,
+    "season": [
+      "summer"
+    ]
+  },
+  {
+    "id": "w06",
+    "category": "blouse",
+    "colors": [
+      "#f4e99b"
+    ],
+    "formality": "smart_casual",
+    "warmth": 0,
+    "season": [
+      "spring",
+      "summer"
+    ]
+  },
+  {
+    "id": "w07",
+    "category": "dress_shirt",
+    "colors": [
+      "#add8e6"
+    ],
+    "formality": "business_casual",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w08",
+    "category": "sweater",
+    "colors": [
+      "#c19a6b"
+    ],
+    "formality": "smart_casual",
+    "warmth": 3,
+    "season": [
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w09",
+    "category": "sweater",
+    "colors": [
+      "#36454f"
+    ],
+    "formality": "smart_casual",
+    "warmth": 3,
+    "season": [
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w10",
+    "category": "cardigan",
+    "colors": [
+      "#fffdd0"
+    ],
+    "formality": "smart_casual",
+    "warmth": 2,
+    "season": [
+      "spring",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w11",
+    "category": "trousers",
+    "colors": [
+      "#36454f"
+    ],
+    "formality": "business_casual",
+    "warmth": 2,
+    "season": [
+      "spring",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w12",
+    "category": "trousers",
+    "colors": [
+      "#c8ad7f"
+    ],
+    "formality": "smart_casual",
+    "warmth": 2,
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w13",
+    "category": "chinos",
+    "colors": [
+      "#1b2a4a"
+    ],
+    "formality": "smart_casual",
+    "warmth": 2,
+    "season": [
+      "spring",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w14",
+    "category": "jeans",
+    "colors": [
+      "#2f3a56"
+    ],
+    "formality": "casual",
+    "warmth": 2,
+    "season": [
+      "spring",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w15",
+    "category": "jeans",
+    "colors": [
+      "#000000"
+    ],
+    "formality": "smart_casual",
+    "warmth": 2,
+    "season": [
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w16",
+    "category": "shorts",
+    "colors": [
+      "#c3b091"
+    ],
+    "formality": "casual",
+    "warmth": 0,
+    "season": [
+      "summer"
+    ]
+  },
+  {
+    "id": "w17",
+    "category": "linen_trousers",
+    "colors": [
+      "#ded0b6"
+    ],
+    "formality": "smart_casual",
+    "warmth": 0,
+    "season": [
+      "summer"
+    ]
+  },
+  {
+    "id": "w18",
+    "category": "skirt",
+    "colors": [
+      "#000000"
+    ],
+    "formality": "business_casual",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w19",
+    "category": "dress",
+    "colors": [
+      "#046307"
+    ],
+    "formality": "semi_formal",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w20",
+    "category": "dress",
+    "colors": [
+      "#1b2a4a"
+    ],
+    "formality": "formal",
+    "warmth": 1,
+    "season": [
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w21",
+    "category": "gown",
+    "colors": [
+      "#000000"
+    ],
+    "formality": "black_tie",
+    "warmth": 1,
+    "season": [
+      "autumn",
+      "winter",
+      "spring",
+      "summer"
+    ]
+  },
+  {
+    "id": "w22",
+    "category": "suit",
+    "colors": [
+      "#36454f"
+    ],
+    "formality": "formal",
+    "warmth": 2,
+    "season": [
+      "spring",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w23",
+    "category": "blazer",
+    "colors": [
+      "#1b2a4a"
+    ],
+    "formality": "business_casual",
+    "warmth": 2,
+    "season": [
+      "spring",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w24",
+    "category": "blazer",
+    "colors": [
+      "#c8ad7f"
+    ],
+    "formality": "smart_casual",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w25",
+    "category": "outerwear",
+    "colors": [
+      "#c8ad7f"
+    ],
+    "formality": "smart_casual",
+    "warmth": 2,
+    "season": [
+      "spring",
+      "autumn"
+    ],
+    "notes_ignored": "trench coat"
+  },
+  {
+    "id": "w26",
+    "category": "outerwear",
+    "colors": [
+      "#c19a6b"
+    ],
+    "formality": "smart_casual",
+    "warmth": 4,
+    "season": [
+      "winter"
+    ]
+  },
+  {
+    "id": "w27",
+    "category": "outerwear",
+    "colors": [
+      "#000000"
+    ],
+    "formality": "casual",
+    "warmth": 5,
+    "season": [
+      "winter"
+    ]
+  },
+  {
+    "id": "w28",
+    "category": "shoes",
+    "colors": [
+      "#ffffff"
+    ],
+    "formality": "casual",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w29",
+    "category": "shoes",
+    "colors": [
+      "#5c4033"
+    ],
+    "formality": "smart_casual",
+    "warmth": 2,
+    "season": [
+      "spring",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w30",
+    "category": "shoes",
+    "colors": [
+      "#000000"
+    ],
+    "formality": "formal",
+    "warmth": 2,
+    "season": [
+      "spring",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w31",
+    "category": "heels",
+    "colors": [
+      "#000000"
+    ],
+    "formality": "formal",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "summer",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w32",
+    "category": "sandals",
+    "colors": [
+      "#d2b48c"
+    ],
+    "formality": "casual",
+    "warmth": 0,
+    "season": [
+      "summer"
+    ]
+  },
+  {
+    "id": "w33",
+    "category": "loafers",
+    "colors": [
+      "#5c4033"
+    ],
+    "formality": "smart_casual",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w34",
+    "category": "belt",
+    "colors": [
+      "#5c4033"
+    ],
+    "formality": "smart_casual",
+    "warmth": 0,
+    "season": [
+      "spring",
+      "summer",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w35",
+    "category": "scarf",
+    "colors": [
+      "#808080"
+    ],
+    "formality": "casual",
+    "warmth": 3,
+    "season": [
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w36",
+    "category": "sneakers",
+    "colors": [
+      "#ffffff",
+      "#808080"
+    ],
+    "formality": "casual",
+    "warmth": 1,
+    "season": [
+      "spring",
+      "summer",
+      "autumn"
+    ]
+  },
+  {
+    "id": "w37",
+    "category": "boots",
+    "colors": [
+      "#5c4033"
+    ],
+    "formality": "smart_casual",
+    "warmth": 3,
+    "season": [
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w38",
+    "category": "jewelry",
+    "colors": [
+      "#d4af37"
+    ],
+    "formality": "smart_casual",
+    "warmth": 0,
+    "season": [
+      "spring",
+      "summer",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w39",
+    "category": "jewelry",
+    "colors": [
+      "#c0c0c0"
+    ],
+    "formality": "semi_formal",
+    "warmth": 0,
+    "season": [
+      "spring",
+      "summer",
+      "autumn",
+      "winter"
+    ]
+  },
+  {
+    "id": "w40",
+    "category": "jewelry",
+    "colors": [
+      "#5c4033"
+    ],
+    "formality": "business_casual",
+    "warmth": 0,
+    "season": [
+      "spring",
+      "summer",
+      "autumn",
+      "winter"
+    ]
+  }
+]

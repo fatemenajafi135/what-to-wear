@@ -31,6 +31,10 @@ REGRESSION_SURFACE_MODULES = [
     "whattowear.core.db",
     "whattowear.core.logging",
     "whattowear.main",  # transitively imports config and db — the one most likely to catch a real regression
+    # --- feature 007 (AI layer port) — extended per module as each lands ---
+    "whattowear.ports",
+    "whattowear.adapters.llm_gateway",
+    "whattowear.prompts",
 ]
 
 

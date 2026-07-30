@@ -33,7 +33,7 @@ recorded-fixture stub returning fixed structured output — never a live call in
 |---|---|---|
 | `list_wardrobe_items` | `(user_id: str) -> list[WardrobeItem]` | `pipeline/context_assembler.load_wardrobe` |
 | `list_catalog_items` | `() -> list[WardrobeItem]` | `pipeline/graph.verify_grounding` |
-| `get_derivation_inputs` | `(user_id: str) -> tuple[list[FeedbackRecord], list[str]]` | `memory/store.get_profile` |
+| `get_derivation_inputs` | `(user_id: str) -> tuple[list[FeedbackRecord], dict[str, datetime]]` | `memory/store.get_profile` |
 
 Production binding: none in this feature (data-model.md, Research §5) — the Protocol is the
 seam; a Postgres-backed implementation lands with closet persistence. Test/eval binding:
