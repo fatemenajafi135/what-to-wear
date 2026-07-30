@@ -528,4 +528,55 @@ button label — the prototype's own reasoning, and it reads better than the stu
 
 ---
 
+## 15. Google button when the provider isn't configured
+
+Neither `design-system.md` nor this doc's §12 says what Sign in/Sign up's Google button
+should look like when Google OAuth isn't wired up server-side. That state is real: it's
+whatever Supabase's `[auth.external.google]` reports today, in any environment, whenever the
+client ID/secret are unset. §6's `auth.signup.error.body` / `auth.signin.error.body` don't
+fit it either — both are about a submitted email/password not matching, not about a
+provider being unavailable before the user does anything.
+
+It also isn't a case the normal form-error mechanism (§1.7's `Banner variant="error"`) can
+even reach. `supabase-js`'s `signInWithOAuth()` never rejects: it resolves `{ error: null }`
+and then does a real `window.location.assign()` to GoTrue's `/authorize` endpoint. If the
+provider is disabled there, GoTrue serves its raw JSON 400 as the response body of a full
+page navigation — the SPA has already been left, so no `catch` in React ever runs. Any
+fix has to prevent the click before that navigation starts, not react to it afterward.
+
+### Decision
+
+**Disable the button** using the convention that already exists for every other control —
+`opacity: 0.5` + `pointer-events: none` via the native `disabled` attribute (§3, decision
+§5) — driven by a live check against GoTrue's public `GET /auth/v1/settings` endpoint
+(`{ external: { google: boolean } }`). This is the same signal Supabase's own server uses
+to decide whether `/authorize` will work, so the button can't drift out of sync with the
+backend the way a duplicated frontend env flag could. The check defaults to "unavailable"
+until it resolves (fail closed): a slow or failed settings fetch leaves the button disabled
+rather than briefly offering one that's about to 400.
+
+No new copy or visual state was invented — the button stays visible on both screens (it is
+specified there) and, when disabled, looks like every other disabled control in the system.
+
+### Alternatives considered
+
+- **Hide the button entirely** — rejected: the task and the design both keep Google
+  specified on Sign in/Sign up; disabled communicates "not right now," hidden would make it
+  look never-planned and would need to reappear/disappear per-environment, which is more
+  moving parts than one boolean.
+- **Catch the error and show a `Banner`** — rejected on the mechanics above (there's nothing
+  to catch), and even a redesigned version that checked availability *before* calling
+  `signInWithOAuth()` would need new copy `design-system.md` doesn't have (`auth.*.error.body`
+  is about credentials, not provider availability) — inventing that copy silently is exactly
+  what the task said not to do, whereas the disabled state needed none.
+- **A build-time `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED` flag instead of the live settings check**
+  — rejected: it's a second, independently-maintained copy of information Supabase already
+  exposes, and the two can silently disagree (flag says enabled, GoTrue says no, or vice
+  versa) in a way the live check structurally cannot.
+
+Implementation: `frontend/lib/supabase/useGoogleAuthAvailable.ts`, consumed by
+`SignUpForm`/`SignInForm` to set `GoogleButton`'s `disabled` prop.
+
+---
+
 *All items in this document are decided. Nothing is left open.*

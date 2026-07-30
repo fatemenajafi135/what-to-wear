@@ -7,6 +7,7 @@ const push = vi.fn();
 const refresh = vi.fn();
 const signInWithPassword = vi.fn();
 const signInWithOAuth = vi.fn();
+let googleAvailable = true;
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh }),
@@ -16,11 +17,16 @@ vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({ auth: { signInWithPassword, signInWithOAuth } }),
 }));
 
+vi.mock("@/lib/supabase/useGoogleAuthAvailable", () => ({
+  useGoogleAuthAvailable: () => googleAvailable,
+}));
+
 beforeEach(() => {
   push.mockClear();
   refresh.mockClear();
   signInWithPassword.mockClear();
   signInWithOAuth.mockClear();
+  googleAvailable = true;
 });
 
 describe("SignInForm", () => {
@@ -66,5 +72,16 @@ describe("SignInForm", () => {
       provider: "google",
       options: { redirectTo: expect.stringContaining("/auth/callback") },
     });
+  });
+
+  it("disables the Google button when Google auth is not configured", async () => {
+    googleAvailable = false;
+    render(<SignInForm />);
+
+    const googleButton = screen.getByRole("button", { name: "Continue with Google" });
+    expect(googleButton).toBeDisabled();
+
+    await userEvent.click(googleButton, { pointerEventsCheck: 0 });
+    expect(signInWithOAuth).not.toHaveBeenCalled();
   });
 });
