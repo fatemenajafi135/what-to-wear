@@ -165,7 +165,7 @@ renumbering the whole document after the fact.
 
 ## Phase 14: Import-linter contract extension
 
-- [ ] T055 Add `pipeline`, `retrieval`, `scoring`, `memory`, `ingest` to `backend/.importlinter`'s `source_modules`; run `uv run lint-imports` clean
+- [x] T055 Added `pipeline`, `retrieval`, `scoring`, `memory`, `ingest` to `backend/.importlinter`'s `source_modules`, alongside `core` (unchanged from feature 002). `whattowear.api` deliberately not added to `forbidden_modules` — matches the existing precedent (only `whattowear.main`/`fastapi` were ever listed there) since `whattowear.api` still doesn't exist in this rebuild (feature 003's territory). `uv run lint-imports`: **1 kept, 0 broken** — the contract that was "narrow, not aspirational" by design (feature 002's own comment) is now the real, full-width AI-independence contract the constitution describes, verified against 98 files / 314 dependencies.
 
 ## Phase 15: The eval gate — headline acceptance bar (US1, US2, US4)
 
