@@ -163,7 +163,10 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# http://127.0.0.1:3000/auth/callback is the app's own OAuth return route (specs/003-auth) —
+# added, not substituted for the existing entry, per the feature handoff's instruction not to
+# weaken this list to make OAuth work locally.
+additional_redirect_urls = ["https://127.0.0.1:3000", "http://127.0.0.1:3000/auth/callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -182,7 +185,9 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+# 8, not the default 6 — docs/design-decisions.md §1.7: the server must enforce what the
+# client claims, not just validate it client-side.
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -250,6 +255,13 @@ otp_expiry = 3600
 # [auth.email.template.invite]
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
+
+# Custom recovery link, using Supabase's own {{ .TokenHash }} template variable, so the link
+# lands on our real /reset-password/:token route (design-system.md §4) instead of Supabase's
+# default query-string redirect shape — see specs/003-auth/research.md §6.
+[auth.email.template.recovery]
+subject = "Reset your What to Wear password"
+content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
@@ -336,6 +348,19 @@ url = ""
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
+
+# Google — the secondary auth flow per docs/design-decisions.md §12. Wired and enabled even
+# with no real credentials available (specs/003-auth handoff §2): the button stays live and
+# fails at the provider-consent step rather than being hidden or stubbed. Populate
+# SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/_SECRET in a local, untracked env file to actually
+# test it.
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+# DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+# Required for local sign in with Google auth (see auth.external.apple's skip_nonce_check comment above).
+skip_nonce_check = true
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.

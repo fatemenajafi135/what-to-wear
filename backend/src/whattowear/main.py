@@ -1,5 +1,7 @@
-"""FastAPI app. One route: `GET /health` (see contracts/health.md under
-specs/002-backend-foundation/). No product endpoint exists in this slice.
+"""FastAPI app. `GET /health` (see contracts/health.md under
+specs/002-backend-foundation/) plus `/api/v1/whoami` (see
+specs/003-auth/contracts/whoami.md) — the latter is not a product endpoint,
+it exists to prove JWT verification works end to end.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response
 from sqlalchemy import text
 
+from whattowear.api.v1.routes.whoami import router as whoami_router
 from whattowear.core.db import get_engine
 from whattowear.core.logging import configure_logging
 
@@ -29,6 +32,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="What to Wear — backend foundation", lifespan=lifespan)
+app.include_router(whoami_router, prefix="/api/v1")
 
 
 def _database_reachable() -> bool:

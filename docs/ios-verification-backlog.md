@@ -39,14 +39,15 @@ Two mechanisms cause almost everything in this file:
 | 3 | **Apple touch icon renders correctly** on the home screen — no black corners, no double rounding. | Only visible once added to the home screen. | 180×180, flattened, no alpha — verified programmatically |
 | 4 | **No browser chrome means TopHeader's back button is the only way back.** Confirm no screen with history omits it. | The failure only manifests where there is no URL bar. | `design-system.md` §7 |
 
-### From feature 003 — auth *(anticipated; confirm when the slice lands)*
+### From feature 003 — auth *(confirmed as built; still unverifiable without a device)*
 
 | # | What to check | Why it cannot be checked now | Built to |
 |---|---|---|---|
-| 5 | **Google OAuth returns to the installed app**, not to Safari, and the session is present afterwards. | Requires installed-standalone on iOS. On Android this works via shared Chrome storage and proves nothing about iOS. | `docs/design-decisions.md` §12 |
-| 6 | **PKCE `code_verifier` survives the round trip** — the exchange must happen in the same storage container that started the flow. Failure looks like a generic OAuth error, not a storage bug. | Container isolation does not exist on Android. | §12 requirement 1 |
-| 7 | **Password reset does not attempt a cross-container handoff.** After reset, the user lands on `/signin` and signs in inside the app. | Same reason. | §12 |
-| 8 | **Session survives app backgrounding and relaunch.** | iOS is more aggressive about evicting PWA storage than Android. | — |
+| 5 | **Google OAuth returns to the installed app**, not to Safari, and the session is present afterwards. | Requires installed-standalone on iOS. On Android this works via shared Chrome storage and proves nothing about iOS. **Additionally untested anywhere at all in this build** — no Google Cloud OAuth client credentials were available in the environment this slice was built in; the button is wired (`signInWithOAuth` + `/auth/callback` route handler) and the redirect URL is on Supabase's allow-list, but the actual provider round trip has never run. | `docs/design-decisions.md` §12, `specs/003-auth/plan.md` |
+| 6 | **PKCE `code_verifier` survives the round trip** — the exchange must happen in the same storage container that started the flow. Failure looks like a generic OAuth error, not a storage bug. | Container isolation does not exist on Android. | §12 requirement 1 — implemented via `@supabase/ssr`'s cookie-based client (`flowType: 'pkce'`), not `localStorage` |
+| 7 | **Password reset does not attempt a cross-container handoff.** After reset, the user lands on `/signin` and signs in inside the app. | Same reason. | §12 — confirmed: `ResetPasswordForm` calls `supabase.auth.signOut()` immediately after a successful `updateUser`, before showing the success state, so no session persists past the reset regardless of which container the link opened in |
+| 8 | **Session survives app backgrounding and relaunch.** | iOS is more aggressive about evicting PWA storage than Android, and may suspend the Supabase client's background token-refresh timer while backgrounded. | Cookie-based session (`proxy.ts` refreshes on every server request via `updateSession`) plus the Supabase browser client's own `autoRefreshToken` — neither is iOS-specific, but iOS's suspension behavior around them is unverified |
+| 13 | **The custom recovery email link** (`{{ .SiteURL }}/reset-password/{{ .TokenHash }}`, `specs/003-auth/research.md` §6) opens correctly from Apple Mail into the browser (not the installed app — that's item 7's guarantee, not a bug) on iOS specifically. | Apple Mail's link-handling and universal-links behavior differs from Android's. | `infra/supabase/templates/recovery.html` |
 
 ### From features 014 / 015 — offline and install *(anticipated)*
 

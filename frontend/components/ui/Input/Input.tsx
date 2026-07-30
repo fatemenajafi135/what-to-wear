@@ -9,6 +9,8 @@ export interface InputProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  /** Optional — docs/design-decisions.md §1.7's blur-triggered validation reads this. */
+  onBlur?: () => void;
   error?: string;
   helpText?: string;
   disabled?: boolean;
@@ -27,6 +29,7 @@ export function Input({
   label,
   value,
   onChange,
+  onBlur,
   error,
   helpText,
   disabled = false,
@@ -50,6 +53,7 @@ export function Input({
           type={resolvedType}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
           disabled={disabled}
           readOnly={readOnly}
           placeholder={placeholder}
