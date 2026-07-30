@@ -35,6 +35,10 @@ REGRESSION_SURFACE_MODULES = [
     "whattowear.ports",
     "whattowear.adapters.llm_gateway",
     "whattowear.prompts",
+    "whattowear.schema",
+    "whattowear.colors",
+    "whattowear.categories",
+    "whattowear.adapters.closet_fixture",
 ]
 
 

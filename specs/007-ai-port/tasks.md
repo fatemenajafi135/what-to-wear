@@ -28,12 +28,12 @@ T059's whole-tree lint pass, which is inherently cross-cutting).
 
 ## Phase 2: Foundational (blocks every user story)
 
-- [ ] T008 Port `schema.py` → `backend/src/whattowear/schema.py` (frozen taxonomy + contracts, unchanged) + `backend/tests/unit/test_schema.py`
-- [ ] T009 [P] Port `colors.py` → `backend/src/whattowear/colors.py` + `backend/tests/unit/test_colors.py`
-- [ ] T010 [P] Port `categories.py` → `backend/src/whattowear/categories.py` + `backend/tests/unit/test_categories.py`
-- [ ] T011 Extend `backend/tests/unit/test_import_safety.py`'s parametrised list with `whattowear.schema`, `whattowear.colors`, `whattowear.categories`, `whattowear.ports`
+- [x] T008 Port `schema.py` → `backend/src/whattowear/schema.py` (frozen taxonomy + contracts; ported whole per inventory's "keep" verdict, not trimmed to only what 007's own modules import — it's the shared contract file future features 003/004/006 need too; only mechanical change is `Optional[X]` → `X | None` to match project convention) + `backend/tests/unit/test_schema.py` (new — module never had one)
+- [x] T009 [P] Port `colors.py` → `backend/src/whattowear/colors.py` (unchanged) + `backend/tests/unit/test_colors.py` (ported from legacy unchanged — already thorough)
+- [x] T010 [P] Port `categories.py` → `backend/src/whattowear/categories.py` (unchanged) + `backend/tests/unit/test_categories.py` (ported from legacy unchanged)
+- [x] T011 Extend `backend/tests/unit/test_import_safety.py`'s parametrised list with `whattowear.schema`, `whattowear.colors`, `whattowear.categories`, `whattowear.adapters.closet_fixture` (`whattowear.ports` was already added in T007). Also completed `test_closet_fixture.py` (deferred from T007 — needed `WardrobeItem` to exist).
 
-**Checkpoint**: `env -i python3 -c "import whattowear.schema"` (and colors/categories/ports) succeed with zero env vars.
+**Checkpoint**: verified — `env -i python3 -c "import whattowear.schema"` (colors/categories/closet_fixture) all succeed with zero env vars (11/11 import-safety cases pass). `mypy src` now clean on schema/colors/categories/closet_fixture (only remaining errors are the expected `memory.preferences` not-yet-ported ones). 86 unit tests pass, `ruff`/`ruff format` clean.
 
 ## Phase 3: `scoring/` package (US1, US4)
 
