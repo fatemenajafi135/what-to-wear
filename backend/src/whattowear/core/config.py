@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     wtw_chat_model: str = "openai/gpt-5.4-mini"
     wtw_embedding_model: str = "openai/text-embedding-3-small"
     wtw_judge_model: str | None = None  # defaults to wtw_chat_model if unset
+    wtw_vision_model: str | None = None  # defaults to wtw_chat_model if unset (vision.py)
     wtw_embedding_dims: int = 1536
 
     # --- Cohere rerank (L3 only, retrieval/advanced.py) -----------------------
@@ -77,6 +78,10 @@ class Settings(BaseSettings):
     @property
     def judge_model(self) -> str:
         return self.wtw_judge_model or self.wtw_chat_model
+
+    @property
+    def vision_model(self) -> str:
+        return self.wtw_vision_model or self.wtw_chat_model
 
 
 @lru_cache

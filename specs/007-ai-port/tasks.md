@@ -105,7 +105,7 @@ Also fixed two real mypy gaps found while typing `graph.py`: `scoring/__init__.p
 
 ## Phase 8: `vision.py` (keep — Feature 003 will call it, out of this feature's scope to wire)
 
-- [ ] T036 Port `vision.py` — extract `SYSTEM_PROMPT` to `prompts/vision_system.md` + test; extend `test_import_safety.py` with `whattowear.vision` (SC-003)
+- [x] T036 Port `vision.py` — extracted `SYSTEM_PROMPT` to `prompts/vision_system.md`; `..config` → `.adapters.llm_gateway`; `WTW_VISION_MODEL` env var moved into `core.config.Settings` (`wtw_vision_model` + `.vision_model` property, matching `judge_model`'s pattern) instead of a bare `os.environ.get` at module level + test (ported from legacy, `mocker` → `unittest.mock`); extended `test_import_safety.py` with `whattowear.vision` (SC-003, verified passing)
 
 ## Phase 9: `eval/` package — `src/whattowear/eval/` (US4)
 
