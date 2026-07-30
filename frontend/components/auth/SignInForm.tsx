@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button/Button";
 import { Banner } from "@/components/ui/Banner/Banner";
 import { GoogleButton } from "@/components/auth/GoogleButton";
 import { createClient } from "@/lib/supabase/client";
+import { useGoogleAuthAvailable } from "@/lib/supabase/useGoogleAuthAvailable";
 import { useValidatedField, validateEmail, validatePassword } from "@/lib/auth-validation";
 import { authCopy } from "@/lib/auth-copy";
 import styles from "./AuthForm.module.css";
@@ -23,6 +24,7 @@ export function SignInForm() {
   const password = useValidatedField(validatePassword);
   const [formError, setFormError] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
+  const googleAvailable = useGoogleAuthAvailable();
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -83,7 +85,7 @@ export function SignInForm() {
       <Button type="submit" width="stretch" state={submitting ? "loading" : "default"}>
         Sign in
       </Button>
-      <GoogleButton onClick={handleGoogleClick} />
+      <GoogleButton onClick={handleGoogleClick} disabled={!googleAvailable} />
       <p className={`textBody ${styles.hint}`}>
         Don&apos;t have an account? <Link href="/signup">Sign up</Link>
       </p>
