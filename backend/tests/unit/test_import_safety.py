@@ -46,6 +46,10 @@ REGRESSION_SURFACE_MODULES = [
     "whattowear.scoring.formality_coherence",
     "whattowear.scoring.silhouette_balance",
     "whattowear.scoring.weather_fitness",
+    "whattowear.retrieval.base",
+    "whattowear.retrieval.baseline",
+    "whattowear.retrieval.hybrid",
+    "whattowear.retrieval.advanced",
 ]
 
 

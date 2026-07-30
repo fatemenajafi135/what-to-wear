@@ -55,10 +55,12 @@ T059's whole-tree lint pass, which is inherently cross-cutting).
 **Goal**: three retrieval strategies (baseline/hybrid/advanced) against `ports.VectorStore`.
 **Independent test**: unit tests with a stub `VectorStore` confirm each strategy's query-shaping logic without a real Qdrant connection.
 
-- [ ] T019 Port `retrieval/base.py` (`RetrievalResult`) + test
-- [ ] T020 [P] Port `retrieval/baseline.py` (naive dense, A/B control — keep per inventory Q5) + test
-- [ ] T021 Port `retrieval/hybrid.py` (per-layer hybrid) + test
-- [ ] T022 Port `retrieval/advanced.py` (hybrid + Cohere rerank via `core.config.get_reranker`) + test
+- [x] T019 Port `retrieval/base.py` (`RetrievalResult`, unchanged) + test (new — never had one despite 11 refs)
+- [x] T020 [P] Port `retrieval/baseline.py` (naive dense, A/B control — keep per inventory Q5; `KnowledgeBase` type deferred to `TYPE_CHECKING`, same pattern as `ports.py` — `kb.py` doesn't land until Phase 11) + test (new)
+- [x] T021 Port `retrieval/hybrid.py` (per-layer hybrid, unchanged; `..logging_utils.get_logger` replaced with stdlib `logging.getLogger(__name__)` — `logging_utils.py` isn't ported this feature, see Phase 11 note, and this one call site didn't need the wrapper) + test (ported; `TestRetrieveL3Live`'s 4 cases skipped — need `external.trends`, Phase 6)
+- [x] T022 Port `retrieval/advanced.py` (hybrid + Cohere rerank via `adapters.llm_gateway.get_reranker`, not `core.config` — factories live in `adapters/`, T002) + test
+
+**Checkpoint**: verified — all 4 modules import with zero env vars (22/22 import-safety cases pass). 16 passed / 4 skipped (pending Phase 6) in `tests/unit/retrieval/`. `ruff`/`ruff format` clean. `mypy` clean except expected `whattowear.kb` (Phase 11) and `whattowear.external.trends` (Phase 6) gaps.
 
 **Checkpoint**: `whattowear.retrieval` imports with zero env vars; no `whattowear.kb` import at module load time (only inside functions that receive an injected `VectorStore`/KB object). Extend `test_import_safety.py` with every `retrieval.*` module landed above (SC-003).
 
