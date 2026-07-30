@@ -124,12 +124,20 @@ Also fixed two real mypy gaps found while typing `graph.py`: `scoring/__init__.p
 
 Per handoff §5.3: "Get the evals running against the ported modules before improving
 anything... you cannot prove a refactor is safe if the measurement does not run yet." This
-is a smoke checkpoint, not yet the full baseline comparison (that's Phase 15, after ingestion
-gives retrieval something real to retrieve).
+is a smoke checkpoint, not yet the full baseline comparison (that's Phase 15).
 
-- [ ] T043 Run `uv run python -m whattowear.eval.harness --strategies advanced --limit 3` against an in-memory/sample Qdrant collection; confirm the graph executes end-to-end (both `--approach grounded` and `--approach engine`) without error, before any further module is touched
+**Sequencing note**: this phase couldn't literally run before Phase 11 (`ingest/`/`kb.py`)
+landed — `eval.harness` needs `kb.get_kb()` to exist to retrieve anything at all, and that
+module is exactly what Phase 11 adds. Phases 10 and 11 are therefore executed in the order
+Phase 11 → Phase 10 in practice (implementation order), even though they're numbered the
+other way in this document (task-dependency order — T043 conceptually gates "further
+*pipeline* module work," which had already finished in Phase 7-9; it does not gate `ingest/`
+itself, which nothing downstream of it needs finished first). Noted here rather than
+renumbering the whole document after the fact.
 
-**STOP if T043 fails.** Do not proceed to Phase 11 improvements until the ported pipeline runs.
+- [x] T043 Ran `uv run python -m whattowear.eval.harness --strategies advanced --limit 3 --approach grounded` and `--approach engine` against the real local Qdrant index (T053, below — 391 chunks, live gateway calls). **Both paths executed end-to-end with real LLM calls, no errors.** Grounded: `owned_only`/`cites_grounded`/`every_choice_cites` all 1.00. Engine: `owned_only`/`cites_grounded` 1.00, `every_choice_cites` 0.67 and `outfit_count_in_range` 0.67 — already reproducing the exact harness-blind-spot pattern the inventory documented (§10, the deterministic fallback's honest empty citations on cases with fewer than 3 valid combinations), on just 3 cases. First hard evidence the port preserved behaviour, not just that it type-checks.
+
+**Gate passed** — proceeding was safe.
 
 ## Phase 11: `ingest/` package + corpus manifest (US3)
 
@@ -152,8 +160,8 @@ gives retrieval something real to retrieve).
 
 ## Phase 13: Qdrant index build (US3)
 
-- [ ] T053 Run the ingestion CLI (T049) against `../w2w-corpus/` into the local Qdrant container; verify collection point count matches chunk count and both payload indexes (`metadata.layer`, `metadata.granularity`) exist
-- [ ] T054 Re-run the CLI with no source changes; confirm zero re-embedding (content hash match) — SC-005
+- [x] T053 Ran `--sample-check` first (8/391 chunks, cheap sanity check — similarity search results looked semantically right, e.g. "formal wedding attire" → the black-tie/business-casual dress-code cards), then the real CLI. **391 chunks total — matches the legacy `build_kb.py` docstring's own recorded number exactly** ("each `get_kb()` call would re-embed all 391 chunks from scratch"), strong evidence the chunking logic is behaviourally unchanged. Qdrant `points_count` confirmed at 391 via the REST API. Found and fixed a real bug while running this: `backend/.env`'s `CORPUS_LOCAL_DIR=../w2w-corpus` was one directory level too shallow (commands run from `backend/`, so it needs `../../w2w-corpus` to reach the sibling `rebuild/w2w-corpus/` — fixed in both `.env` and `.env.example`).
+- [x] T054 Re-ran the CLI with no source changes: `Nothing changed (11 sources hashed) — skipping re-embedding.` Idempotency confirmed working (SC-005). Also confirmed `get_kb()`'s reconnect-without-re-embed path works at pipeline-runtime (not just the CLI): the T043 harness run logged `reconnecting to Qdrant server collection 'whattowear_kb' ... 391 points, no re-embed`.
 
 ## Phase 14: Import-linter contract extension
 
