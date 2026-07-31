@@ -63,9 +63,10 @@ No request body. Deletes the connection and (per FR-013) any picked event.
 
 **200**
 ```json
-{ "connected": false }
+{ "connected": false, "connected_at": null }
 ```
-Idempotent — disconnecting an already-disconnected user still returns `200`, not `404`.
+Same `ConnectionResponse` shape as `GET /connection`, for consistency. Idempotent —
+disconnecting an already-disconnected user still returns `200`, not `404`.
 
 ## `GET /events`
 
