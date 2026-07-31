@@ -63,8 +63,9 @@ notifications). No new endpoint for Account (Supabase Auth) or Connected account
 - [x] **VIII — Visual truth.** Applies. Every value sourced from design-system tokens /
       design-decisions.md; nothing copied from `design/prototype/`; loading/error/offline
       states on both screens; WCAG AA (44px targets, `:focus-visible`, one `<h1>` per screen,
-      focus-on-navigate, focus trap+restore where BottomSheet/overlay patterns are reused,
-      reduced motion honoured via existing token/animation conventions). Two design-system
+      focus-on-navigate, reduced motion honoured via existing token/animation conventions).
+      This feature uses no `BottomSheet`/overlay pattern (in-page switcher only), so the
+      focus-trap-and-restore clause is N/A here, not exercised. Two design-system
       "Open questions" resolved here rather than silently invented — see research.md §4-5.
 - [x] **IX — One codebase.** Applies. `/profile` and `/profile/settings` are ordinary
       App Router routes, identical at every form factor; only chrome (nav rail/sidebar/bottom

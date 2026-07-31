@@ -66,7 +66,9 @@ and/or writes `user_profile` through the same table, backend routes, and typed f
 - [ ] T012 [P] Write `backend/tests/integration/test_profile_routes.py` — `GET` returns
       all-defaults for a brand-new user (no 404), a `PATCH` persists and is reflected on the
       next `GET`, missing/invalid bearer token yields `401`, out-of-vocabulary values yield
-      `422`. Depends on: T009.
+      `422`, and — proving SC-004 at the route level, not just the DB level (T011 is the DB
+      proof) — two different valid tokens each see and persist only their own independent
+      profile, never each other's. Depends on: T009.
 - [ ] T013 Create `frontend/lib/api/client.ts` (thin typed `fetch` wrapper: attaches the
       current Supabase session's access token as `Authorization: Bearer`, throws on non-2xx,
       types its return against `frontend/lib/api/schema.d.ts`) and `frontend/lib/api/profile.ts`
@@ -164,9 +166,12 @@ persist, including the illustrated body-shape selection.
       `DatePicker` for birth date with blur-triggered future-date validation
       (`field.required`-style copy per design-decisions §1.7's pattern, e.g. a new
       `field.birthDate.future` message: "Enter a date in the past."); `Select` for Height,
-      Top size (XXS-XXXL), Bottom size (00-20), Shoe size. Same Edit/Done draft-commit pattern
-      as Style preferences; "Done" calls `updateBodySize`. Register this section in the
-      Settings shell's switcher (T017). Depends on: T017, T020.
+      Top size (XXS-XXXL), Bottom size (00-20), Shoe size. **Height's and Shoe size's exact
+      option arrays are not specified anywhere in spec/plan/data-model** (only Top/Bottom size
+      are pinned) — define a concrete, reasonable list for each directly in this file with a
+      one-line comment noting it's this task's own choice, not sourced from the design system.
+      Same Edit/Done draft-commit pattern as Style preferences; "Done" calls `updateBodySize`.
+      Register this section in the Settings shell's switcher (T017). Depends on: T017, T020.
 - [ ] T022 [P] [US3] Write `BodyShapePicker.test.tsx` (renders 5 options, single-select
       behavior, keyboard operability) and `BodySizeSection.test.tsx` (all fields persist
       together, empty birth date shows an empty state not an invalid date, future birth date
