@@ -623,4 +623,112 @@ button style would be exactly that.
 
 ---
 
+## 17. Reconciling features 004 and 013's independent `frontend/lib/api/` decisions
+
+004 (closet) and 013 (profile/settings) were developed in parallel, against the same base,
+each the first slice to need the other's not-yet-existing file. Both independently built
+`frontend/lib/api/client.ts` and both independently decided how `schema.d.ts` gets produced —
+and disagreed on both. Merging `rebuild` (which already carries 004) into 013 surfaced the
+collision as a real merge conflict plus a broken `next build` (`no exported member 'apiClient'`
+in `ClosetGrid.tsx`), not a paper one.
+
+### 17.1 One client module: `openapi-fetch` base, 013's `ApiError` layered on top
+
+**Decision**: `frontend/lib/api/client.ts` keeps 004's `openapi-fetch`-based `apiClient`
+(typed against the generated `paths`, so a call to a route or param name that doesn't exist
+is a compile error — something a hand-written wrapper cannot give) as the base, and adds back
+013's `ApiError`/`unwrap`: a thin function that turns `openapi-fetch`'s non-throwing
+`{ data, error, response }` result into a thrown `ApiError` (carrying the real HTTP status)
+for call sites that prefer throw/catch. `frontend/lib/api/profile.ts` was rewritten to call
+`apiClient.GET`/`.PATCH` and pass the result through `unwrap`; `ClosetGrid.tsx` and
+`[itemId]/page.tsx` are untouched — they already destructure `{ data, error }` directly from
+`apiClient`, which the merged client still returns exactly as before.
+
+**Rationale**: `openapi-fetch`'s compile-time route/param checking is what Constitution
+Principle VII's "frontend MUST consume types generated from OpenAPI" actually implies —
+013's original `apiFetch<TResponse>(path: keyof paths, ...)` only checked that `path` was a
+known key, not that the method, request body, or response shape for that path matched. Losing
+`ApiError`'s typed failure handling (a real, if small, regression) is avoided by keeping it as
+a composable helper rather than a competing client.
+
+**Alternatives considered**:
+- *Keep 013's hand-written `apiFetch`, rewrite `ClosetGrid.tsx`/`[itemId]/page.tsx` onto it.*
+  Rejected — explicitly out of bounds (004's screens are correct on their own terms), and it
+  throws away `openapi-fetch`'s compile-time route/param checking for no gain.
+- *Keep both clients under different names/files (e.g. `client.ts` and `fetchClient.ts`).*
+  Rejected — two ways to call the same backend from the same frontend is the "two sources of
+  truth" failure mode this whole document exists to avoid elsewhere (see §12's single Supabase
+  client instance, §8's one match-score source); it would also leave the next feature to
+  guess which one to extend.
+- *Drop `ApiError` entirely and have 013's sections handle `{ data, error }` inline like
+  `ClosetGrid.tsx` does.* Considered seriously — it would remove `unwrap` entirely. Rejected
+  because 013's Edit/Done sections are written as `async function done() { ... }` bodies where
+  throw/catch reads more naturally against a draft-commit flow than a `data`/`error` branch at
+  every call site; `unwrap` is small enough (nine lines) that keeping both idioms available,
+  rather than forcing one shape on every future caller, isn't the kind of speculative
+  abstraction the constitution's Quality Bar warns against — it's an existing concern (013
+  shipped it) being preserved, not a new one being invented.
+- *An option not initially on this list, worth naming explicitly since an incomplete option
+  list is the named failure mode to guard against here*: making `unwrap` throw the real
+  Pydantic `detail` validation message instead of a generic `"Request failed"` string, by
+  reading `result.error` (FastAPI's `422` body). Not done — no call site currently surfaces
+  field-level server error text to the user (Settings' sections show the shared
+  `settings.error.body` copy per design-system.md §6, not per-field server messages), so this
+  would be unused code today. Flagged here rather than silently built or silently dropped, in
+  case a future feature needs it.
+
+### 17.2 `schema.d.ts`: generated at build/CI time, never committed
+
+**Decision**: adopt 013's approach. `git rm --cached frontend/lib/api/schema.d.ts`; the
+`.gitignore` entry (already present from 013) is what's authoritative going forward.
+`.github/workflows/ci.yml`'s frontend job now installs `uv`, installs backend dependencies,
+starts `uvicorn` with placeholder `DATABASE_URL`/`SUPABASE_URL` values (`/openapi.json` is
+served from route/type definitions alone — FastAPI never touches the database to build it, so
+this doesn't need Supabase running, only `Settings()` to construct, matching
+`test_whoami.py`'s existing fake-env pattern), waits for it to answer, then runs
+`npm run generate:api-types` before lint/typecheck/build. A fresh clone follows the same
+sequence documented in `specs/013-profile-settings/quickstart.md` §4 and `frontend/package.json`.
+
+**Rationale**: 004's `research.md` §8 committed the file reasoning "CI has no live backend to
+query," true at the time — 004's own CI job never started `uvicorn`. That premise doesn't
+survive a second feature adding routes in parallel: a committed snapshot reflects whichever
+branch generated it last, and neither 004 nor 013's copy could see the other's routes,
+because commit order isn't merge order. The deeper issue is that `schema.d.ts` isn't
+"append-only" the way `infra/supabase/migrations/*.sql` is — each migration is a permanent,
+independent addition nothing else overwrites, so two features' migrations coexist by
+construction. `schema.d.ts` is a single whole-state snapshot that a second feature's commit
+necessarily *replaces*, not extends — closer to a lockfile than a migration, and this
+project's own lockfiles (`package-lock.json`, `uv.lock`) are already committed-but-regenerated
+artifacts precisely because two branches' independent edits to them aren't safe to merge by
+hand either (see the mechanical `frontend/package-lock.json` conflict this same rebase hit).
+Generating fresh in CI, immediately before the type-check/build step that consumes it, means
+there is never a second copy to drift from — the "staleness" failure mode 004 was correctly
+worried about (frontend silently type-checking against routes that no longer exist) is
+structurally impossible once nothing is committed, not caught after the fact by a diff.
+
+**Alternatives considered**:
+- *Keep 004's committed copy, regenerate it as part of this fix, and add a CI step that
+  regenerates-and-diffs to catch drift.* This is the brief's own suggested fallback, and was
+  seriously considered. Rejected in favor of not committing at all: a diff-based drift check
+  only ever fires *after* someone already forgot to regenerate and committed the stale file —
+  it catches the mistake one CI run late, whereas generating fresh removes the mistake's
+  precondition (there is no committed file to forget to update).
+- *Commit `openapi.json` (the OpenAPI document itself) instead of the generated `.d.ts`,
+  generating types from that file at build time.* A legitimate alternative the brief itself
+  named — makes the frontend build hermetic (no live backend needed, just a static JSON file)
+  at the cost of a second generation step (`export /openapi.json` from the backend, then
+  `openapi-typescript` from the file) and a new place for the same staleness problem to hide
+  (the committed `openapi.json` itself can drift from the backend's actual routes, just one
+  layer further removed from the symptom). Rejected because it trades one committed artifact
+  for another without removing the underlying risk, and this repo already has a working
+  pattern for "needs a live backend in CI" (the backend job's own `supabase start` +
+  `supabase db reset`) — starting `uvicorn` for a few seconds to serve `/openapi.json` is a
+  smaller addition than it looks.
+- *Run `npm run generate:api-types` in a local pre-commit/pre-push git hook instead of CI.*
+  Rejected — hooks are opt-in per developer machine and silently do nothing if not installed;
+  a CI-enforced step is the only one that can't be skipped by forgetting to set something up
+  locally.
+
+---
+
 *All items in this document are decided. Nothing is left open.*
