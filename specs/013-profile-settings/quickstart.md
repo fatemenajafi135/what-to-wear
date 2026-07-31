@@ -50,7 +50,7 @@ curl -s -H "Authorization: Bearer $TOKEN" localhost:8000/api/v1/profile
 
 ```bash
 cd frontend && npm run generate:api-types   # backend must be running; renamed post-merge
-                                             # with feature 004 (docs/design-decisions.md §17)
+                                             # with feature 004 (docs/design-decisions.md §20)
 git diff --stat lib/api/schema.d.ts   # gitignored — this just confirms the script runs
 npm run typecheck                     # profile.ts must compile against the generated schema
 ```

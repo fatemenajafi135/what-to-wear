@@ -10,7 +10,7 @@ that disagreement is called out explicitly below with a decision and a reason.
 
 Every value here is derived from tokens already defined in §1.1/§1.2. Nothing is invented.
 
-Every item in this document is decided. Nothing is left open.
+Every item here is decided except those explicitly marked **deferred** — recorded gaps awaiting a decision, not open questions blocking work.
 
 ---
 
@@ -683,7 +683,7 @@ control).
   loses the explanation entirely (titles are short, "13px/700" per §3) or forces multi-line
   text into a slot the component doesn't support, when a bespoke variant is already the
   system's documented answer for this exact shape of content.
-## 16. Feature 013 (Profile & Settings) — three design-system gaps resolved
+## 19. Feature 013 (Profile & Settings) — three design-system gaps resolved
 
 ### 16.1 Profile's "three cards" — contents
 
@@ -727,7 +727,7 @@ button style would be exactly that.
 
 ---
 
-## 17. Reconciling features 004 and 013's independent `frontend/lib/api/` decisions
+## 20. Reconciling features 004 and 013's independent `frontend/lib/api/` decisions
 
 004 (closet) and 013 (profile/settings) were developed in parallel, against the same base,
 each the first slice to need the other's not-yet-existing file. Both independently built
@@ -835,4 +835,57 @@ structurally impossible once nothing is committed, not caught after the fact by 
 
 ---
 
-*All items in this document are decided. Nothing is left open.*
+## 21. Calendar event window and freshness — two deferred gaps
+
+Both surfaced from using the working feature, not from reading the spec. Neither
+blocks anything; both are recorded here rather than fixed now.
+
+### 21.1 The 7-day / 20-event window feels short
+
+`google_calendar.py` sets `EVENT_WINDOW_DAYS = 7` and `EVENT_MAX_RESULTS = 20`, per a
+recorded clarification in `specs/012-calendar/spec.md`: *"Next 7 days, capped at 20 events.
+Matches the design's plain scrollable list with no pagination control."*
+
+**This is not an arbitrary number — it is anchored in the design's own copy.**
+`calendar.empty.body` reads *"Nothing on your calendar **this week**."* A wider window
+would make the empty state contradict what the list actually shows.
+
+**If it is widened**, three things move together, and skipping any one leaves an
+inconsistency:
+
+1. `EVENT_WINDOW_DAYS` and probably `EVENT_MAX_RESULTS`.
+2. `calendar.empty.body` — "this week" stops being true.
+3. The design system's *"plain scrollable list, no pagination"* decision — 20 events is
+   already a long scroll on a phone; 50 is a different screen and would need a
+   "load more" affordance the design does not contain.
+
+So this is a **design change**, not a constant tweak. **Status: deferred.**
+
+### 21.2 Every visit to `/calendar` hits Google live
+
+There is no caching anywhere in the calendar path. `get_valid_access_token` is efficient —
+it refreshes only when the stored token has actually expired, so a page load makes exactly
+one Google call. The latency is the network round-trip itself, which on a slow connection
+has been observed at ~10s (the OAuth token exchange took 11.1s on the same link).
+
+The design system says nothing about calendar caching, so there is no specified behaviour
+to implement — this is a genuine gap, not an unimplemented requirement.
+
+Options, if it is picked up:
+
+| Option | Effect | Cost |
+|---|---|---|
+| **Short-TTL per-user cache (~5 min)** | Second and later visits instant | Events added in the last 5 minutes do not appear |
+| Cache + manual refresh control | Instant, with a way to force a fetch | Adds a control the design system does not specify |
+| Optimistic render, refresh in background | Feels instant | Needs a staleness indicator; more moving parts |
+
+**Recommended when picked up: the short-TTL cache.** Smallest change, adds no unspecified
+UI, and five-minute-stale data is acceptable for "pick an event to style for." There is
+precedent in the salvaged pipeline — feature 005's per-user suggestion cache solves the
+same problem the same way.
+
+**Status: deferred.** Correct today, just slow on a slow link.
+
+---
+
+*Every item above is decided except those explicitly marked **deferred** (§21), which are recorded gaps awaiting a decision rather than open questions blocking work.*

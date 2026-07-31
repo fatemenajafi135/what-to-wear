@@ -10,7 +10,7 @@ import type { paths } from "./schema";
  * route requires `get_current_user_id` (feature 003).
  *
  * One client, shared by features 004 (closet) and 013 (profile/settings) —
- * see docs/design-decisions.md §17 for why this shape won over 013's
+ * see docs/design-decisions.md §20 for why this shape won over 013's
  * original hand-written `apiFetch` wrapper.
  */
 export const apiClient = createOpenapiClient<paths>({
