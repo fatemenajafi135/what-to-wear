@@ -34,24 +34,26 @@ and/or writes `user_profile` through the same table, backend routes, and typed f
       policies (`user_profile_select_own`, `user_profile_modify_own`) from data-model.md.
 - [ ] T004 Run `cd infra && npx supabase db reset` and confirm `0003` applies cleanly after
       `0001_init.sql` from an empty database (quickstart.md §1). Depends on: T003.
-- [ ] T005 [P] Create `backend/src/whattowear/models/user_profile.py` — SQLAlchemy model
-      matching data-model.md's `user_profile` columns exactly.
-- [ ] T006 [P] Create `backend/src/whattowear/schemas/profile.py` — Pydantic models
+- [ ] T005 [P] Create `backend/src/whattowear/schemas/profile.py` — Pydantic models
       `ProfileResponse`, `StylePreferencesUpdate`, `BodySizeUpdate`, `NotificationsUpdate` per
       contracts/profile-settings-api.md, with validators for: `style_tags`/`colour_tags`
       fixed-vocabulary membership, `body_shape`/`gender` fixed-vocabulary-or-null,
       `top_size`/`bottom_size` fixed-option-list-or-null, `birth_date` not in the future,
       `brands_to_avoid` trimmed/de-duplicated/non-empty-string.
+- [ ] T006 [P] (renumbered into T005 — no separate ORM model task; see plan.md's Project
+      Structure note on why no SQLAlchemy declarative layer is introduced.)
 - [ ] T007 Create `backend/src/whattowear/repositories/profile_repository.py` — all DB access
-      for this table: `get_or_default(session, user_id)` (returns defaults if no row),
-      `upsert_style_preferences(...)`, `upsert_body_size(...)`, `upsert_notifications(...)`
-      (each an `insert ... on conflict (user_id) do update`, scoped by the caller's
-      JWT-verified `user_id` — the enforcement that actually protects data per research.md
-      §1). Depends on: T005.
+      for this table via raw parameterized SQL (`sqlalchemy.text(...)`) against
+      `get_session()`, matching the only existing DB-access precedent in this codebase
+      (`main.py`'s `_database_reachable`): `get_or_default(session, user_id)` (returns defaults
+      if no row), `upsert_style_preferences(...)`, `upsert_body_size(...)`,
+      `upsert_notifications(...)` (each an `insert ... on conflict (user_id) do update`, scoped
+      by the caller's JWT-verified `user_id` — the enforcement that actually protects data per
+      research.md §1). Depends on: T005.
 - [ ] T008 Create `backend/src/whattowear/api/v1/routes/profile.py` — `GET /profile`,
       `PATCH /profile/style-preferences`, `PATCH /profile/body-size`,
       `PATCH /profile/notifications`, each behind `Depends(get_current_user_id)` exactly like
-      `whoami.py`. Depends on: T006, T007.
+      `whoami.py`. Depends on: T005, T007.
 - [ ] T009 Wire the profile router into `backend/src/whattowear/main.py`
       (`app.include_router(profile_router, prefix="/api/v1")`). Depends on: T008.
 - [ ] T010 [P] Write `backend/tests/unit/test_profile_schemas.py` — vocabulary validation,

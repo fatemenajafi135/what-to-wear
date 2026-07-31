@@ -4,6 +4,9 @@ notes/
 
 # --- Node / Next.js ---
 node_modules/
+# Generated from the backend's live OpenAPI schema (feature 013) — regenerate with
+# `npm run generate:api`, never hand-edit.
+frontend/lib/api/schema.d.ts
 .pnp
 .pnp.*
 .yarn/*

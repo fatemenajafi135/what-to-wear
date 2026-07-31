@@ -121,8 +121,16 @@ backend/
 ├── src/whattowear/
 │   ├── api/v1/routes/profile.py                  # new — GET/PATCH endpoints
 │   ├── schemas/profile.py                        # new — Pydantic request/response models
-│   ├── models/user_profile.py                    # new — SQLAlchemy model
-│   ├── repositories/profile_repository.py        # new — all DB access for this table
+│   ├── repositories/profile_repository.py        # new — all DB access for this table, raw
+│   │                                                parameterized SQL via get_session() —
+│   │                                                no SQLAlchemy ORM/declarative layer exists
+│   │                                                anywhere in this codebase yet (only /health's
+│   │                                                raw `text("SELECT 1")`), and the backend's
+│   │                                                internal layout is explicitly unsettled until
+│   │                                                the Phase 4 constitution (CLAUDE.md) — adding
+│   │                                                an ORM base class for one table would commit
+│   │                                                the whole backend to a pattern nothing else
+│   │                                                uses.
 │   └── main.py                                   # + include profile router
 └── tests/
     ├── unit/test_profile_schemas.py              # new
