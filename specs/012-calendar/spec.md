@@ -25,6 +25,15 @@ matching design-decisions §12's auth flow decision. Out of scope: the styling c
 the suggestion pager (009), making weather services interactive (stays a non-interactive 'Coming
 soon' badge), closet/outfits/profile screens, any cloud Supabase project."
 
+## Clarifications
+
+### Session 2026-07-31
+
+- Q: Which of the user's Google calendars should the event list read from — just their primary
+  calendar, or every calendar they can access? → A: Primary calendar only, using the least-
+  privilege `calendar.events.readonly` scope. No per-calendar grouping/filtering UI exists in
+  the design system, so a single primary-calendar list matches what the screen actually renders.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Connect Google Calendar (Priority: P1)
@@ -175,10 +184,11 @@ being required to notice on next visit.
   owning user, and MUST NOT persist a connection for a cancelled or failed OAuth attempt.
 - **FR-005**: System MUST never store an OAuth access or refresh token in a tracked file, a log
   line, or any error response returned to the client.
-- **FR-006**: System MUST render each upcoming event as a row showing the event title and a
-  computed `{relative day, time} · {location}` meta line, where the relative-day label is Today,
-  Tomorrow, a weekday name for the next ~6 days, or a short date beyond that, derived from the
-  event's actual timestamp — never a fixed string.
+- **FR-006**: System MUST render each upcoming event from the user's **primary Google
+  calendar only** as a row showing the event title and a computed `{relative day, time} ·
+  {location}` meta line, where the relative-day label is Today, Tomorrow, a weekday name for
+  the next ~6 days, or a short date beyond that, derived from the event's actual timestamp —
+  never a fixed string.
 - **FR-007**: System MUST let a user pick exactly one event from the list; picking one MUST
   disable every row in the list (visually and to interaction) and MUST NOT render any row as
   "selected" or highlighted.
