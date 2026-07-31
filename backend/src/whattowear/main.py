@@ -19,7 +19,7 @@ from whattowear.api.v1.routes.whoami import router as whoami_router
 from whattowear.core.db import get_engine
 from whattowear.core.logging import configure_logging
 
-# The Next.js dev server's origin — port 3000 for `npm run dev`, port 3100
+# The Next.js dev server's origins — port 3000 for `npm run dev`, port 3100
 # for the e2e suite (frontend/playwright.config.ts runs its own `next dev`
 # on a separate port so it never collides with a developer's own running
 # dev server). Hardcoded rather than threaded through Settings: this
@@ -28,7 +28,23 @@ from whattowear.core.logging import configure_logging
 # at module level would break the zero-env-vars import contract
 # test_import_safety.py exists specifically to catch — its own docstring
 # documents this exact mistake as the regression it protects against.
-_CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:3100"]
+#
+# BOTH hosts are listed deliberately. To a browser `localhost` and `127.0.0.1`
+# are different origins even though they resolve to the same machine, and this
+# project sends you to both: Supabase's `site_url` is `http://127.0.0.1:3000`
+# and `next.config.ts`'s `allowedDevOrigins` allows 127.0.0.1 (feature 003
+# needed that for OAuth), while Playwright and most people typing a URL use
+# `localhost`. Listing only one produced a 400 on every preflight from the
+# other, which surfaced as the closet's generic "Couldn't load your closet."
+# error — invisible to the whole test suite, because Playwright runs on the
+# host that happened to work. There is no security cost to allowing both
+# locally; a deployed frontend gets a single explicit origin from config.
+_CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3100",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3100",
+]
 
 logger = logging.getLogger(__name__)
 
