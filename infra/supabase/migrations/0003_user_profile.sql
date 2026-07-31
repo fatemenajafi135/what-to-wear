@@ -50,3 +50,13 @@ create policy "user_profile_select_own" on user_profile
 
 create policy "user_profile_modify_own" on user_profile
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- RLS restricts ROWS; it does nothing without the table-level GRANT that lets
+-- `authenticated` touch the table at all. This table was created by `postgres`, and the
+-- local stack's default ACL doesn't cover it — the same gap feature 004's
+-- 0002_wardrobe_and_catalog_items.sql found and fixed the same way
+-- (specs/004-closet-read/research.md §2). Missed here originally: this feature's own RLS
+-- test only passed locally because tests/integration/conftest.py's blanket grant papered
+-- over it — a real `supabase db reset` deploy without that test fixture running would have
+-- shipped this table with policies `authenticated` has no privilege to even attempt.
+grant select, insert, update, delete on user_profile to authenticated;

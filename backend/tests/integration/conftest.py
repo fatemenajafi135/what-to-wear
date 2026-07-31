@@ -44,9 +44,13 @@ def _ensure_auth_stubs() -> Iterator[None]:
                     """
                 )
             )
-        # Real Supabase grants `authenticated`/`anon` DML on every `public` table by default
-        # (its own project-initialization step, separate from any migration) — a bare Postgres
-        # fallback has no such default. Re-granting the same privilege on a real Supabase
-        # database is a harmless no-op; it never narrows or replaces an existing grant.
+        # Correction: real Supabase does NOT grant `authenticated` DML on a new `public` table
+        # by default either — feature 004 found this the hard way (specs/004-closet-read/
+        # research.md §2) and each of its migrations grants explicitly; 0003_user_profile.sql
+        # was fixed to do the same after this fixture's blanket grant was found masking the
+        # gap in this feature's own tests. This blanket grant now only matters as a
+        # belt-and-braces safety net for the bare-Postgres Docker-less fallback and for any
+        # future table a migration forgets to grant on its own — re-granting an
+        # already-granted privilege is a harmless no-op, never narrowing or replacing it.
         conn.execute(text("grant select, insert, update, delete on all tables in schema public to authenticated"))
     yield
