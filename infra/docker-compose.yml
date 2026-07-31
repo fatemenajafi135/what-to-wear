@@ -1,0 +1,21 @@
+### Local Qdrant only. Supabase's own stack (Postgres, Auth, Storage) is managed
+### separately by the pinned Supabase CLI (`npx supabase start`) — see
+### specs/002-backend-foundation/quickstart.md. This file exists because Qdrant
+### has no equivalent CLI-managed lifecycle here.
+###
+### Version pinned to match qdrant-client>=1.15.0 (backend/pyproject.toml) —
+### server and client stay in the same minor line rather than tracking Qdrant's
+### latest release, which is one minor ahead as of this writing.
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.15.5
+    container_name: whattowear-qdrant
+    ports:
+      - "6333:6333" # REST — WTW_QDRANT_URL points here
+      - "6334:6334" # gRPC
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:

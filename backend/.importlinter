@@ -6,18 +6,20 @@ include_external_packages = True
 
 # AI-independence contract (constitution "Technology Constraints"): pipeline/,
 # retrieval/, scoring/, memory/ and ingest/ must never import whattowear.api,
-# whattowear.main, or fastapi. None of those AI modules exist yet — they land
-# in feature 007 — so listing them as source_modules now would error on a
-# module that doesn't exist, which is worse than a narrow contract (see
-# specs/002-backend-foundation/docs/handoffs brief §4.3). This contract covers
-# only what exists today: whattowear.core stays framework-free too. Feature
-# 007 extends source_modules with pipeline/retrieval/scoring/memory/ingest as
-# each module lands.
+# whattowear.main, or fastapi. Feature 007 (the AI layer port) extended
+# source_modules with all five as each landed, so this contract is always
+# true, never aspirational — see specs/007-ai-port/tasks.md T055.
+# whattowear.core stays covered too, unchanged from feature 002.
 [importlinter:contract:core-is-framework-free]
 name = core stays framework-free (AI-independence contract, narrow form)
 type = forbidden
 source_modules =
     whattowear.core
+    whattowear.pipeline
+    whattowear.retrieval
+    whattowear.scoring
+    whattowear.memory
+    whattowear.ingest
 forbidden_modules =
     whattowear.main
     fastapi

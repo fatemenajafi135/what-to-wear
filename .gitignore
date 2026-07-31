@@ -67,6 +67,13 @@ outputs/
 *.faiss
 *.index
 *.pkl
+
+# eval.harness's raw JSONL run output (feature 007) — regenerable by
+# running the harness. A specific run gets promoted to a tracked
+# docs/eval-baselines/ snapshot deliberately, by hand; the working
+# directory itself is never tracked (matches ../app-legacy's own
+# precedent: docs/eval-baselines/ is tracked, backend/artifacts/ is not).
+backend/artifacts/
 *.npy
 *.parquet
 *.db
