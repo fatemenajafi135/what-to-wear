@@ -39,16 +39,16 @@ no real Google OAuth token exchange without live credentials).
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Add `cryptography` to `backend/pyproject.toml` dependencies; `uv sync`
-- [ ] T002 [P] Add `WTW_TOKEN_ENCRYPTION_KEY`, `GOOGLE_OAUTH_CLIENT_ID`,
+- [x] T001 [P] Add `cryptography` to `backend/pyproject.toml` dependencies; `uv sync`
+- [x] T002 [P] Add `WTW_TOKEN_ENCRYPTION_KEY`, `GOOGLE_OAUTH_CLIENT_ID`,
       `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` (blank) to
       `backend/.env.example`, with a comment on how to generate the encryption key
       (`Fernet.generate_key()`) and that the redirect URI is an app route, never
       provider-hosted (design-decisions §12)
-- [ ] T003 [P] Add `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` (blank) to
+- [x] T003 [P] Add `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` (blank) to
       `infra/.env.example`, documenting they're shared with feature 003's sign-in client
       (docs/handoffs/012-calendar.md §2)
-- [ ] T004 Add `token_encryption_key`, `google_oauth_client_id`,
+- [x] T004 Add `token_encryption_key`, `google_oauth_client_id`,
       `google_oauth_client_secret`, `google_oauth_redirect_uri` fields to `Settings` in
       `backend/src/whattowear/core/config.py`, all optional (`str | None = None`) so
       `get_settings()` doesn't fail for callers that don't need them (matching the existing
@@ -66,32 +66,32 @@ behavior can be verified.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T005 Write `infra/supabase/migrations/0004_calendar.sql` per `data-model.md`:
+- [x] T005 Write `infra/supabase/migrations/0004_calendar.sql` per `data-model.md`:
       `calendar_connections`, `calendar_oauth_attempts`, `picked_events` tables, each with
       RLS enabled and a `for all using (auth.uid() = user_id) with check (auth.uid() =
       user_id)` policy, `updated_at` trigger on `calendar_connections`, and the
       `grant select, insert, update, delete ... to authenticated` on all three (0002's
       documented convention — silently unreachable without it)
-- [ ] T006 Apply migration `0004` against the local Postgres harness and confirm it
+- [x] T006 Apply migration `0004` against the local Postgres harness and confirm it
       reproduces cleanly from the existing schema (§10 checklist item 1's spirit; full
       `npx supabase db reset` replay is deferred to whoever next runs this with working
       Docker — see feature report)
-- [ ] T007 [P] Implement `backend/src/whattowear/adapters/token_encryption.py`:
+- [x] T007 [P] Implement `backend/src/whattowear/adapters/token_encryption.py`:
       `encrypt(plaintext: str) -> str` / `decrypt(ciphertext: str) -> str` wrapping `Fernet`,
       raising a clear error if `WTW_TOKEN_ENCRYPTION_KEY` is unset (research.md §2)
-- [ ] T008 [P] `backend/tests/unit/test_token_encryption.py` — round-trip encrypt/decrypt,
+- [x] T008 [P] `backend/tests/unit/test_token_encryption.py` — round-trip encrypt/decrypt,
       and the clear-error-when-unset case
-- [ ] T009 [P] Implement `backend/src/whattowear/adapters/google_calendar.py`: pure HTTP
+- [x] T009 [P] Implement `backend/src/whattowear/adapters/google_calendar.py`: pure HTTP
       functions (via `requests`) for (a) building the authorization URL with PKCE challenge,
       (b) exchanging `code`+`code_verifier` for tokens, (c) refreshing an access token from a
       refresh token, (d) listing primary-calendar events in a date range — no route/DB code,
       matching the AI-independence contract's spirit of framework-free adapters (research.md
       §1/§4/§5)
-- [ ] T010 [P] `backend/tests/unit/test_google_calendar_adapter.py` — each function against
+- [x] T010 [P] `backend/tests/unit/test_google_calendar_adapter.py` — each function against
       a mocked `requests` call: correct PKCE params on the authorize URL, correct token
       exchange/refresh request shape, correct event-list query params (primary calendar,
       7-day window, `maxResults=20`), and that no function ever logs a token/code value
-- [ ] T011 Implement `backend/src/whattowear/repositories/supabase_calendar.py`:
+- [x] T011 Implement `backend/src/whattowear/repositories/supabase_calendar.py`:
       `SupabaseCalendarRepository` with `get_connection`, `start_oauth_attempt`,
       `finish_oauth_attempt` (looks up + deletes the `calendar_oauth_attempts` row,
       encrypts and upserts into `calendar_connections`), `disconnect` (deletes both
@@ -100,10 +100,10 @@ behavior can be verified.
       returns `None` on refresh failure per research.md §6), `get_picked_event`,
       `set_picked_event` (upsert) — every method sets `request.jwt.claim.sub` first, matching
       `supabase_closet.py`'s `_set_jwt_claim` convention
-- [ ] T012 [P] `backend/tests/unit/test_supabase_calendar_repository.py` — mocked-session
+- [x] T012 [P] `backend/tests/unit/test_supabase_calendar_repository.py` — mocked-session
       tests per method: connect upserts, disconnect deletes both tables, refresh failure
       clears the connection and returns `None`, picked-event upsert
-- [ ] T013 Implement `backend/src/whattowear/api/v1/routes/calendar.py`: the 7 routes from
+- [x] T013 Implement `backend/src/whattowear/api/v1/routes/calendar.py`: the 7 routes from
       `contracts/calendar.md` (`GET /connection`, `POST /connect/start`,
       `POST /connect/finish`, `POST /disconnect`, `GET /events`, `GET /picked-event`,
       `PUT /picked-event`), all behind `get_current_user_id`, response models per the
@@ -111,40 +111,40 @@ behavior can be verified.
       failure, generic `400` detail on `/connect/finish` failure (never echoes Google's error
       body or the code/verifier), `503` on `/connect/start` when
       `GOOGLE_OAUTH_CLIENT_ID`/`SECRET` are unset (FR-017) — never a raw 500
-- [ ] T014 Register `calendar_router` in `backend/src/whattowear/main.py` alongside the
+- [x] T014 Register `calendar_router` in `backend/src/whattowear/main.py` alongside the
       existing `closet_router`/`whoami_router` (or just `whoami_router` if 004 hasn't merged
       yet — additive either way)
-- [ ] T015 [P] `backend/tests/integration/test_calendar_routes.py` — 401 with no token; 200
+- [x] T015 [P] `backend/tests/integration/test_calendar_routes.py` — 401 with no token; 200
       shapes for connection/events/picked-event against a real Postgres; 409 on `/events`
       when disconnected; idempotent `/disconnect`; 503 on `/connect/start` with
       `GOOGLE_OAUTH_CLIENT_ID` unset (FR-017)
-- [ ] T016 `backend/tests/integration/test_calendar_rls.py` — mirrors
+- [x] T016 `backend/tests/integration/test_calendar_rls.py` — mirrors
       `test_wardrobe_rls.py` exactly (direct port, `authenticator` role, `SET ROLE
       authenticated`, session-scoped `request.jwt.claim.sub`): two seeded users each see only
       their own `calendar_connections` row, only their own `picked_events` row, and a
       connection with no claim set sees nothing (research.md §9)
-- [ ] T017 Run `uv run pytest backend/tests -q` and confirm the existing 459+ tests are still
+- [x] T017 Run `uv run pytest backend/tests -q` and confirm the existing 459+ tests are still
       green plus the new tests above, before continuing (§10 checklist "backend test count
       has not dropped")
-- [ ] T018 [P] Add `NEXT_PUBLIC_API_URL` usage confirmation / regenerate
+- [x] T018 [P] Add `NEXT_PUBLIC_API_URL` usage confirmation / regenerate
       `frontend/lib/api/schema.d.ts` via `npm run generate:api-types` against the running
       backend (Constitution VII — no hand-written duplicate of any `contracts/calendar.md`
       shape)
-- [ ] T019 [P] Implement `frontend/lib/calendar/primed.ts`: `isCalendarPrimed()` /
+- [x] T019 [P] Implement `frontend/lib/calendar/primed.ts`: `isCalendarPrimed()` /
       `setCalendarPrimed()` reading/writing `wtw_calendar_primed` in `localStorage`
       (known-gaps.md §-2)
-- [ ] T020 [P] Implement `frontend/lib/calendar/formatEventTime.ts`: pure function computing
+- [x] T020 [P] Implement `frontend/lib/calendar/formatEventTime.ts`: pure function computing
       the Today/Tomorrow/weekday/short-date label plus a locale-aware time string from an ISO
       timestamp (research.md §7, design-system "Date & time formats")
-- [ ] T021 [P] `frontend/lib/calendar/formatEventTime.test.ts` — Today, Tomorrow, a weekday
+- [x] T021 [P] `frontend/lib/calendar/formatEventTime.test.ts` — Today, Tomorrow, a weekday
       within 6 days, and a short date beyond that, using a fixed mocked "now"
-- [ ] T022 Implement `frontend/lib/calendar/useCalendarConnection.ts`: a hook exposing
+- [x] T022 Implement `frontend/lib/calendar/useCalendarConnection.ts`: a hook exposing
       `{ connected, connectedAt, isLoading, connect(), disconnect() }` — `connect()` calls
       `POST /connect/start`, redirects via `window.location.assign`; `disconnect()` calls
       `POST /disconnect` and refetches connection state. This is the shared module both
       `/calendar` and (once feature 013 merges) Settings' Connected-accounts row consume, per
       the handoff's "two entry points, one state" requirement
-- [ ] T023 [P] `frontend/lib/calendar/useCalendarConnection.test.ts` — connect/disconnect
+- [x] T023 [P] `frontend/lib/calendar/useCalendarConnection.test.ts` — connect/disconnect
       call the right endpoints and update state; a failed disconnect leaves state unchanged
 
 **Checkpoint**: Backend fully wired and tested; shared frontend connection state ready to
@@ -161,22 +161,22 @@ primer + PKCE flow, and the connection persists.
 card, trigger connect, confirm the primer appears once then not again, and confirm a completed
 connection is reflected back on `/calendar`.
 
-- [ ] T024 [US1] Implement `frontend/components/calendar/CalendarPrimer.tsx`: bespoke
+- [x] T024 [US1] Implement `frontend/components/calendar/CalendarPrimer.tsx`: bespoke
       `<dialog>`-based card (real modal semantics via `showModal()`, matching
       `BottomSheet.tsx`'s pattern) with the title/body/actions from design-decisions §18,
       "Continue to Google" (primary) and "Not now" (secondary/dismiss)
-- [ ] T025 [P] [US1] `frontend/components/calendar/CalendarPrimer.test.tsx` — renders title/
+- [x] T025 [P] [US1] `frontend/components/calendar/CalendarPrimer.test.tsx` — renders title/
       body/both actions, "Continue to Google" and "Not now" each fire their callback, focus
       moves to the dialog on open
-- [ ] T026 [US1] Implement `frontend/app/(app)/calendar/page.tsx` disconnected state: icon
+- [x] T026 [US1] Implement `frontend/app/(app)/calendar/page.tsx` disconnected state: icon
       tile, `calendar.disconnected.title`/`.body`/`.cta` from design-system §6, wired to
       `useCalendarConnection().connect` gated behind the primer (skip the primer if
       `isCalendarPrimed()` is already true, per FR-002)
-- [ ] T027 [US1] Implement `frontend/app/calendar/callback/route.ts`: extracts `code`/`state`
+- [x] T027 [US1] Implement `frontend/app/calendar/callback/route.ts`: extracts `code`/`state`
       from the query string, calls `POST /connect/finish`, redirects to `/calendar`
       regardless of outcome (success shows connected; failure leaves the disconnected card,
       per spec's Story 1 acceptance scenario 5 — no partial/broken connection persisted)
-- [ ] T028 [P] [US1] `frontend/app/(app)/calendar/page.test.tsx` (disconnected-state cases):
+- [x] T028 [P] [US1] `frontend/app/(app)/calendar/page.test.tsx` (disconnected-state cases):
       renders the disconnected card copy, connect button triggers the primer on first use,
       skips the primer on a subsequent use
 - [ ] T029 [US1] Manual/local verification against a real Google Cloud OAuth client if one is
@@ -197,23 +197,23 @@ the pick surfaces on `/recommend`.
 computed date/time labels render, pick a row, confirm all rows disable, and confirm
 `/recommend` shows "Styling for {event} · Change".
 
-- [ ] T030 [US2] Implement `frontend/components/calendar/EventRow.tsx`: title line + `{time}
+- [x] T030 [US2] Implement `frontend/components/calendar/EventRow.tsx`: title line + `{time}
       · {location}` meta line (using `formatEventTime`), `disabled` prop applying `opacity:
       0.5; cursor: not-allowed` per design-system §6 (no "selected" visual state)
-- [ ] T031 [P] [US2] `frontend/components/calendar/EventRow.test.tsx` — renders computed
+- [x] T031 [P] [US2] `frontend/components/calendar/EventRow.test.tsx` — renders computed
       label (not a hardcoded string), omits the `· {location}` segment cleanly when location
       is absent, disabled prop applies the specified styles
-- [ ] T032 [US2] Extend `frontend/app/(app)/calendar/page.tsx` with the connected-with-events
+- [x] T032 [US2] Extend `frontend/app/(app)/calendar/page.tsx` with the connected-with-events
       state: `calendar.list.hint` caption + stacked `EventRow`s fetched from `GET /events`;
       picking a row calls `PUT /picked-event` then re-renders every row disabled
-- [ ] T033 [US2] Add the calendar-context line to the `/recommend` stub
+- [x] T033 [US2] Add the calendar-context line to the `/recommend` stub
       (`frontend/app/(app)/recommend/page.tsx`): "Style for an event from calendar" link when
       `GET /picked-event` returns `picked: false`, "Styling for {event} · Change" (with the
       calendar glyph) when `picked: true` — the only change to this file; the rest of the stub
       (chat/hero content) stays feature 008's territory
-- [ ] T034 [P] [US2] `frontend/app/(app)/recommend/page.test.tsx` — both context-line states
+- [x] T034 [P] [US2] `frontend/app/(app)/recommend/page.test.tsx` — both context-line states
       render correctly given a mocked `GET /picked-event` response
-- [ ] T035 [US2] "Change" on `/recommend` navigates back to `/calendar`
+- [x] T035 [US2] "Change" on `/recommend` navigates back to `/calendar`
 
 **Checkpoint**: User Stories 1-2 together deliver the feature's core payoff end to end.
 
@@ -229,14 +229,14 @@ and its bypass button; force a `502`/network failure and confirm the error state
 force `navigator.onLine === false` and confirm the screen suppresses its own error in favor of
 the global offline banner.
 
-- [ ] T036 [US3] Extend `frontend/app/(app)/calendar/page.tsx` with the connected-empty state
+- [x] T036 [US3] Extend `frontend/app/(app)/calendar/page.tsx` with the connected-empty state
       (`calendar.empty.body`/`.cta` → `/recommend` directly, bypassing the event list) and
       the error state (`calendar.error.body`/`.cta` → retry), plus the Calendar skeleton
       (two 56px blocks, 14px radius) for loading
-- [ ] T037 [US3] Wire the screen's error-vs-offline precedence: suppress the screen-level
+- [x] T037 [US3] Wire the screen's error-vs-offline precedence: suppress the screen-level
       error and rely on the existing global offline `Banner` when `navigator.onLine` is
       `false`, matching feature 004's established pattern for `/closet`
-- [ ] T038 [P] [US3] `frontend/app/(app)/calendar/page.test.tsx` (empty/error/offline cases):
+- [x] T038 [P] [US3] `frontend/app/(app)/calendar/page.test.tsx` (empty/error/offline cases):
       each state renders its specified copy and action; offline suppresses the error state
 
 **Checkpoint**: All four `/calendar` states plus loading/offline are complete and tested.
@@ -253,16 +253,16 @@ is reflected everywhere, and clears any picked event.
 `GET /picked-event` now returns `picked: false`, and confirm `/recommend`'s context line
 reverts.
 
-- [ ] T039 [US4] Confirm (already true by construction from T011/T013) that
+- [x] T039 [US4] Confirm (already true by construction from T011/T013) that
       `POST /disconnect` deletes both `calendar_connections` and `picked_events` server-side
       in one call — add an integration-test case to `test_calendar_routes.py` asserting
       `GET /picked-event` returns `picked: false` immediately after disconnect
-- [ ] T040 [US4] Document, in the feature report, exactly what `ConnectedAccountsSection.tsx`
+- [x] T040 [US4] Document, in the feature report, exactly what `ConnectedAccountsSection.tsx`
       (feature 013's branch, not yet merged into `rebuild`) needs once merged: a "Connected"
       `Badge` + "Disconnect" text action (design-decisions §17) both wired to
       `useCalendarConnection()` — this feature does not touch that file since it doesn't
       exist on this branch (handoff §2/013 handoff §7)
-- [ ] T041 [P] [US4] `frontend/lib/calendar/useCalendarConnection.test.ts` (extend T023):
+- [x] T041 [P] [US4] `frontend/lib/calendar/useCalendarConnection.test.ts` (extend T023):
       after `disconnect()`, `connected` is `false` and a subsequent `/recommend` context-line
       read reflects the unpicked prompt
 
@@ -273,26 +273,26 @@ built to look like it does.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T042 [P] Add `docs/design-decisions.md` §16-18 references into this feature's report
+- [x] T042 [P] Add `docs/design-decisions.md` §16-18 references into this feature's report
       (already written during planning — confirm nothing drifted during implementation)
-- [ ] T043 [P] Add the calendar-redirect iOS item to `docs/ios-verification-backlog.md`,
+- [x] T043 [P] Add the calendar-redirect iOS item to `docs/ios-verification-backlog.md`,
       matching the existing `/auth/callback` entries' shape (design-decisions §12 precedent)
-- [ ] T044 Run the full backend gate: `uv run pytest && uv run ruff check . && uv run ruff
+- [x] T044 Run the full backend gate: `uv run pytest && uv run ruff check . && uv run ruff
       format --check . && uv run mypy src && uv run lint-imports`
-- [ ] T045 Run the full frontend gate: `npm run lint && npm run typecheck && npm run build &&
+- [x] T045 Run the full frontend gate: `npm run lint && npm run typecheck && npm run build &&
       npm test`
-- [ ] T046 Manual pass of all four `/calendar` states in both themes at
+- [x] T046 Manual pass of all four `/calendar` states in both themes at
       320/768/1024/1440px (§10 checklist item 3) — record exactly how each was driven
       (fixture vs. live) in the feature report
-- [ ] T047 Keyboard-only pass of `/calendar` and the primer: tab order, focus-visible ring
+- [x] T047 Keyboard-only pass of `/calendar` and the primer: tab order, focus-visible ring
       present on keyboard nav and absent on mouse click, focus trapped in the primer while
       open and restored to the invoking control on close (§10 checklist item 9)
-- [ ] T048 Confirm exactly one `<h1>` on `/calendar` (`TopHeader`'s title) and that the
+- [x] T048 Confirm exactly one `<h1>` on `/calendar` (`TopHeader`'s title) and that the
       `/recommend` change didn't introduce a second one
-- [ ] T049 Grep the diff for `access_token`/`refresh_token`/`code_verifier` outside
+- [x] T049 Grep the diff for `access_token`/`refresh_token`/`code_verifier` outside
       `token_encryption.py`/`google_calendar.py`/tests to confirm no token ever reaches a log
       line, tracked file, or API response body (§10 checklist item 8, FR-005)
-- [ ] T050 Write the feature completion report per handoff §12: what was built, whether OAuth
+- [x] T050 Write the feature completion report per handoff §12: what was built, whether OAuth
       was tested or only wired, token storage rationale, exact `/recommend` diff, unmet
       Constitution Check gates (if any), §10 checklist results, and everything recorded in
       `design-decisions.md`
