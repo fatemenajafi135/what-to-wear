@@ -46,6 +46,15 @@ describe("ItemEditForm", () => {
     expect(screen.getByLabelText("Notes")).toHaveValue("A bit worn");
   });
 
+  it("highlights the Category chip matching the item's group, not its raw category", () => {
+    // ITEM.category is "t-shirt" (a specific type) but category_group is
+    // "top" — the chip must reflect the group, not the literal category
+    // string, or none of the five chips would ever show active.
+    render(<ItemEditForm item={ITEM} isOnline onSaved={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Top" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Footwear" })).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("submits only the changed field", async () => {
     mockedPatch.mockResolvedValue({ data: { ...ITEM, notes: "Needs ironing" }, error: undefined } as never);
     const onSaved = vi.fn();

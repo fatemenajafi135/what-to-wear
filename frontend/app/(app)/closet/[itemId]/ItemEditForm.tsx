@@ -38,6 +38,15 @@ export interface ItemEditFormProps {
 export function ItemEditForm({ item, isOnline, onSaved }: ItemEditFormProps) {
   const [name, setName] = useState(item.name ?? "");
   const [category, setCategory] = useState(item.category);
+  // Which Category chip reads as active. Separate from `category` (the
+  // Group input's value, e.g. "blazer") because the chip set is the
+  // coarser group — `item.category_group` is already server-computed
+  // (categories.group_of), so this reads it directly rather than
+  // duplicating that taxonomy client-side (constitution VI). A chip click
+  // updates both this and `category` together; typing in Group only
+  // updates `category`, leaving the chip's highlight as whichever group
+  // was last explicitly chosen.
+  const [categoryChip, setCategoryChip] = useState<string>(item.category_group);
   const [fabric, setFabric] = useState(item.fabric ?? "");
   const [colorsText, setColorsText] = useState(item.color_names.join(", "));
   const [notes, setNotes] = useState(item.notes ?? "");
@@ -85,7 +94,14 @@ export function ItemEditForm({ item, isOnline, onSaved }: ItemEditFormProps) {
         <span className={`textLabel ${styles.chipGroupLabel}`}>Category</span>
         <div className={styles.chipGroup} role="group" aria-label="Category">
           {CATEGORY_CHIPS.map((chip) => (
-            <Chip key={chip.value} active={category === chip.value} onClick={() => setCategory(chip.value)}>
+            <Chip
+              key={chip.value}
+              active={categoryChip === chip.value}
+              onClick={() => {
+                setCategoryChip(chip.value);
+                setCategory(chip.value);
+              }}
+            >
               {chip.label}
             </Chip>
           ))}
