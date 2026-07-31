@@ -14,6 +14,7 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from whattowear.api.v1.routes.calendar import router as calendar_router
 from whattowear.api.v1.routes.closet import router as closet_router
 from whattowear.api.v1.routes.profile import router as profile_router
 from whattowear.api.v1.routes.whoami import router as whoami_router
@@ -76,6 +77,7 @@ app.add_middleware(
 app.include_router(whoami_router, prefix="/api/v1")
 app.include_router(closet_router, prefix="/api/v1")
 app.include_router(profile_router, prefix="/api/v1")
+app.include_router(calendar_router, prefix="/api/v1")
 
 
 def _database_reachable() -> bool:

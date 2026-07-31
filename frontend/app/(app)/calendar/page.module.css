@@ -1,0 +1,56 @@
+.disconnected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-md);
+  padding: var(--space-3xl) var(--space-lg);
+  margin: var(--space-lg);
+  max-width: 480px;
+  margin-inline: auto;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.iconTile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+}
+
+.body {
+  max-width: 32ch;
+  color: var(--color-text-secondary);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+.hint {
+  padding-inline: var(--space-xs);
+}
+
+.skeletonList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+.skeletonRow {
+  height: 56px;
+  border-radius: var(--radius-md);
+}

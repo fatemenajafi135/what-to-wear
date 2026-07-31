@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_jwt_aud: str = "authenticated"
 
+    # --- Calendar (feature 012) — token encryption + app-orchestrated Google OAuth --------
+    # Optional: each adapter/repository call site raises its own clear error when actually
+    # needed and unset, mirroring the AI-layer key pattern above — get_settings() itself must
+    # never fail for a caller that doesn't touch calendar code.
+    wtw_token_encryption_key: str | None = None
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+    google_oauth_redirect_uri: str | None = None
+
     # --- AI Gateway (Vercel AI Gateway) — every LLM/embedding call ------------
     ai_gateway_api_key: str | None = None
     ai_gateway_base_url: str = "https://ai-gateway.vercel.sh/v1"

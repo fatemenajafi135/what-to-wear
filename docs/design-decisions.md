@@ -579,6 +579,110 @@ Implementation: `frontend/lib/supabase/useGoogleAuthAvailable.ts`, consumed by
 
 ---
 
+## 16. Calendar OAuth token storage
+
+Neither `design-system.md` nor this document said how a third-party OAuth token — the first
+one this project holds — should be stored. Feature 012's handoff flagged this exact gap as
+likely and asked for it to be recorded here rather than defaulted silently into the existing
+wardrobe-item pattern (query-level filter + RLS as convention), which was never evaluated
+against holding a credential usable outside this application entirely.
+
+### Decision
+
+`calendar_connections.access_token`/`refresh_token` are encrypted at the application layer
+(`cryptography`'s `Fernet`) before being written to Postgres, decrypted only inside the
+repository layer immediately before a live Google API call, and never included in any API
+response, error message, or log line. Key: `WTW_TOKEN_ENCRYPTION_KEY`, a new backend setting,
+blank in `.env.example`.
+
+Full reasoning, including why RLS alone is not sufficient here (`specs/004-closet-read/
+research.md` §1 already found the app's own pooler connection bypasses RLS entirely) and the
+alternatives considered (plaintext + RLS-only, a managed KMS/Supabase Vault, refresh-token-only
+storage), lives in `specs/012-calendar/research.md` §2 — this entry exists so the decision is
+discoverable from the same document every other cross-cutting choice lives in, not to
+duplicate that reasoning.
+
+---
+
+## 17. Connected accounts' Google Calendar — what actually triggers disconnect
+
+`design-system.md` §4 describes Connected accounts' Google Calendar row as "a connect/disconnect
+toggle (shows a 'Connected' status Badge when linked, a 'Connect' text action when not)." That
+sentence names an affordance for the *not-linked* case (a text action) but only a **display**
+element for the *linked* case — `Badge` is specified elsewhere (§3) as display-only, with no
+interactive states of its own. Taken literally, a connected user would have no way to disconnect
+at all.
+
+### Decision
+
+When linked, the row shows the "Connected" `Badge` **plus** a "Disconnect" text action beside
+it — the same visual treatment (plain underlined text button) as the "Connect" text action
+already specified for the not-linked case, just the mirror-image label. No new component is
+introduced; this reuses the exact text-action pattern the design system already names for the
+opposite state.
+
+`/calendar` itself never gains a disconnect affordance — its screen anatomy (§6, "Screen
+anatomy → Calendar") only ever describes a connect action, present in the disconnected card.
+Once connected, `/calendar` has no disconnected card to put a disconnect action on, and no
+other affordance is specified for one. Settings → Connected accounts is therefore the *only*
+place a user disconnects, which is a valid reading of "two entry points" (both places can
+*connect*; only one shows a *connected* state with something to act on).
+
+### Alternatives considered
+
+- **Tapping the `Badge` itself toggles disconnect.** Rejected — `Badge` is documented
+  system-wide as a display-only pill (§3); overloading it with a hidden interactive behavior
+  contradicts its own spec and gives keyboard/AT users no discoverable way to reach it (no
+  visible affordance, no accessible name suggesting an action).
+- **Add a disconnect action to `/calendar`'s connected states too**, so both entry points are
+  fully symmetric. Rejected — the design system's screen anatomy for Calendar's connected
+  states (event list, empty) names no such control, and design-decisions.md exists to resolve
+  silence or contradiction, not to add UI the design never specified in the first place
+  (Principle VIII, the same direction this document's other entries are careful not to
+  violate).
+
+---
+
+## 18. Calendar permission primer — copy
+
+`known-gaps.md` §-2 requires a primer card before the real Google consent screen and names its
+primary action's label verbatim ("Continue to Google"), but neither it nor `design-system.md`
+specifies the primer's title or body copy, and `design/prototype/` has no working primer to
+read intent from (searched — no match).
+
+### Decision
+
+| Element | Copy |
+|---|---|
+| Title | Before you connect |
+| Body | I'll be able to see your event titles, times and locations so I can suggest outfits for what's actually on your schedule. You can disconnect anytime from Settings. |
+| Primary action | Continue to Google |
+| Secondary action | Not now |
+
+First-person stylist voice ("I'll be able to see... so I can suggest"), matching
+`calendar.disconnected.body`'s existing voice ("so I can suggest outfits for what is actually
+on your schedule") rather than switching to a neutral system voice — this primer is a
+continuation of the same connect action, not a distinct system-level notice like the offline
+banner. Sentence case, no em dash, one recovery-shaped action pair, per §9's copy conventions.
+
+Rendered as a bespoke card in the same `<dialog>`-based, real-modal-semantics shape
+`BottomSheet` uses (safe-area-aware bottom padding, focus trap via `showModal()`) rather than
+reusing the `BottomSheet` component directly — its API is label-only rows and has no slot for
+body text, and `design-system.md` §3 already names this exact situation ("Bespoke variants not
+on this component... richer than BottomSheet's plain label rows") as the documented escape
+hatch, not a violation of "don't build form components" (a primer card is content, not a form
+control).
+
+### Alternatives considered
+
+- **Neutral/system voice** ("You'll be able to see event titles, times and locations…") —
+  rejected: breaks voice consistency with the disconnected card's copy one tap away, for no
+  stated reason in §9's exception list (which reserves neutral voice for connection/sync
+  *status*, not a connection *action*).
+- **Reuse `BottomSheet` verbatim with the explanation squeezed into the title.** Rejected —
+  loses the explanation entirely (titles are short, "13px/700" per §3) or forces multi-line
+  text into a slot the component doesn't support, when a bespoke variant is already the
+  system's documented answer for this exact shape of content.
 ## 16. Feature 013 (Profile & Settings) — three design-system gaps resolved
 
 ### 16.1 Profile's "three cards" — contents
