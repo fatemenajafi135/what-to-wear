@@ -18,28 +18,43 @@ export interface CalendarPrimerProps {
  * situation ("richer than BottomSheet's plain label rows") as the
  * documented escape hatch for a bespoke variant. Copy and rationale:
  * docs/design-decisions.md §18.
+ *
+ * Native `<dialog>` + `showModal()` gives a real focus trap for free, but
+ * NOT focus restoration on close (a common misconception — the spec never
+ * promises it) — design-system.md §8 requires both ("restore focus to the
+ * invoking control on close"), so the invoking element is captured on open
+ * and refocused explicitly here.
  */
 export function CalendarPrimer({ open, onContinue, onDismiss }: CalendarPrimerProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const triggerRef = useRef<Element | null>(null);
   const titleId = useId();
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (open && !dialog.open) {
+      triggerRef.current = document.activeElement;
       dialog.showModal();
     } else if (!open && dialog.open) {
       dialog.close();
     }
   }, [open]);
 
+  const handleClose = () => {
+    if (triggerRef.current instanceof HTMLElement) {
+      triggerRef.current.focus();
+    }
+    onDismiss();
+  };
+
   return (
     <dialog
       ref={dialogRef}
       className={styles.dialog}
       aria-labelledby={titleId}
-      onClose={onDismiss}
-      onCancel={onDismiss}
+      onClose={handleClose}
+      onCancel={handleClose}
     >
       <div className={styles.content}>
         <h2 id={titleId} className={`textSectionTitle ${styles.title}`}>
@@ -51,7 +66,7 @@ export function CalendarPrimer({ open, onContinue, onDismiss }: CalendarPrimerPr
           Settings.
         </p>
         <Button onClick={onContinue}>Continue to Google</Button>
-        <button type="button" className={`control ${styles.notNow}`} onClick={onDismiss}>
+        <button type="button" className={`control ${styles.notNow}`} onClick={handleClose}>
           Not now
         </button>
       </div>
