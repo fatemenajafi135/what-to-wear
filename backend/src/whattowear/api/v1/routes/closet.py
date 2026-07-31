@@ -15,6 +15,7 @@ reused there.
 
 from __future__ import annotations
 
+import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -106,6 +107,17 @@ def get_closet_item(
     user_id: str = Depends(get_current_user_id),  # noqa: B008
     repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
 ) -> ClosetItemView:
+    try:
+        uuid.UUID(item_id)
+    except ValueError:
+        # A syntactically invalid id can never match a row — treated
+        # identically to "doesn't exist" (spec.md's URL-tampering edge
+        # case) rather than reaching the database, where the `uuid` column
+        # comparison would otherwise raise a raw DataError (caught in
+        # review: a malformed id crashed with an unhandled 500 instead of
+        # the same 404 every other not-found case gets).
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found") from None
+
     item = repository.get_wardrobe_item(user_id, item_id)
     if item is None:
         # Identical shape whether item_id doesn't exist or belongs to

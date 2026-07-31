@@ -148,6 +148,17 @@ def test_item_detail_404_for_nonexistent_item() -> None:
     assert response.json() == {"detail": "Item not found"}
 
 
+def test_item_detail_404_for_malformed_id() -> None:
+    """Caught in review: a syntactically invalid uuid used to reach the
+    database's `uuid` column comparison and crash with an unhandled 500
+    instead of the same 404 every other not-found case gets."""
+    with _client_as(USER_A) as client:
+        response = client.get("/api/v1/closet/items/not-a-uuid")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Item not found"}
+
+
 def test_pagination_has_more_flag() -> None:
     ids = [_insert_item(USER_A, "t-shirt") for _ in range(25)]
     try:
