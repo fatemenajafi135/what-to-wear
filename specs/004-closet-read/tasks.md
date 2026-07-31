@@ -81,9 +81,13 @@ every user story needs real data flowing before its screen behavior can be verif
       task only, per the handoff's explicit "keep the fixture" instruction)
 - [ ] T013 Implement `GET /api/v1/closet/items` and `GET /api/v1/closet/items/{item_id}` in
       `backend/src/whattowear/api/v1/routes/closet.py` per `contracts/closet.md`:
+      `ClosetItemView(WardrobeItem)` with computed `category_group`
+      (`categories.group_of(category)`) and `color_names` (`colors.nearest_names(colors)`),
       `ClosetItemsResponse` (route-local), category→group filtering (Bottoms includes
       `full_body`), offset pagination at `WTW_CLOSET_PAGE_SIZE`, 404 with identical shape for
-      missing-vs-not-owned, both behind `Depends(get_current_user_id)`
+      missing-vs-not-owned, both behind `Depends(get_current_user_id)` — found missing during
+      `/speckit-analyze` (C2): without the computed fields, the frontend would have to
+      duplicate `categories.py`/`colors.py`'s mapping logic in TypeScript
 - [ ] T014 Register the closet router in `backend/src/whattowear/main.py`
       (`app.include_router(closet_router, prefix="/api/v1")`, matching `whoami_router`'s
       existing pattern)
@@ -136,14 +140,20 @@ and item count; confirm a second user sees none of the first user's items.
 - [ ] T024 [US1] Implement `frontend/app/(app)/closet/[itemId]/page.tsx` — `TopHeader` with
       back navigation and a `dots` right-slot trigger (wired, sheet left empty — feature
       005's), photo placeholder block, details card (Name/Category/Group/Fabric/Colour/Notes
-      label-value pairs, Colour derived via existing `colors.nearest_names`-equivalent
-      display logic)
+      label-value pairs) — Category reads the response's `category_group`, Group reads
+      `category`, Colour reads `color_names.join(", ")`; both computed fields come from the
+      API response (T013's `ClosetItemView`), never re-derived on the frontend
 - [ ] T025 [P] [US1] `frontend/app/(app)/closet/[itemId]/page.module.css`
 - [ ] T026 [US1] Implement the desktop two-pane composition (≥1024px): grid as the wide list
       pane beside an item-detail pane; placeholder copy "Select an item from your closet to
       see its details." when nothing selected; narrower breakpoints push-navigate instead
 - [ ] T027 [P] [US1] `frontend/e2e/closet-two-pane.spec.ts` — playwright, confirms the
       two-pane layout at 1024/1440px and single-column push-nav at 320/768px
+- [ ] T027a [US1] Add the manual "Load more" text button below the grid in
+      `frontend/app/(app)/closet/page.tsx` when `has_more` is true: fetches the next
+      `offset`, appends items, shows a "Loading more items…" caption while fetching — not
+      infinite scroll (FR-009; found missing from the task list during `/speckit-analyze`,
+      C1)
 - [ ] T028 [P] [US1] `frontend/components/…` vitest coverage for the grid's item-count
       subtitle and per-item navigation (matching existing component test patterns, e.g.
       `Chip.test.tsx`)

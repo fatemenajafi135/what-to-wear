@@ -25,11 +25,15 @@ Query parameters (both optional):
   "items": [ { "id": "...", "category": "top", "colors": ["#1b2a4a"], "formality": "casual",
                "warmth": 1, "season": ["spring"], "fabric": null, "source": "upload",
                "pattern": null, "fit": null, "photo_path": null,
-               "name": "Navy tee", "notes": null } ],
+               "name": "Navy tee", "notes": null,
+               "category_group": "top", "color_names": ["Navy"] } ],
   "total": 37,
   "has_more": true
 }
 ```
+
+`category_group` and `color_names` are computed at response time (`ClosetItemView` in
+`data-model.md`) — never stored, never re-derived on the frontend.
 
 `items` is exactly the caller's own `wardrobe_items` rows (never another user's, never
 `catalog_items`), category-filtered then sliced to one page. `total` is the count matching

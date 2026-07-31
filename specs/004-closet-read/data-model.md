@@ -90,14 +90,30 @@ valid, since both are optional.
 Route-local, not part of the AI-pipeline contract — matches `whoami.py`'s existing pattern of
 defining its own response model beside the route.
 
+**`ClosetItemView`** — `WardrobeItem` plus two display-only computed fields, so the frontend
+never has to re-derive backend business logic in TypeScript (caught in `/speckit-analyze`:
+without this, showing Item detail's "Category" and "Colour" labels would require duplicating
+`categories.group_of()` and `colors.nearest_names()` client-side):
+
+```python
+class ClosetItemView(WardrobeItem):
+    category_group: str   # categories.group_of(self.category) — "Category" label's value
+    color_names: list[str]  # colors.nearest_names(self.colors) — "Colour" label's value
+```
+
+Populated in the route layer at response-construction time, not the repository — the
+repository's return type stays exactly `list[WardrobeItem]`, matching `ports.ClosetRepository`
+unchanged. `category` itself (the specific string, e.g. `"blazer"`) remains on the model
+unchanged — it's what Item detail's "Group" label displays.
+
 ```python
 class ClosetItemsResponse(BaseModel):
-    items: list[WardrobeItem]
+    items: list[ClosetItemView]
     total: int          # count matching the current filter, before pagination
     has_more: bool
 ```
 
-`GET /api/v1/closet/items/{item_id}` returns a bare `WardrobeItem` (200) or a `404` with
+`GET /api/v1/closet/items/{item_id}` returns a bare `ClosetItemView` (200) or a `404` with
 FastAPI's standard `{"detail": ...}` shape — no dedicated wrapper needed for a single object.
 
 ## Relationships
