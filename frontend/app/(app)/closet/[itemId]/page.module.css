@@ -1,0 +1,84 @@
+.wrapper {
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+/* design/design-system.md § Image treatment — full-width, fixed 220px,
+   16px radius, same diagonal-stripe treatment as the Closet grid tile. */
+.photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 220px;
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--color-surface-sunken) 0 8px,
+    var(--color-background) 8px 16px
+  );
+  margin-bottom: var(--space-lg);
+}
+
+.placeholderLabel {
+  font-family: monospace;
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+}
+
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.fieldRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.fieldLabel {
+  color: var(--color-text-secondary);
+}
+
+.fieldValue {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.bar {
+  height: 14px;
+  border-radius: var(--radius-pill);
+}
+
+.bar60 {
+  width: 60%;
+}
+
+.bar40 {
+  width: 40%;
+}
+
+.bar80 {
+  width: 80%;
+}
+
+.stateBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-lg);
+  padding: var(--space-3xl) var(--space-lg);
+}
+
+.stateBody {
+  max-width: 32ch;
+  color: var(--color-text-secondary);
+}

@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiClient, unwrap } from "./client";
 import type { components } from "./schema";
 
 export type ProfileResponse = components["schemas"]["ProfileResponse"];
@@ -6,18 +6,18 @@ export type StylePreferencesUpdate = components["schemas"]["StylePreferencesUpda
 export type BodySizeUpdate = components["schemas"]["BodySizeUpdate"];
 export type NotificationsUpdate = components["schemas"]["NotificationsUpdate"];
 
-export function getProfile(): Promise<ProfileResponse> {
-  return apiFetch<ProfileResponse>("/api/v1/profile", "GET");
+export async function getProfile(): Promise<ProfileResponse> {
+  return unwrap(await apiClient.GET("/api/v1/profile"));
 }
 
-export function updateStylePreferences(update: StylePreferencesUpdate): Promise<ProfileResponse> {
-  return apiFetch<ProfileResponse>("/api/v1/profile/style-preferences", "PATCH", update);
+export async function updateStylePreferences(update: StylePreferencesUpdate): Promise<ProfileResponse> {
+  return unwrap(await apiClient.PATCH("/api/v1/profile/style-preferences", { body: update }));
 }
 
-export function updateBodySize(update: BodySizeUpdate): Promise<ProfileResponse> {
-  return apiFetch<ProfileResponse>("/api/v1/profile/body-size", "PATCH", update);
+export async function updateBodySize(update: BodySizeUpdate): Promise<ProfileResponse> {
+  return unwrap(await apiClient.PATCH("/api/v1/profile/body-size", { body: update }));
 }
 
-export function updateNotifications(update: NotificationsUpdate): Promise<ProfileResponse> {
-  return apiFetch<ProfileResponse>("/api/v1/profile/notifications", "PATCH", update);
+export async function updateNotifications(update: NotificationsUpdate): Promise<ProfileResponse> {
+  return unwrap(await apiClient.PATCH("/api/v1/profile/notifications", { body: update }));
 }

@@ -12,13 +12,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "generate:api": "openapi-typescript http://localhost:8000/openapi.json -o lib/api/schema.d.ts"
+    "generate:api-types": "openapi-typescript http://localhost:8000/openapi.json -o lib/api/schema.d.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.111.0",
     "lucide-react": "1.27.0",
     "next": "16.2.12",
+    "openapi-fetch": "^0.17.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -35,7 +36,7 @@
     "eslint-plugin-jsx-a11y": "6.10.2",
     "eslint-plugin-react-hooks": "7.1.1",
     "jsdom": "30.0.0",
-    "openapi-typescript": "7.4.4",
+    "openapi-typescript": "^7.13.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.65.0",
     "vitest": "4.1.10"
