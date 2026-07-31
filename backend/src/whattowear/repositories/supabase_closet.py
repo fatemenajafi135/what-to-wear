@@ -21,14 +21,14 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import text
-from sqlalchemy.engine import Row
+from sqlalchemy.engine import CursorResult, Row
 from sqlalchemy.orm import Session
 
 from ..core.db import get_session
-from ..schema import WardrobeItem
+from ..schema import WardrobeItem, WardrobeItemPatch
 
 if TYPE_CHECKING:
     from ..memory.preferences import FeedbackRecord
@@ -38,10 +38,13 @@ if TYPE_CHECKING:
 # context manager here rather than duplicating session lifecycle handling.
 _session_scope = contextmanager(get_session)
 
-# Both tables share every one of these columns except `source`, which only
-# exists on `wardrobe_items` — the catalog query below projects a literal
-# `'catalog'` in its place so both queries can share one row->model mapping.
-_ITEM_COLUMNS = "id, category, colors, formality, warmth, season, fabric, pattern, fit, name, notes, source, photo_path"
+# Both tables share every one of these columns except `source` and
+# `favorite`, which only exist on `wardrobe_items` — the catalog query below
+# projects literal `'catalog'`/`false` in their place so both queries can
+# share one row->model mapping.
+_ITEM_COLUMNS = (
+    "id, category, colors, formality, warmth, season, fabric, pattern, fit, name, notes, source, photo_path, favorite"
+)
 
 
 def _row_to_wardrobe_item(row: Row[Any]) -> WardrobeItem:
@@ -60,11 +63,19 @@ def _row_to_wardrobe_item(row: Row[Any]) -> WardrobeItem:
         photo_path=m["photo_path"],
         name=m["name"],
         notes=m["notes"],
+        favorite=m["favorite"],
     )
 
 
 def _set_jwt_claim(session: Session, user_id: str) -> None:
     session.execute(text("SELECT set_config('request.jwt.claim.sub', :user_id, true)"), {"user_id": user_id})
+
+
+def _build_set_clause(fields: dict[str, Any]) -> str:
+    # Keys come only from `WardrobeItemPatch`'s own field names (a fixed,
+    # schema-defined set), never from unvalidated user input — safe to
+    # interpolate directly into the SQL text.
+    return ", ".join(f"{column} = :{column}" for column in fields)
 
 
 class SupabaseClosetRepository:
@@ -81,7 +92,7 @@ class SupabaseClosetRepository:
 
     def list_catalog_items(self) -> list[WardrobeItem]:
         with _session_scope() as session:
-            columns = _ITEM_COLUMNS.replace("source", "'catalog' AS source")
+            columns = _ITEM_COLUMNS.replace("source", "'catalog' AS source").replace("favorite", "false AS favorite")
             rows = session.execute(text(f"SELECT {columns} FROM catalog_items")).fetchall()
             return [_row_to_wardrobe_item(row) for row in rows]
 
@@ -101,3 +112,90 @@ class SupabaseClosetRepository:
                 {"user_id": user_id, "item_id": item_id},
             ).fetchone()
             return _row_to_wardrobe_item(row) if row is not None else None
+
+    def update_wardrobe_item(self, user_id: str, item_id: str, patch: WardrobeItemPatch) -> WardrobeItem | None:
+        """Partial update — feature 005. Only fields present on `patch`
+        (`exclude_unset`) are written, matching `WardrobeItemPatch`'s own
+        PATCH-semantics doc comment. A patch with nothing set skips the
+        `UPDATE` entirely (an empty `SET` clause is invalid SQL) and just
+        re-fetches, so a no-op call still returns the current row — or
+        `None` if it doesn't belong to `user_id`."""
+        fields = patch.model_dump(exclude_unset=True)
+        with _session_scope() as session:
+            _set_jwt_claim(session, user_id)
+            if fields:
+                session.execute(
+                    text(
+                        f"UPDATE wardrobe_items SET {_build_set_clause(fields)} "
+                        "WHERE user_id = :user_id AND id = :item_id"
+                    ),
+                    {**fields, "user_id": user_id, "item_id": item_id},
+                )
+                session.commit()
+            row = session.execute(
+                text(f"SELECT {_ITEM_COLUMNS} FROM wardrobe_items WHERE user_id = :user_id AND id = :item_id"),
+                {"user_id": user_id, "item_id": item_id},
+            ).fetchone()
+            return _row_to_wardrobe_item(row) if row is not None else None
+
+    def toggle_favorite(self, user_id: str, item_id: str) -> bool | None:
+        """Reads-then-flips in one statement (`RETURNING`) rather than a
+        separate read + write — the client has no reliable local copy of
+        the current value to flip and round-trip, since Item detail never
+        displays it (design-system §2.3). Returns the value *after* the
+        toggle, or `None` if the item doesn't belong to `user_id`."""
+        with _session_scope() as session:
+            _set_jwt_claim(session, user_id)
+            row = session.execute(
+                text(
+                    "UPDATE wardrobe_items SET favorite = NOT favorite "
+                    "WHERE user_id = :user_id AND id = :item_id "
+                    "RETURNING favorite"
+                ),
+                {"user_id": user_id, "item_id": item_id},
+            ).fetchone()
+            session.commit()
+            return bool(row._mapping["favorite"]) if row is not None else None
+
+    def record_wear(self, user_id: str, item_id: str) -> bool:
+        """Idempotent per calendar day (docs/design-decisions.md §22.1): a
+        second call the same day no-ops against `item_wears`' own
+        `(item_id, worn_date)` unique constraint rather than inserting a
+        second row. Returns `False` if the item doesn't belong to
+        `user_id` (or doesn't exist); `True` otherwise, whether this call
+        inserted a new row or matched an existing one for today."""
+        with _session_scope() as session:
+            _set_jwt_claim(session, user_id)
+            owned = session.execute(
+                text("SELECT 1 FROM wardrobe_items WHERE user_id = :user_id AND id = :item_id"),
+                {"user_id": user_id, "item_id": item_id},
+            ).fetchone()
+            if owned is None:
+                return False
+            session.execute(
+                text(
+                    "INSERT INTO item_wears (item_id, user_id, worn_date) "
+                    "VALUES (:item_id, :user_id, CURRENT_DATE) "
+                    "ON CONFLICT (item_id, worn_date) DO NOTHING"
+                ),
+                {"item_id": item_id, "user_id": user_id},
+            )
+            session.commit()
+            return True
+
+    def delete_wardrobe_item(self, user_id: str, item_id: str) -> bool:
+        """Hard delete — cascades to the item's `item_wears` rows via the
+        migration's `on delete cascade`. Returns whether a row was
+        actually removed, so the route can 404 identically whether the
+        item never existed or belongs to someone else."""
+        with _session_scope() as session:
+            _set_jwt_claim(session, user_id)
+            result = cast(
+                "CursorResult[Any]",
+                session.execute(
+                    text("DELETE FROM wardrobe_items WHERE user_id = :user_id AND id = :item_id"),
+                    {"user_id": user_id, "item_id": item_id},
+                ),
+            )
+            session.commit()
+            return result.rowcount > 0

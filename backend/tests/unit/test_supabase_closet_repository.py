@@ -15,6 +15,7 @@ import pytest
 
 from whattowear.repositories import supabase_closet
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
+from whattowear.schema import WardrobeItemPatch
 
 
 class _FakeRow:
@@ -62,6 +63,7 @@ _ROW = {
     "notes": "A bit worn",
     "source": "upload",
     "photo_path": None,
+    "favorite": False,
 }
 
 
@@ -139,3 +141,122 @@ class TestGetDerivationInputs:
         feedback, dismissals = repo.get_derivation_inputs("any-user-id")
         assert feedback == []
         assert dismissals == {}
+
+
+class TestUpdateWardrobeItem:
+    def test_partial_patch_issues_update_then_refetches(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        update_result = MagicMock()
+        select_result = MagicMock()
+        select_result.fetchone.return_value = _FakeRow(_ROW)
+        session = _fake_session([set_config_result, update_result, select_result])
+        patch_session_scope(session)
+
+        repo = SupabaseClosetRepository()
+        item = repo.update_wardrobe_item("user-a", _ROW["id"], WardrobeItemPatch(name="New name"))
+
+        assert item is not None
+        assert session.commit.called
+        # Second execute call is the UPDATE — assert only the changed field
+        # reached the SQL params, not every WardrobeItemPatch field.
+        update_call = session.execute.call_args_list[1]
+        assert update_call.args[1] == {"name": "New name", "user_id": "user-a", "item_id": _ROW["id"]}
+
+    def test_empty_patch_skips_update_and_still_refetches(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        select_result = MagicMock()
+        select_result.fetchone.return_value = _FakeRow(_ROW)
+        session = _fake_session([set_config_result, select_result])
+        patch_session_scope(session)
+
+        repo = SupabaseClosetRepository()
+        item = repo.update_wardrobe_item("user-a", _ROW["id"], WardrobeItemPatch())
+
+        assert item is not None
+        assert session.execute.call_count == 2  # set_config + SELECT only, no UPDATE
+        assert not session.commit.called
+
+    def test_returns_none_for_foreign_or_missing_item(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        update_result = MagicMock()
+        select_result = MagicMock()
+        select_result.fetchone.return_value = None
+        session = _fake_session([set_config_result, update_result, select_result])
+        patch_session_scope(session)
+
+        repo = SupabaseClosetRepository()
+        item = repo.update_wardrobe_item("user-a", "someone-elses-id", WardrobeItemPatch(name="x"))
+        assert item is None
+
+
+class TestToggleFavorite:
+    def test_flips_and_returns_new_value(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        update_result = MagicMock()
+        update_result.fetchone.return_value = _FakeRow({"favorite": True})
+        session = _fake_session([set_config_result, update_result])
+        patch_session_scope(session)
+
+        repo = SupabaseClosetRepository()
+        favorite = repo.toggle_favorite("user-a", _ROW["id"])
+        assert favorite is True
+        assert session.commit.called
+
+    def test_returns_none_for_foreign_or_missing_item(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        update_result = MagicMock()
+        update_result.fetchone.return_value = None
+        session = _fake_session([set_config_result, update_result])
+        patch_session_scope(session)
+
+        repo = SupabaseClosetRepository()
+        assert repo.toggle_favorite("user-a", "someone-elses-id") is None
+
+
+class TestRecordWear:
+    def test_inserts_upsert_when_owned(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        ownership_result = MagicMock()
+        ownership_result.fetchone.return_value = (1,)
+        insert_result = MagicMock()
+        session = _fake_session([set_config_result, ownership_result, insert_result])
+        patch_session_scope(session)
+
+        repo = SupabaseClosetRepository()
+        assert repo.record_wear("user-a", _ROW["id"]) is True
+        assert session.commit.called
+        insert_call = session.execute.call_args_list[2]
+        assert "ON CONFLICT (item_id, worn_date) DO NOTHING" in insert_call.args[0].text
+
+    def test_returns_false_for_foreign_or_missing_item_without_inserting(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        ownership_result = MagicMock()
+        ownership_result.fetchone.return_value = None
+        session = _fake_session([set_config_result, ownership_result])
+        patch_session_scope(session)
+
+        repo = SupabaseClosetRepository()
+        assert repo.record_wear("user-a", "someone-elses-id") is False
+        assert session.execute.call_count == 2  # no INSERT attempted
+        assert not session.commit.called
+
+
+class TestDeleteWardrobeItem:
+    def test_returns_true_when_a_row_was_deleted(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        delete_result = MagicMock(rowcount=1)
+        session = _fake_session([set_config_result, delete_result])
+        patch_session_scope(session)
+
+        repo = SupabaseClosetRepository()
+        assert repo.delete_wardrobe_item("user-a", _ROW["id"]) is True
+        assert session.commit.called
+
+    def test_returns_false_when_no_row_matched(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        delete_result = MagicMock(rowcount=0)
+        session = _fake_session([set_config_result, delete_result])
+        patch_session_scope(session)
+
+        repo = SupabaseClosetRepository()
+        assert repo.delete_wardrobe_item("user-a", "someone-elses-id") is False
