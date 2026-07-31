@@ -1,0 +1,142 @@
+"use client";
+
+import { use, useCallback, useEffect, useState } from "react";
+import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
+import { Button } from "@/components/ui/Button/Button";
+import { apiClient } from "@/lib/api/client";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
+import { ClosetGrid } from "../ClosetGrid";
+import type { components } from "@/lib/api/schema";
+import twoPaneStyles from "../page.module.css";
+import styles from "./page.module.css";
+
+type ClosetItemView = components["schemas"]["ClosetItemView"];
+
+/**
+ * `/closet/:itemId` — design/design-system.md § Item detail: header with
+ * back + overflow (dots) trigger, photo placeholder, and the details card.
+ * The overflow sheet itself is feature 005's — the trigger is wired here
+ * but opens nothing yet (this feature ships no sheet content).
+ *
+ * At ≥1024px (design-system.md §5's two-pane master-detail), the closet
+ * grid renders in a pane to the left of this content, mirroring
+ * `/closet/page.tsx`'s own two-pane composition.
+ */
+export default function ItemDetailPage({ params }: { params: Promise<{ itemId: string }> }) {
+  const { itemId } = use(params);
+  const [item, setItem] = useState<ClosetItemView | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState(false);
+  const isOnline = useOnlineStatus();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setNotFound(false);
+    setError(false);
+    try {
+      const { data, response } = await apiClient.GET("/api/v1/closet/items/{item_id}", {
+        params: { path: { item_id: itemId } },
+      });
+      if (response.status === 404) {
+        setNotFound(true);
+        return;
+      }
+      if (!data) {
+        setError(true);
+        return;
+      }
+      setItem(data);
+    } catch {
+      // Dropped connection (fetch rejects outright, distinct from a non-2xx
+      // response) — most commonly hit while offline, resolves to the same
+      // suppressed-error state `showError` already handles.
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [itemId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const showError = error && isOnline; // offline suppresses the screen-level error (design-system §6)
+
+  return (
+    <div className={twoPaneStyles.twoPane}>
+      <div className={twoPaneStyles.gridPane}>
+        <ClosetGrid selectedItemId={itemId} />
+      </div>
+
+      <div>
+        <TopHeader
+          title="Item details"
+          backHref="/closet"
+          rightSlot={{ kind: "icon", icon: "dots", onClick: () => {} }}
+        />
+
+        {loading && (
+          // design-system.md § Per-screen skeleton layouts: Item detail's
+          // skeleton is the three-bar card only, no photo placeholder.
+          <div className={styles.wrapper} aria-hidden="true">
+            <div className={styles.card}>
+              <div className={`${styles.bar} ${styles.bar60} skeleton`} />
+              <div className={`${styles.bar} ${styles.bar40} skeleton`} />
+              <div className={`${styles.bar} ${styles.bar80} skeleton`} />
+            </div>
+          </div>
+        )}
+
+        {!loading && notFound && (
+          <div className={styles.stateBlock}>
+            <p className={`textBody ${styles.stateBody}`}>
+              This item couldn&apos;t be found — it may have been removed.
+            </p>
+            <Button href="/closet" width="intrinsic">
+              Back to Closet
+            </Button>
+          </div>
+        )}
+
+        {!loading && showError && (
+          <div className={styles.stateBlock}>
+            <p className={`textBody ${styles.stateBody}`}>Couldn&apos;t load your closet.</p>
+            <Button width="intrinsic" onClick={load}>
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {!loading && !notFound && !error && item && <ItemDetailCard item={item} />}
+      </div>
+    </div>
+  );
+}
+
+function ItemDetailCard({ item }: { item: ClosetItemView }) {
+  const fields: { label: string; value: string }[] = [
+    { label: "Name", value: item.name ?? "—" },
+    { label: "Category", value: item.category_group },
+    { label: "Group", value: item.category },
+    { label: "Fabric", value: item.fabric ?? "—" },
+    { label: "Colour", value: item.color_names.length > 0 ? item.color_names.join(", ") : "—" },
+    { label: "Notes", value: item.notes ?? "—" },
+  ];
+
+  return (
+    <div className={styles.wrapper}>
+      <div className={styles.photo} aria-hidden="true">
+        <span className={styles.placeholderLabel}>{item.category}</span>
+      </div>
+      <div className={styles.card}>
+        {fields.map((field) => (
+          <div key={field.label} className={styles.fieldRow}>
+            <span className={`textLabel ${styles.fieldLabel}`}>{field.label}</span>
+            <span className={styles.fieldValue}>{field.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

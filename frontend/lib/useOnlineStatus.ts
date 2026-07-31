@@ -3,26 +3,25 @@
 import { useEffect, useState } from "react";
 
 /**
- * `navigator.onLine`, kept live via the `online`/`offline` window events.
- * Backs the global offline `Banner` (design-system.md §6's "offline is a
- * global, persistent condition") and any screen's own offline-vs-error
- * precedence check (§6: suppress a screen's own error state while offline).
- * Assumes online during SSR/first paint — `navigator` doesn't exist there,
- * and a false "offline" flash on every load would be worse than a brief
- * false "online" one that corrects itself on mount.
+ * design/design-system.md §6's offline banner didn't exist anywhere in the
+ * app shell before feature 004 (specs/004-closet-read/research.md §9) — this
+ * is the one piece of global chrome the closet screens' offline requirement
+ * depends on. `navigator.onLine` for the initial value (never assumed true
+ * during SSR/first paint), then the `online`/`offline` window events for
+ * changes.
  */
 export function useOnlineStatus(): boolean {
   const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
-    const goOnline = () => setIsOnline(true);
-    const goOffline = () => setIsOnline(false);
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
     return () => {
-      window.removeEventListener("online", goOnline);
-      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
   }, []);
 

@@ -1,0 +1,100 @@
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.skeletonGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+/* design/design-system.md § Image treatment — the diagonal-stripe photo
+   placeholder, unchanged until feature 006 replaces it with a real photo. */
+.tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--color-surface-sunken) 0 8px,
+    var(--color-background) 8px 16px
+  );
+  text-decoration: none;
+}
+
+.tileSelected {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.placeholderLabel {
+  font-family: monospace;
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  text-align: center;
+  padding: var(--space-xs);
+}
+
+.stateBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-lg);
+  padding: var(--space-3xl) var(--space-lg);
+}
+
+.stateBody {
+  max-width: 32ch;
+  color: var(--color-text-secondary);
+}
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.loadMoreButton {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+}
+
+.loadMoreButton:focus-visible {
+  box-shadow: var(--shadow-focus-ring);
+  outline: none;
+  border-radius: var(--radius-sm);
+}

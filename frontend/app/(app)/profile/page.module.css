@@ -5,18 +5,57 @@
   padding-top: calc(var(--space-md) + env(safe-area-inset-top));
 }
 
-.empty {
+.cards {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: var(--space-md);
-  padding: var(--space-3xl) var(--space-lg);
-  min-height: 50vh;
+  gap: var(--space-lg);
+  padding: 0 var(--space-lg) var(--space-lg);
 }
 
-.body {
-  max-width: 32ch;
-  color: var(--color-text-secondary);
+@media (min-width: 768px) {
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1024px) {
+  .cards {
+    grid-template-columns: repeat(3, minmax(0, 340px));
+    justify-content: center;
+  }
+}
+
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+}
+
+/* Per-screen skeleton (design-system.md's "Per-screen skeleton layouts" has no
+   dedicated Profile entry — three card-sized blocks approximate its 3 cards). */
+.skeletonCard {
+  height: 100px;
+  border-radius: var(--radius-md);
+}
+
+.fieldLabel {
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-xs);
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  background-color: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+  margin: 0 var(--space-lg) var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+}
+
+.signOut {
+  padding: 0 var(--space-lg) var(--space-lg);
 }

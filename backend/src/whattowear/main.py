@@ -1,8 +1,7 @@
 """FastAPI app. `GET /health` (see contracts/health.md under
 specs/002-backend-foundation/) plus `/api/v1/whoami` (see
-specs/003-auth/contracts/whoami.md — not a product endpoint, exists to prove
-JWT verification works end to end) and `/api/v1/calendar/*` (see
-specs/012-calendar/contracts/calendar.md).
+specs/003-auth/contracts/whoami.md) — the latter is not a product endpoint,
+it exists to prove JWT verification works end to end.
 """
 
 from __future__ import annotations
@@ -16,15 +15,38 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from whattowear.api.v1.routes.calendar import router as calendar_router
+from whattowear.api.v1.routes.closet import router as closet_router
+from whattowear.api.v1.routes.profile import router as profile_router
 from whattowear.api.v1.routes.whoami import router as whoami_router
 from whattowear.core.db import get_engine
 from whattowear.core.logging import configure_logging
 
-# The Next.js dev server's origin — port 3000 for `npm run dev`, port 3100
-# for the e2e suite (matches feature 004's own CORS setup, added
-# independently here since this feature is the first browser-calling one
-# merged on this branch; additive, no conflict if 004 lands afterward).
-_CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:3100"]
+# The Next.js dev server's origins — port 3000 for `npm run dev`, port 3100
+# for the e2e suite (frontend/playwright.config.ts runs its own `next dev`
+# on a separate port so it never collides with a developer's own running
+# dev server). Hardcoded rather than threaded through Settings: this
+# project has no deployed frontend yet (local Supabase only, per every
+# other feature's "local only" scoping), and reading it via get_settings()
+# at module level would break the zero-env-vars import contract
+# test_import_safety.py exists specifically to catch — its own docstring
+# documents this exact mistake as the regression it protects against.
+#
+# BOTH hosts are listed deliberately. To a browser `localhost` and `127.0.0.1`
+# are different origins even though they resolve to the same machine, and this
+# project sends you to both: Supabase's `site_url` is `http://127.0.0.1:3000`
+# and `next.config.ts`'s `allowedDevOrigins` allows 127.0.0.1 (feature 003
+# needed that for OAuth), while Playwright and most people typing a URL use
+# `localhost`. Listing only one produced a 400 on every preflight from the
+# other, which surfaced as the closet's generic "Couldn't load your closet."
+# error — invisible to the whole test suite, because Playwright runs on the
+# host that happened to work. There is no security cost to allowing both
+# locally; a deployed frontend gets a single explicit origin from config.
+_CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3100",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3100",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +63,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="What to Wear — backend foundation", lifespan=lifespan)
+# Feature 004 is the first slice where a browser calls this API directly
+# (003's /whoami was never called from the UI) — without this, every
+# request from the Next.js dev server is blocked by the browser's CORS
+# preflight before it ever reaches a route.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_CORS_ALLOWED_ORIGINS,
@@ -49,6 +75,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(whoami_router, prefix="/api/v1")
+app.include_router(closet_router, prefix="/api/v1")
+app.include_router(profile_router, prefix="/api/v1")
 app.include_router(calendar_router, prefix="/api/v1")
 
 
