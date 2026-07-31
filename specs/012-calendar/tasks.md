@@ -109,13 +109,15 @@ behavior can be verified.
       `PUT /picked-event`), all behind `get_current_user_id`, response models per the
       contract, `409` when `/events` is called disconnected, `502` on a live Google-call
       failure, generic `400` detail on `/connect/finish` failure (never echoes Google's error
-      body or the code/verifier)
+      body or the code/verifier), `503` on `/connect/start` when
+      `GOOGLE_OAUTH_CLIENT_ID`/`SECRET` are unset (FR-017) — never a raw 500
 - [ ] T014 Register `calendar_router` in `backend/src/whattowear/main.py` alongside the
       existing `closet_router`/`whoami_router` (or just `whoami_router` if 004 hasn't merged
       yet — additive either way)
 - [ ] T015 [P] `backend/tests/integration/test_calendar_routes.py` — 401 with no token; 200
       shapes for connection/events/picked-event against a real Postgres; 409 on `/events`
-      when disconnected; idempotent `/disconnect`
+      when disconnected; idempotent `/disconnect`; 503 on `/connect/start` with
+      `GOOGLE_OAUTH_CLIENT_ID` unset (FR-017)
 - [ ] T016 `backend/tests/integration/test_calendar_rls.py` — mirrors
       `test_wardrobe_rls.py` exactly (direct port, `authenticator` role, `SET ROLE
       authenticated`, session-scoped `request.jwt.claim.sub`): two seeded users each see only

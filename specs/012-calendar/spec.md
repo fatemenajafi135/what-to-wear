@@ -191,7 +191,10 @@ being required to notice on next visit.
   calendar only**, within the **next 7 days and capped at 20 events**, as a row showing the
   event title and a computed `{relative day, time} · {location}` meta line, where the
   relative-day label is Today, Tomorrow, a weekday name for the next ~6 days, or a short date
-  beyond that, derived from the event's actual timestamp — never a fixed string.
+  beyond that, derived from the event's actual timestamp — never a fixed string. When an event
+  has no location, the meta line MUST show only `{relative day, time}` — the `· {location}`
+  segment and its separator are omitted entirely, never rendered as a blank or placeholder
+  value.
 - **FR-007**: System MUST let a user pick exactly one event from the list; picking one MUST
   disable every row in the list (visually and to interaction) and MUST NOT render any row as
   "selected" or highlighted.
@@ -223,7 +226,11 @@ being required to notice on next visit.
 - **FR-017**: System MUST keep the Google Calendar connect option visible and fully wired even
   in an environment where the OAuth client credentials are not configured, consistent with how
   feature 003 handles the equivalent gap for Google sign-in — never hidden, stubbed, or faked
-  into a false connected state.
+  into a false connected state. Unlike feature 003's Google sign-in button (which can be
+  disabled ahead of the click via a live, unauthenticated GoTrue settings check), no equivalent
+  live signal exists for this feature's own backend configuration, so the button MUST stay
+  enabled unconditionally; the unconfigured case surfaces only when actually attempted, as a
+  clear failure response distinct from a crash, never echoing any credential value.
 
 ### Key Entities
 

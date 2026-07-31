@@ -29,6 +29,13 @@ renders a redirect itself (design-decisions §12's "never a provider-hosted page
 *return* leg; the *outbound* leg to the provider's own consent screen is expected and is not
 what that rule forbids).
 
+**503** — `GOOGLE_OAUTH_CLIENT_ID`/`SECRET` unset in this environment (spec FR-017). The
+connect button itself stays visible and enabled unconditionally (no live pre-check exists for
+this case, unlike feature 003's GoTrue-backed Google-button gate — design-decisions §12/§15);
+this response is what a click actually gets back. `{"detail": "Calendar connect isn't
+configured in this environment"}` — never echoes the missing/blank credential values
+themselves.
+
 ## `POST /connect/finish`
 
 Called by `/calendar/callback` (the app route Google redirects back to) after extracting
