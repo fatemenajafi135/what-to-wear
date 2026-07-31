@@ -15,10 +15,10 @@ spec.md.
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Add `openapi-typescript` devDependency and a `generate:api` script (reads
+- [X] T001 [P] Add `openapi-typescript` devDependency and a `generate:api` script (reads
       `http://localhost:8000/openapi.json`, writes `frontend/lib/api/schema.d.ts`) to
       `frontend/package.json`, per research.md §2.
-- [ ] T002 [P] Add `frontend/lib/api/schema.d.ts` to `.gitignore` (generated, not committed).
+- [X] T002 [P] Add `frontend/lib/api/schema.d.ts` to `.gitignore` (generated, not committed).
 
 ---
 
@@ -27,22 +27,22 @@ spec.md.
 **These tasks must complete before any user-story phase below**, since every story reads
 and/or writes `user_profile` through the same table, backend routes, and typed frontend client.
 
-- [ ] T003 Write `infra/supabase/migrations/0003_user_profile.sql`: create `user_profile`
+- [X] T003 Write `infra/supabase/migrations/0003_user_profile.sql`: create `user_profile`
       table exactly per data-model.md (columns, defaults, `unique(user_id)`, FK to
       `auth.users(id) on delete cascade`), attach `public.set_updated_at()` (from
       `0001_init.sql` — do not write a second trigger function), enable RLS, and add the two
       policies (`user_profile_select_own`, `user_profile_modify_own`) from data-model.md.
-- [ ] T004 Run `cd infra && npx supabase db reset` and confirm `0003` applies cleanly after
+- [X] T004 Run `cd infra && npx supabase db reset` and confirm `0003` applies cleanly after
       `0001_init.sql` from an empty database (quickstart.md §1). Depends on: T003.
-- [ ] T005 [P] Create `backend/src/whattowear/schemas/profile.py` — Pydantic models
+- [X] T005 [P] Create `backend/src/whattowear/schemas/profile.py` — Pydantic models
       `ProfileResponse`, `StylePreferencesUpdate`, `BodySizeUpdate`, `NotificationsUpdate` per
       contracts/profile-settings-api.md, with validators for: `style_tags`/`colour_tags`
       fixed-vocabulary membership, `body_shape`/`gender` fixed-vocabulary-or-null,
       `top_size`/`bottom_size` fixed-option-list-or-null, `birth_date` not in the future,
       `brands_to_avoid` trimmed/de-duplicated/non-empty-string.
-- [ ] T006 [P] (renumbered into T005 — no separate ORM model task; see plan.md's Project
+- [X] T006 [P] (renumbered into T005 — no separate ORM model task; see plan.md's Project
       Structure note on why no SQLAlchemy declarative layer is introduced.)
-- [ ] T007 Create `backend/src/whattowear/repositories/profile_repository.py` — all DB access
+- [X] T007 Create `backend/src/whattowear/repositories/profile_repository.py` — all DB access
       for this table via raw parameterized SQL (`sqlalchemy.text(...)`) against
       `get_session()`, matching the only existing DB-access precedent in this codebase
       (`main.py`'s `_database_reachable`): `get_or_default(session, user_id)` (returns defaults
@@ -50,28 +50,28 @@ and/or writes `user_profile` through the same table, backend routes, and typed f
       `upsert_notifications(...)` (each an `insert ... on conflict (user_id) do update`, scoped
       by the caller's JWT-verified `user_id` — the enforcement that actually protects data per
       research.md §1). Depends on: T005.
-- [ ] T008 Create `backend/src/whattowear/api/v1/routes/profile.py` — `GET /profile`,
+- [X] T008 Create `backend/src/whattowear/api/v1/routes/profile.py` — `GET /profile`,
       `PATCH /profile/style-preferences`, `PATCH /profile/body-size`,
       `PATCH /profile/notifications`, each behind `Depends(get_current_user_id)` exactly like
       `whoami.py`. Depends on: T005, T007.
-- [ ] T009 Wire the profile router into `backend/src/whattowear/main.py`
+- [X] T009 Wire the profile router into `backend/src/whattowear/main.py`
       (`app.include_router(profile_router, prefix="/api/v1")`). Depends on: T008.
-- [ ] T010 [P] Write `backend/tests/unit/test_profile_schemas.py` — vocabulary validation,
+- [X] T010 [P] Write `backend/tests/unit/test_profile_schemas.py` — vocabulary validation,
       future-birth-date rejection, brands-to-avoid trim/dedupe/empty-string rejection. Depends
       on: T006.
-- [ ] T011 [P] Write `backend/tests/integration/test_user_profile_rls.py` — opens its own
+- [X] T011 [P] Write `backend/tests/integration/test_user_profile_rls.py` — opens its own
       Postgres connection as the `authenticated` role with `SET LOCAL request.jwt.claims` set
       to two distinct user ids in turn, inserts a row per user directly, and asserts user A's
       session cannot `SELECT` user B's row. This connection is separate from the app's
       SQLAlchemy session — it must not go through `core/db.py`'s pooled engine, per research.md
       §1's "false-positive proof" warning. Depends on: T004.
-- [ ] T012 [P] Write `backend/tests/integration/test_profile_routes.py` — `GET` returns
+- [X] T012 [P] Write `backend/tests/integration/test_profile_routes.py` — `GET` returns
       all-defaults for a brand-new user (no 404), a `PATCH` persists and is reflected on the
       next `GET`, missing/invalid bearer token yields `401`, out-of-vocabulary values yield
       `422`, and — proving SC-004 at the route level, not just the DB level (T011 is the DB
       proof) — two different valid tokens each see and persist only their own independent
       profile, never each other's. Depends on: T009.
-- [ ] T013 Create `frontend/lib/api/client.ts` (thin typed `fetch` wrapper: attaches the
+- [X] T013 Create `frontend/lib/api/client.ts` (thin typed `fetch` wrapper: attaches the
       current Supabase session's access token as `Authorization: Bearer`, throws on non-2xx,
       types its return against `frontend/lib/api/schema.d.ts`) and `frontend/lib/api/profile.ts`
       (`getProfile`, `updateStylePreferences`, `updateBodySize`, `updateNotifications`).
@@ -88,7 +88,7 @@ Body & size) plus a gear icon to Settings and working sign-out.
 **Independent Test** (spec.md): Sign in, navigate to `/profile`, confirm the three cards (or
 their loading/error/empty state), the gear icon, and sign-out all work.
 
-- [ ] T014 [P] [US1] Replace the stub `frontend/app/(app)/profile/page.tsx`: visually-hidden
+- [X] T014 [P] [US1] Replace the stub `frontend/app/(app)/profile/page.tsx`: visually-hidden
       `<h1>Profile</h1>` (`tabIndex={-1}`, focused on navigation per design-system §8), gear
       `IconButton` to `/profile/settings` (existing, keep), "Sign out" `Button` (existing, keep
       unchanged per handoff — don't rebuild it), and three `<h2>`-headed cards: **Account**
@@ -99,10 +99,10 @@ their loading/error/empty state), the gear icon, and sign-out all work.
       `frontend/app/(app)/profile/page.module.css` for the layout (stacked mobile, 2-col
       tablet with 3rd card wrapping, 3-in-a-row ~340px desktop, per design-system §5). Depends
       on: T013.
-- [ ] T015 [US1] Add loading (skeleton), error (`profile.error.body`/`.cta` + retry), and
+- [X] T015 [US1] Add loading (skeleton), error (`profile.error.body`/`.cta` + retry), and
       offline (suppress the screen error per §6's "offline wins for messaging", disable no
       actions since Profile has none to disable) states to the same file. Depends on: T014.
-- [ ] T016 [P] [US1] Write a frontend test (`frontend/app/(app)/profile/page.test.tsx` or
+- [X] T016 [P] [US1] Write a frontend test (`frontend/app/(app)/profile/page.test.tsx` or
       colocated per this repo's existing convention — check `SignInForm.test.tsx` for the
       pattern) covering: three cards render with data, with defaults (no profile yet), the
       error state + retry, and the gear icon's link target.
@@ -119,7 +119,7 @@ exist yet for this phase's own test to pass, though the gear icon will 404 until
 **Independent Test** (spec.md): Open Settings, select Style preferences, Edit, change values,
 Done, reload, confirm persistence.
 
-- [ ] T017 [US2] Replace the stub `frontend/app/(app)/profile/settings/page.tsx` with the
+- [X] T017 [US2] Replace the stub `frontend/app/(app)/profile/settings/page.tsx` with the
       shared Settings shell: `TopHeader title="Settings" backHref="/profile"`, an in-page
       section switcher over the five section keys (not sub-routes, per FR-003), a
       `useState`-held `activeSection`, loading/error/offline states shared across sections
@@ -129,7 +129,7 @@ Done, reload, confirm persistence.
       `frontend/app/(app)/profile/settings/page.module.css` accordingly. Renders only the
       Style preferences section's content for now (others added in later phases). Depends on:
       T013.
-- [ ] T018 [US2] Create
+- [X] T018 [US2] Create
       `frontend/app/(app)/profile/settings/sections/StylePreferencesSection.tsx`: style tags as
       multi-select `Chip`s (Classic, Minimal, Bold, Casual, Edgy), colour tags as multi-select
       `Chip`s (Neutral tones, Jewel tones, Pastels, Monochrome, Earth tones), brands-to-avoid as
@@ -138,7 +138,7 @@ Done, reload, confirm persistence.
       `updateStylePreferences` and replaces the saved state with the response; navigating away
       (unmount) without Done discards the draft (FR-011) — no local-storage persistence of an
       abandoned draft. Depends on: T017.
-- [ ] T019 [P] [US2] Write `StylePreferencesSection.test.tsx`: pre-fill on Edit, Done persists
+- [X] T019 [P] [US2] Write `StylePreferencesSection.test.tsx`: pre-fill on Edit, Done persists
       and returns to read state, abandoning edit (simulate navigating away) discards the draft,
       empty brands-to-avoid list is a valid saved state (spec.md edge case).
 
@@ -155,14 +155,14 @@ together.
 **Independent Test** (spec.md): Open Body & size, edit every field, save, reload, confirm all
 persist, including the illustrated body-shape selection.
 
-- [ ] T020 [P] [US3] Create `frontend/components/ui/BodyShapePicker/BodyShapePicker.tsx` — the
+- [X] T020 [P] [US3] Create `frontend/components/ui/BodyShapePicker/BodyShapePicker.tsx` — the
       one net-new form control (design-decisions.md has no existing illustrated single-select).
       Five options (Hourglass, Pear, Rectangle, Apple, Inverted triangle), each a filled
       geometric silhouette per the stroke/size spec recorded in design-decisions.md (32×44
       viewBox; 26×36px read-only display; 64×84px option box in the picker), single-select,
       horizontally scrollable option row, keyboard-operable (arrow keys or Tab+Enter — match
       the existing `Chip`/`Switch` keyboard convention), 44px+ hit area per option.
-- [ ] T021 [US3] Create
+- [X] T021 [US3] Create
       `frontend/app/(app)/profile/settings/sections/BodySizeSection.tsx`: `BodyShapePicker` for
       body shape; gender as single-select `Chip`s (Woman, Man, Non-binary, Prefer not to say);
       `DatePicker` for birth date with blur-triggered future-date validation
@@ -174,7 +174,7 @@ persist, including the illustrated body-shape selection.
       one-line comment noting it's this task's own choice, not sourced from the design system.
       Same Edit/Done draft-commit pattern as Style preferences; "Done" calls `updateBodySize`.
       Register this section in the Settings shell's switcher (T017). Depends on: T017, T020.
-- [ ] T022 [P] [US3] Write `BodyShapePicker.test.tsx` (renders 5 options, single-select
+- [X] T022 [P] [US3] Write `BodyShapePicker.test.tsx` (renders 5 options, single-select
       behavior, keyboard operability) and `BodySizeSection.test.tsx` (all fields persist
       together, empty birth date shows an empty state not an invalid date, future birth date
       blocks save with a validation error — spec.md's three acceptance scenarios for this
@@ -193,14 +193,14 @@ sign-in identity.
 **Independent Test** (spec.md): Edit email to invalid format → validation error, no commit.
 Edit to valid address → Done → persists across reload.
 
-- [ ] T023 [US4] Create
+- [X] T023 [US4] Create
       `frontend/app/(app)/profile/settings/sections/AccountSection.tsx`: `Input` (type="email")
       showing the current Supabase Auth session email; Edit/Done pattern where "Done" validates
       format on blur (`field.email.invalid` per design-decisions §1.7) then calls
       `supabase.auth.updateUser({ email })` directly (research.md §3 — no backend call, no new
       `user_profile` field) and shows the newly-requested address as current on success.
       Register this section in the Settings shell's switcher (T017). Depends on: T017.
-- [ ] T024 [P] [US4] Write `AccountSection.test.tsx`: invalid format blocks Done with a
+- [X] T024 [P] [US4] Write `AccountSection.test.tsx`: invalid format blocks Done with a
       validation error and no `updateUser` call; valid format calls `updateUser` and the
       section returns to read state showing the new value.
 
@@ -214,20 +214,20 @@ Edit to valid address → Done → persists across reload.
 **Independent Test** (spec.md): Connected accounts shows the specified disconnected/inert
 appearance; Notifications toggle persists without a save step.
 
-- [ ] T025 [P] [US5] Create
+- [X] T025 [P] [US5] Create
       `frontend/app/(app)/profile/settings/sections/ConnectedAccountsSection.tsx`: a static
       Google Calendar row in its disconnected appearance with an inert action (no `onClick`
       handler, or a handler that no-ops — feature 012 owns the real toggle, per handoff §7),
       and a Weather services row with a muted `Badge` "Coming soon", not interactive. No
       Edit/Done (nothing here is editable in this feature). Register in the Settings shell's
       switcher. Depends on: T017.
-- [ ] T026 [US5] Create
+- [X] T026 [US5] Create
       `frontend/app/(app)/profile/settings/sections/NotificationsSection.tsx`: a single
       `Switch` (`checked={notifications_enabled}`, default from the saved profile — `true` for
       a brand-new user per FR-009) that calls `updateNotifications` immediately on toggle, with
       no Edit/Done affordance at all (design-system §4's stated exception). Register in the
       Settings shell's switcher. Depends on: T017.
-- [ ] T027 [P] [US5] Write `ConnectedAccountsSection.test.tsx` (Calendar row renders
+- [X] T027 [P] [US5] Write `ConnectedAccountsSection.test.tsx` (Calendar row renders
       disconnected, its action is inert, Weather row shows "Coming soon" and isn't interactive)
       and `NotificationsSection.test.tsx` (toggle calls the update immediately, no Edit/Done
       controls rendered).
@@ -236,25 +236,25 @@ appearance; Notifications toggle persists without a save step.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T028 Add two new entries to `docs/design-decisions.md` resolving the design-system
+- [X] T028 Add two new entries to `docs/design-decisions.md` resolving the design-system
       "Open questions" this feature touched: the body-shape illustration stroke/size spec, and
       the Settings Edit/Done toggle's label-only (no color/style change) visual treatment —
       content per research.md §5.
-- [ ] T029 Add a short entry to `docs/design-decisions.md` recording the Profile "three cards"
+- [X] T029 Add a short entry to `docs/design-decisions.md` recording the Profile "three cards"
       content decision (Account, Style preferences, Body & size) since design-system.md never
       names them — content per research.md §4.
-- [ ] T030 Update `docs/ios-verification-backlog.md` with anything built blind for iOS in this
+- [X] T030 Update `docs/ios-verification-backlog.md` with anything built blind for iOS in this
       feature (e.g. `BodyShapePicker`'s touch/scroll behavior on a real iOS device, the native
       `<input type="date">` and `<select>` picker UIs at this feature's specific field set)
       per the handoff §10.
-- [ ] T031 Full keyboard-only and reduced-motion manual pass on both routes at 320/768/1024/1440
+- [X] T031 Full keyboard-only and reduced-motion manual pass on both routes at 320/768/1024/1440
       in both themes, per quickstart.md §5 — fix any focus-order, `:focus-visible`, or
       focus-on-navigate defects found.
-- [ ] T032 Run the full verification suite (quickstart.md §6: `pytest`, `ruff check`,
+- [X] T032 Run the full verification suite (quickstart.md §6: `pytest`, `ruff check`,
       `ruff format --check`, `mypy`, `lint-imports`, `eslint`, `tsc --noEmit`, `next build`,
       Vitest) and fix any regressions. Confirm the pre-existing 459 backend tests are still
       green.
-- [ ] T033 Confirm no file under `backend/src/whattowear/memory/` was touched (handoff §6/§11)
+- [X] T033 Confirm no file under `backend/src/whattowear/memory/` was touched (handoff §6/§11)
       and no secret is present in the diff.
 
 ---

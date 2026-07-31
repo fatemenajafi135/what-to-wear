@@ -49,6 +49,15 @@ Two mechanisms cause almost everything in this file:
 | 8 | **Session survives app backgrounding and relaunch.** | iOS is more aggressive about evicting PWA storage than Android, and may suspend the Supabase client's background token-refresh timer while backgrounded. | Cookie-based session (`proxy.ts` refreshes on every server request via `updateSession`) plus the Supabase browser client's own `autoRefreshToken` — neither is iOS-specific, but iOS's suspension behavior around them is unverified |
 | 13 | **The custom recovery email link** (`{{ .SiteURL }}/reset-password/{{ .TokenHash }}`, `specs/003-auth/research.md` §6) opens correctly from Apple Mail into the browser (not the installed app — that's item 7's guarantee, not a bug) on iOS specifically. | Apple Mail's link-handling and universal-links behavior differs from Android's. | `infra/supabase/templates/recovery.html` |
 
+### From feature 013 — Profile & Settings *(confirmed as built; still unverifiable without a device)*
+
+| # | What to check | Why it cannot be checked now | Built to |
+|---|---|---|---|
+| 14 | **Native `<input type="date">` picker UI** (Body & size → Birth date) — iOS Safari's date wheel, especially inside an installed PWA rather than a browser tab. | Only a real iOS device renders the native control's actual picker chrome; desktop/Android render entirely different pickers. | `docs/design-decisions.md` §1.5 — kept native deliberately |
+| 15 | **Native `<select>` picker UI at this feature's specific option-list lengths** (Height: 21 options, Shoe size: 17, per `tasks.md` T021's own concrete arrays) — iOS's wheel picker at that length. | Same reason — iOS's picker chrome is unverifiable outside a device. | `docs/design-decisions.md` §1.4 |
+| 16 | **`BodyShapePicker`'s horizontal-scroll drag** (5 options, momentum scroll) on real iOS touch. | Touch momentum/overscroll behavior differs from a desktop trackpad/mouse simulation. | `components/ui/BodyShapePicker/BodyShapePicker.tsx` |
+| 17 | **`TagInput`'s Enter-to-commit on iOS's on-screen keyboard** (Style preferences → Brands to avoid) — whether the iOS "return" key reliably fires the same `keydown` Enter event a hardware keyboard does. | A known iOS Safari quirk area; unverifiable without a real on-screen keyboard. | `components/ui/TagInput/TagInput.tsx` (unchanged by this feature, first real usage of it) |
+
 ### From features 014 / 015 — offline and install *(anticipated)*
 
 | # | What to check | Why it cannot be checked now |

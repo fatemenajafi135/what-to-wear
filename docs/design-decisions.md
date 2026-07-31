@@ -579,4 +579,48 @@ Implementation: `frontend/lib/supabase/useGoogleAuthAvailable.ts`, consumed by
 
 ---
 
+## 16. Feature 013 (Profile & Settings) — three design-system gaps resolved
+
+### 16.1 Profile's "three cards" — contents
+
+`design-system.md` says "three cards" three times (§2's type-scale note, §5's responsive
+table, §8's accessibility note) but never names what the three are. `design/prototype/`
+shows a materially different, superseded split (Style preferences and Body & size as
+*editable* cards directly on its "Profile" screen, with Account/Connected/Notifications only
+reachable via a separate "Settings" screen) that contradicts the current spec's "Settings has
+all five sections, Profile has none of the controls" model, so it isn't load-bearing here.
+
+**Decision**: the three cards are **Account** (email), **Style preferences** (style tags +
+colour tags only — "Brands to avoid" is omitted from the summary), and **Body & size** (body
+shape, gender, birth date, height, sizes — whichever the user has set). Account gives the
+screen an identity anchor since the current design-system text specifies no avatar/name
+header for Profile; Style preferences and Body & size are the two sections spec.md itself
+calls the core declared-taste data this feature exists to capture (both P1 user stories).
+Connected accounts and Notifications stay Settings-only, consistent with them being the
+explicitly lowest-priority section pair in spec.md.
+
+### 16.2 Body-shape illustrations — stroke weight and size
+
+On `design-system.md`'s own "Open questions" list: *"the 5-option body-shape selector needs a
+stroke weight/size spec for its line-art silhouettes if rebuilt without the source SVGs."*
+
+**Decision**: filled (not stroked) geometric silhouettes — a circle for the head plus one or
+two polygons per shape for the torso/hip line — at a `32×44` viewBox. Rendered at `26×36px` in
+the read-only summary (Profile card, Settings read state) and inside a `64×84px` option box in
+the edit-mode picker (`BodyShapePicker`). Matches the proportions the prototype's own
+placeholder art implies (reference for intent only — no markup or coordinates were copied;
+`BodyShapePicker.tsx`'s five polygons are independently authored).
+
+### 16.3 Settings Edit/Done toggle — visual treatment while editing
+
+Also on `design-system.md`'s "Open questions" list: *"does the toggle button change
+color/style while in 'editing' mode, or only its label swaps?"*
+
+**Decision**: label-only swap ("Edit" ↔ "Done"); the button's color, border, and background
+stay identical in both states. Consistent with this document's own minimalism precedent (§5:
+no new visual state invented without a token backing it) — inventing a distinct "editing"
+button style would be exactly that.
+
+---
+
 *All items in this document are decided. Nothing is left open.*
