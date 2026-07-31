@@ -33,6 +33,9 @@ soon' badge), closet/outfits/profile screens, any cloud Supabase project."
   calendar, or every calendar they can access? → A: Primary calendar only, using the least-
   privilege `calendar.events.readonly` scope. No per-calendar grouping/filtering UI exists in
   the design system, so a single primary-calendar list matches what the screen actually renders.
+- Q: How far ahead — or how many events — should the "upcoming events" list actually fetch? →
+  A: Next 7 days, capped at 20 events. Matches the design's plain scrollable list with no
+  pagination control, and keeps a single request fast.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -161,9 +164,9 @@ being required to notice on next visit.
   side before they reach `/recommend`? Out of scope for this slice — the picked context is a
   point-in-time snapshot (title, time, location) taken when picked; live re-validation against
   Google is not required.
-- What happens when a user has more upcoming events than fit on screen? Out of scope for this
-  slice's acceptance criteria beyond "the list scrolls"; no pagination behavior is specified by
-  the design system for this screen.
+- What happens when a user has more than 20 events in the next 7 days? The list is capped at 20
+  (the earliest 20, by start time); no pagination or "load more" exists for this screen, per
+  the design system.
 - What happens if a second browser tab picks a different event while `/recommend` is open in
   another? Last write wins server-side; no real-time sync between tabs is required.
 
@@ -185,10 +188,10 @@ being required to notice on next visit.
 - **FR-005**: System MUST never store an OAuth access or refresh token in a tracked file, a log
   line, or any error response returned to the client.
 - **FR-006**: System MUST render each upcoming event from the user's **primary Google
-  calendar only** as a row showing the event title and a computed `{relative day, time} ·
-  {location}` meta line, where the relative-day label is Today, Tomorrow, a weekday name for
-  the next ~6 days, or a short date beyond that, derived from the event's actual timestamp —
-  never a fixed string.
+  calendar only**, within the **next 7 days and capped at 20 events**, as a row showing the
+  event title and a computed `{relative day, time} · {location}` meta line, where the
+  relative-day label is Today, Tomorrow, a weekday name for the next ~6 days, or a short date
+  beyond that, derived from the event's actual timestamp — never a fixed string.
 - **FR-007**: System MUST let a user pick exactly one event from the list; picking one MUST
   disable every row in the list (visually and to interaction) and MUST NOT render any row as
   "selected" or highlighted.
@@ -199,7 +202,7 @@ being required to notice on next visit.
   action to pick a different event.
 - **FR-010**: System MUST show a connected-empty state (with a "Style something" action that
   bypasses the calendar and goes directly to `/recommend`) when a connected user has zero
-  upcoming events, distinct from the disconnected state.
+  events in the next 7 days, distinct from the disconnected state.
 - **FR-011**: System MUST show an error state with a retry action when a connected user's
   calendar fails to sync for a real (non-offline) server-side reason, and MUST suppress that
   error state in favor of the global offline banner when the client itself is offline.
