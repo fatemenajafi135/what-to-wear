@@ -58,7 +58,7 @@ from ..scoring import score_outfits
 from ..scoring.properties import weather_appropriate
 from . import cite, context_assembler, engine, query_builder
 from .generator import GenOutfit, GenOutput, GenRationale, generate
-from .grounding import verify_outfit_grounding
+from .grounding import filter_ungrounded_cites, verify_outfit_grounding
 from .validity import is_slot_complete as _is_slot_complete
 from .validity import is_valid_combination as _is_valid_combination
 
@@ -369,9 +369,10 @@ def generate_outfits(state: GraphState, repo: ClosetRepository) -> dict:
     note = memory.profile_note(ctx.user_id, repo)
     gen = generate(pruned_ctx, state["retrieval"], profile_note=note)
 
+    retrieved_rule_ids = {d.metadata["rule_id"] for d in state["retrieval"].all()}
     wardrobe_by_id = {it.id: it for it in ctx.wardrobe}
     complete: list[GenOutfit] = [
-        o
+        GenOutfit(items=o.items, rationale=filter_ungrounded_cites(o.rationale, retrieved_rule_ids))
         for o in gen.outfits
         if _is_slot_complete(o.items, wardrobe_by_id) and _is_valid_combination(o.items, wardrobe_by_id)
     ]
