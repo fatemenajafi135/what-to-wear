@@ -5,6 +5,17 @@
   padding: var(--space-lg);
 }
 
+/* design-system.md's Settings skeleton spec: two 100px blocks then one 60px. */
+.skeletonBlockLg {
+  height: 100px;
+  border-radius: var(--radius-md);
+}
+
+.skeletonBlockSm {
+  height: 60px;
+  border-radius: var(--radius-md);
+}
+
 .errorBanner {
   display: flex;
   align-items: center;

@@ -15,14 +15,14 @@ export function ConnectedAccountsSection() {
         <h2 className="textSectionTitle">Connected accounts</h2>
       </div>
 
-      <div className={styles.field} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className={`${styles.field} ${styles.rowBetween}`}>
         <p className="textBody">Google Calendar</p>
-        <button type="button" className="control" disabled style={{ opacity: 0.5 }}>
+        <button type="button" className={`control ${styles.inertAction}`} disabled>
           <span className="textBody">Connect</span>
         </button>
       </div>
 
-      <div className={styles.field} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className={`${styles.field} ${styles.rowBetween}`}>
         <p className="textBody">Weather services</p>
         <Badge tone="muted">Coming soon</Badge>
       </div>

@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
 import { IconButton } from "@/components/ui/IconButton/IconButton";
 import { Button } from "@/components/ui/Button/Button";
-import { Banner } from "@/components/ui/Banner/Banner";
 import { getProfile, type ProfileResponse } from "@/lib/api/profile";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { StylePreferencesSection } from "./sections/StylePreferencesSection";
 import { BodySizeSection } from "./sections/BodySizeSection";
 import { AccountSection } from "./sections/AccountSection";
@@ -38,7 +38,8 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [activeSection, setActiveSection] = useState<SectionKey>("style");
   const [mobileShowingList, setMobileShowingList] = useState(true);
-  const [isOffline, setIsOffline] = useState(false);
+  const isOnline = useOnlineStatus();
+  const isOffline = !isOnline;
 
   async function load() {
     setLoadState("loading");
@@ -53,18 +54,6 @@ export default function SettingsPage() {
 
   useEffect(() => {
     load();
-  }, []);
-
-  useEffect(() => {
-    setIsOffline(!navigator.onLine);
-    const goOffline = () => setIsOffline(true);
-    const goOnline = () => setIsOffline(false);
-    window.addEventListener("offline", goOffline);
-    window.addEventListener("online", goOnline);
-    return () => {
-      window.removeEventListener("offline", goOffline);
-      window.removeEventListener("online", goOnline);
-    };
   }, []);
 
   function selectSection(key: SectionKey) {
@@ -91,17 +80,11 @@ export default function SettingsPage() {
     <>
       <TopHeader title="Settings" backHref="/profile" />
 
-      {isOffline && (
-        <Banner variant="offline">
-          You&apos;re offline. Some actions are unavailable until you&apos;re reconnected.
-        </Banner>
-      )}
-
       {loadState === "loading" && (
         <div className={styles.skeletonStack}>
-          <div className="skeleton" style={{ height: 100, borderRadius: "var(--radius-md)" }} />
-          <div className="skeleton" style={{ height: 100, borderRadius: "var(--radius-md)" }} />
-          <div className="skeleton" style={{ height: 60, borderRadius: "var(--radius-md)" }} />
+          <div className={`skeleton ${styles.skeletonBlockLg}`} />
+          <div className={`skeleton ${styles.skeletonBlockLg}`} />
+          <div className={`skeleton ${styles.skeletonBlockSm}`} />
         </div>
       )}
 

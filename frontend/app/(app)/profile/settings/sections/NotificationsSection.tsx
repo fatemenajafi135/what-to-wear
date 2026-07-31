@@ -35,7 +35,7 @@ export function NotificationsSection({ profile, disabled, onSaved }: Props) {
         <h2 className="textSectionTitle">Notifications</h2>
       </div>
 
-      <div className={styles.field} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className={`${styles.field} ${styles.rowBetween}`}>
         <p className="textBody">Push notifications</p>
         <Switch checked={checked} onChange={toggle} disabled={disabled || saving} aria-label="Push notifications" />
       </div>

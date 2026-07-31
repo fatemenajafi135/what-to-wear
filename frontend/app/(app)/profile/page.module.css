@@ -33,6 +33,13 @@
   padding: var(--space-lg);
 }
 
+/* Per-screen skeleton (design-system.md's "Per-screen skeleton layouts" has no
+   dedicated Profile entry — three card-sized blocks approximate its 3 cards). */
+.skeletonCard {
+  height: 100px;
+  border-radius: var(--radius-md);
+}
+
 .fieldLabel {
   margin-top: var(--space-md);
   margin-bottom: var(--space-xs);

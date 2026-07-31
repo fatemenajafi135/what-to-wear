@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconButton } from "@/components/ui/IconButton/IconButton";
 import { Button } from "@/components/ui/Button/Button";
-import { Banner } from "@/components/ui/Banner/Banner";
 import { createClient } from "@/lib/supabase/client";
 import { getProfile, type ProfileResponse } from "@/lib/api/profile";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import styles from "./page.module.css";
 
 type LoadState = "loading" | "ready" | "error";
@@ -38,7 +38,8 @@ export default function ProfilePage() {
   const [state, setState] = useState<LoadState>("loading");
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [email, setEmail] = useState<string | null>(null);
-  const [isOffline, setIsOffline] = useState(false);
+  const isOnline = useOnlineStatus();
+  const isOffline = !isOnline;
 
   async function load() {
     setState("loading");
@@ -60,18 +61,6 @@ export default function ProfilePage() {
     load();
   }, []);
 
-  useEffect(() => {
-    setIsOffline(!navigator.onLine);
-    const goOffline = () => setIsOffline(true);
-    const goOnline = () => setIsOffline(false);
-    window.addEventListener("offline", goOffline);
-    window.addEventListener("online", goOnline);
-    return () => {
-      window.removeEventListener("offline", goOffline);
-      window.removeEventListener("online", goOnline);
-    };
-  }, []);
-
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -88,17 +77,11 @@ export default function ProfilePage() {
         <IconButton icon="settings" href="/profile/settings" />
       </div>
 
-      {isOffline && (
-        <Banner variant="offline">
-          You&apos;re offline. Some actions are unavailable until you&apos;re reconnected.
-        </Banner>
-      )}
-
       {state === "loading" && (
         <div className={styles.cards}>
-          <div className="skeleton" style={{ height: 100, borderRadius: "var(--radius-md)" }} />
-          <div className="skeleton" style={{ height: 100, borderRadius: "var(--radius-md)" }} />
-          <div className="skeleton" style={{ height: 100, borderRadius: "var(--radius-md)" }} />
+          <div className={`skeleton ${styles.skeletonCard}`} />
+          <div className={`skeleton ${styles.skeletonCard}`} />
+          <div className={`skeleton ${styles.skeletonCard}`} />
         </div>
       )}
 
