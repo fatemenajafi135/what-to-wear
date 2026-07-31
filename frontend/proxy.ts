@@ -30,9 +30,23 @@ function isAuthStackPath(pathname: string): boolean {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // The OAuth return route, the reset-password link target, and the root
+  // The OAuth return routes, the reset-password link target, and the root
   // redirect are all handled elsewhere / always pass through.
-  if (pathname === "/" || pathname.startsWith("/auth/callback") || pathname.startsWith("/reset-password")) {
+  //
+  // `/calendar/callback` must be exempted for the same reason `/auth/callback`
+  // is, and missing it silently broke the calendar connect flow. Supabase runs
+  // with `enable_refresh_token_rotation = true`, so `updateSession()` rotates
+  // the refresh token and writes the replacements onto the RESPONSE — while a
+  // route handler running afterwards still reads the REQUEST cookies, which by
+  // then hold a consumed token. `getSession()` returns null, the handler skips
+  // its token exchange, and the user lands back on /calendar still
+  // disconnected with nothing logged anywhere.
+  if (
+    pathname === "/" ||
+    pathname.startsWith("/auth/callback") ||
+    pathname.startsWith("/calendar/callback") ||
+    pathname.startsWith("/reset-password")
+  ) {
     return NextResponse.next();
   }
 
