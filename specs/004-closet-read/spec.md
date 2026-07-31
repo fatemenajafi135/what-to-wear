@@ -15,6 +15,23 @@ establishes the RLS convention (per-user row isolation, proven by a two-user tes
 later table copies. Full brief at docs/handoffs/004-closet-read.md — read it first, it is
 authoritative for scope."
 
+## Clarifications
+
+### Session 2026-07-31
+
+- Q: Should Name and Notes be added as new optional fields on the frozen WardrobeItem model
+  (schema.py), or handled another way? → A: Extend WardrobeItem — add `name: str | None` and
+  `notes: str | None` as new optional fields, plus matching migration columns; the
+  database-backed repository and API response carry them through like every other field.
+- Q: The Closet screen's filter chips are All, Tops, Bottoms, Outerwear, Shoes, Accessories —
+  five specific chips — but the frozen taxonomy has six category groups, including
+  `full_body` (dresses, suits, jumpsuits, rompers), which has no chip of its own. Which chip
+  should `full_body` items appear under? → A: Bottoms — `full_body` items filter under the
+  Bottoms chip, matching the existing scoring-code precedent that treats `full_body` as a
+  bottom-equivalent slot.
+- Q: How many items should one page of the closet grid load before the manual "Load more"
+  button appears? → A: 20, treated as a named config constant, not a literal.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Browse my closet (Priority: P1)
@@ -158,17 +175,21 @@ in favor of the global offline banner.
 
 - **FR-001**: System MUST persist wardrobe items in the database, each owned by exactly one
   user, using the frozen category-group and formality-level taxonomy (Constitution Principle
-  VI) — no parallel scale, no renamed group.
+  VI) — no parallel scale, no renamed group — plus a `name` and a `notes` field, both
+  optional, added additively to the shared `WardrobeItem` contract (not part of the frozen
+  taxonomy itself).
 - **FR-002**: System MUST let a signed-in user list only their own wardrobe items, never
   another user's, enforced independently at both the database row-security level and the
   query level.
 - **FR-003**: System MUST render `/closet` with a sticky header (title, item-count subtitle),
-  a single-select category filter row (All, Tops, Bottoms, Outerwear, Shoes, Accessories),
-  and a responsive grid (2 columns mobile / 3 tablet / 4 desktop) of item tiles using the
-  design system's photo placeholder treatment.
+  a single-select category filter row (All, Tops, Bottoms, Outerwear, Shoes, Accessories —
+  where Bottoms includes both the `bottom` and `full_body` taxonomy groups), and a responsive
+  grid (2 columns mobile / 3 tablet / 4 desktop) of item tiles using the design system's photo
+  placeholder treatment.
 - **FR-004**: System MUST render `/closet/:itemId` with a sticky header (back navigation, an
   overflow-menu trigger), a photo placeholder block, and a details card listing Name,
-  Category, Group, Fabric, Colour and Notes.
+  Category (the derived category group), Group (the specific category, e.g. "Blazers"),
+  Fabric, Colour and Notes.
 - **FR-005**: System MUST distinguish the first-run empty state (zero items, no filter) from
   the empty-filtered state (items exist, current filter matches none) with different copy and
   a different recovery action, and MUST never show one where the other applies.
@@ -179,7 +200,8 @@ in favor of the global offline banner.
 - **FR-008**: System MUST suppress the screen-level error state while the client is offline
   and rely on the global offline banner instead, never showing both for the same failure.
 - **FR-009**: System MUST show a manual "Load more" action (not infinite scroll) when
-  additional items exist beyond the current page.
+  additional items exist beyond the current page, using a page size of 20 items (a named
+  config constant, not a literal).
 - **FR-010**: System MUST render `/closet` as a two-pane master-detail layout at ≥1024px
   viewports (grid as the wide list pane, item detail in the adjacent pane, placeholder copy
   when nothing is selected), and as a single grid with push-navigation to item detail at
@@ -201,9 +223,9 @@ in favor of the global offline banner.
 ### Key Entities
 
 - **Wardrobe item**: A single garment owned by exactly one user — category (with a derived
-  category group), colors, fabric, warmth, season, formality, pattern, fit, and an optional
-  photo reference (no real photo exists yet in this feature; a placeholder renders in its
-  place). Private to its owner.
+  category group), colors, fabric, warmth, season, formality, pattern, fit, an optional name,
+  optional notes, and an optional photo reference (no real photo exists yet in this feature; a
+  placeholder renders in its place). Private to its owner.
 - **Catalog item**: A garment in the shared catalog, structurally identical to a wardrobe item
   but not owned by any single user — readable by every signed-in user, not user-editable.
 - **User**: The opaque identity established by feature 003's verified session; no local
