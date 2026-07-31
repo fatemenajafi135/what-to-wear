@@ -42,6 +42,15 @@ class TestWardrobeItem:
         assert item.colors == []
         assert item.season == []
         assert item.fabric is None
+        assert item.name is None
+        assert item.notes is None
+
+    def test_name_and_notes_accepted_when_provided(self) -> None:
+        item = WardrobeItem(
+            id="w1", category="top", formality="casual", warmth=0, name="Navy tee", notes="Slightly faded"
+        )
+        assert item.name == "Navy tee"
+        assert item.notes == "Slightly faded"
 
 
 class TestWardrobeItemPatch:
@@ -49,6 +58,8 @@ class TestWardrobeItemPatch:
         patch = WardrobeItemPatch()
         assert patch.category is None
         assert patch.colors is None
+        assert patch.name is None
+        assert patch.notes is None
 
     def test_none_colors_pass_through_unvalidated(self) -> None:
         patch = WardrobeItemPatch(colors=None)
@@ -57,6 +68,11 @@ class TestWardrobeItemPatch:
     def test_present_colors_still_normalized(self) -> None:
         patch = WardrobeItemPatch(colors=["ABCDEF"])
         assert patch.colors == ["#abcdef"]
+
+    def test_name_and_notes_present_when_provided(self) -> None:
+        patch = WardrobeItemPatch(name="Navy tee", notes="Slightly faded")
+        assert patch.name == "Navy tee"
+        assert patch.notes == "Slightly faded"
 
 
 class TestExtractedAttributes:

@@ -82,6 +82,14 @@ class WardrobeItem(BaseModel):
     pattern: str | None = None  # free-text, matches fabric's shape
     fit: str | None = None  # free-text, matches fabric's shape
     photo_path: str | None = None  # Storage object path, set once at creation
+    # Added for feature 004 (closet read) — resolved in /speckit-clarify
+    # 2026-07-31: the design system requires both fields on Item detail and
+    # the Add-item review card, but neither existed on this contract or in
+    # the legacy schema. Additive-only: not part of constitution VI's frozen
+    # taxonomy, so no eval regression — every fixture item simply has both
+    # as None, which is valid since both are optional.
+    name: str | None = None
+    notes: str | None = None
 
     @field_validator("colors")
     @classmethod
@@ -106,6 +114,8 @@ class WardrobeItemPatch(BaseModel):
     pattern: str | None = None
     fit: str | None = None
     photo_path: str | None = None  # None clears it
+    name: str | None = None
+    notes: str | None = None
 
     @field_validator("colors")
     @classmethod

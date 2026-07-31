@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     # --- LangGraph checkpointer pool (memory/store.py) ------------------------
     wtw_checkpointer_pool_max: int = 5
 
+    # --- Closet (feature 004) --------------------------------------------------
+    wtw_closet_page_size: int = 20
+
     @property
     def judge_model(self) -> str:
         return self.wtw_judge_model or self.wtw_chat_model
