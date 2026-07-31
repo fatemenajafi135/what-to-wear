@@ -28,7 +28,20 @@ def _fernet() -> Fernet:
             '(generate with: python -c "from cryptography.fernet import Fernet; '
             'print(Fernet.generate_key().decode())")'
         )
-    return Fernet(key.encode())
+    try:
+        return Fernet(key.encode())
+    except ValueError as e:
+        # A malformed key previously surfaced as a raw ValueError from deep
+        # inside cryptography, arriving as a 500 at the very END of the OAuth
+        # flow — after consent, after the token exchange, with the grant
+        # already in hand and about to be discarded. The message named Fernet's
+        # requirement but not the variable at fault or how to fix it.
+        raise RuntimeError(
+            f"WTW_TOKEN_ENCRYPTION_KEY is not a valid Fernet key ({e}). It must be "
+            "32 url-safe base64-encoded bytes — any other base64 string will fail. "
+            'Generate one with: python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())"'
+        ) from e
 
 
 def encrypt(plaintext: str) -> str:
