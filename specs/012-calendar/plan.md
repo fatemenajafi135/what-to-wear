@@ -155,7 +155,9 @@ backend/
 
 infra/
 ├── supabase/migrations/0004_calendar.sql   # NEW
-└── .env.example                            # CHANGED — GOOGLE_OAUTH_CLIENT_ID/SECRET placeholders
+└── .env.example                            # CHANGED — a note only: calendar OAuth is
+                                             #   app-orchestrated (research.md §1), its
+                                             #   credentials live in backend/.env, not here
 
 backend/.env.example                        # CHANGED — WTW_TOKEN_ENCRYPTION_KEY,
                                              #   GOOGLE_OAUTH_CLIENT_ID/SECRET,
