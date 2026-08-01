@@ -23,6 +23,7 @@ beforeEach(() => {
   });
   HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
     this.removeAttribute("open");
+    this.dispatchEvent(new Event("close"));
   });
   URL.createObjectURL = vi.fn(() => "blob:fake-url");
 });

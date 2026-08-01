@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useId } from "react";
+import { useModalDialog } from "@/lib/useModalDialog";
 import styles from "./BottomSheet.module.css";
 
 export interface BottomSheetRow {
@@ -37,27 +38,16 @@ export function BottomSheet({
   errorAction,
   rows = [],
 }: BottomSheetProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    if (open && !dialog.open) {
-      dialog.showModal();
-    } else if (!open && dialog.open) {
-      dialog.close();
-    }
-  }, [open]);
+  const { dialogRef, onNativeClose } = useModalDialog(open, onClose);
 
   return (
     <dialog
       ref={dialogRef}
       className={styles.dialog}
       aria-labelledby={titleId}
-      onClose={onClose}
-      onCancel={onClose}
+      onClose={onNativeClose}
     >
       <div className={styles.content}>
         <h2 id={titleId} className={`textSectionTitle ${styles.title}`}>

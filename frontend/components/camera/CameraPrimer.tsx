@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { cameraPrimerCopy } from "@/lib/add-item-copy";
+import { useModalDialog } from "@/lib/useModalDialog";
 import styles from "./CameraPrimer.module.css";
 
 export interface CameraPrimerProps {
@@ -25,19 +26,12 @@ export interface CameraPrimerProps {
  * proceeding) fires, per research.md §7's addendum.
  */
 export function CameraPrimer({ open, onContinue, onDismiss }: CameraPrimerProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<Element | null>(null);
   const titleId = useId();
 
+
   useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open && !dialog.open) {
-      triggerRef.current = document.activeElement;
-      dialog.showModal();
-    } else if (!open && dialog.open) {
-      dialog.close();
-    }
+    if (open) triggerRef.current = document.activeElement;
   }, [open]);
 
   const restoreFocus = () => {
@@ -56,13 +50,14 @@ export function CameraPrimer({ open, onContinue, onDismiss }: CameraPrimerProps)
     onDismiss();
   };
 
+  const { dialogRef, onNativeClose } = useModalDialog(open, handleDismiss);
+
   return (
     <dialog
       ref={dialogRef}
       className={styles.dialog}
       aria-labelledby={titleId}
-      onClose={handleDismiss}
-      onCancel={handleDismiss}
+      onClose={onNativeClose}
     >
       <div className={styles.content}>
         <h2 id={titleId} className={`textSectionTitle ${styles.title}`}>

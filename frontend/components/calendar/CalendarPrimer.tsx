@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef } from "react";
 import { Button } from "@/components/ui/Button/Button";
+import { useModalDialog } from "@/lib/useModalDialog";
 import styles from "./CalendarPrimer.module.css";
 
 export interface CalendarPrimerProps {
@@ -26,19 +27,12 @@ export interface CalendarPrimerProps {
  * and refocused explicitly here.
  */
 export function CalendarPrimer({ open, onContinue, onDismiss }: CalendarPrimerProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<Element | null>(null);
   const titleId = useId();
 
+
   useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open && !dialog.open) {
-      triggerRef.current = document.activeElement;
-      dialog.showModal();
-    } else if (!open && dialog.open) {
-      dialog.close();
-    }
+    if (open) triggerRef.current = document.activeElement;
   }, [open]);
 
   const handleClose = () => {
@@ -48,13 +42,14 @@ export function CalendarPrimer({ open, onContinue, onDismiss }: CalendarPrimerPr
     onDismiss();
   };
 
+  const { dialogRef, onNativeClose } = useModalDialog(open, handleClose);
+
   return (
     <dialog
       ref={dialogRef}
       className={styles.dialog}
       aria-labelledby={titleId}
-      onClose={handleClose}
-      onCancel={handleClose}
+      onClose={onNativeClose}
     >
       <div className={styles.content}>
         <h2 id={titleId} className={`textSectionTitle ${styles.title}`}>
