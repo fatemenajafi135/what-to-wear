@@ -263,40 +263,35 @@ class TestDeleteWardrobeItem:
 
 
 class TestCreateWardrobeItemFromUpload:
-    def test_omitted_optional_attributes_get_documented_defaults(self, patch_session_scope) -> None:
+    def test_detected_attributes_are_never_replaced_by_defaults(self, patch_session_scope) -> None:
+        """This method used to substitute casual/3/all-four-seasons whenever
+        the request omitted them, and the frontend was omitting them — so
+        every photo-added item stored the same three fabricated values
+        regardless of what the VLM detected (design-decisions.md §30). The
+        request model now requires them; nothing here may rewrite them."""
         set_config_result = MagicMock()
         insert_result = MagicMock()
         insert_result.fetchone.return_value = _FakeRow(
-            {
-                **_ROW,
-                "formality": "casual",
-                "warmth": 3,
-                "season": ["spring", "summer", "autumn", "winter"],
-                "fabric": None,
-                "pattern": None,
-                "fit": None,
-                "photo_path": "user-a/abc-shirt.jpg",
-            }
+            {**_ROW, "formality": "black_tie", "warmth": 0, "season": ["summer"]}
         )
         session = _fake_session([set_config_result, insert_result])
         patch_session_scope(session)
 
         request = CreateWardrobeItemFromUploadRequest(
-            photo_path="user-a/abc-shirt.jpg", category="top", colors=["#1b2a4a"]
+            photo_path="user-a/abc-shirt.jpg",
+            category="top",
+            colors=["#1b2a4a"],
+            formality="black_tie",
+            warmth=0,
+            season=["summer"],
         )
         repo = SupabaseClosetRepository()
-        item = repo.create_wardrobe_item_from_upload("user-a", request)
+        repo.create_wardrobe_item_from_upload("user-a", request)
 
-        assert session.commit.called
-        insert_call = session.execute.call_args_list[1]
-        params = insert_call.args[1]
-        assert params["formality"] == "casual"
-        assert params["warmth"] == 3
-        assert params["season"] == ["spring", "summer", "autumn", "winter"]
-        assert params["fabric"] is None
-        assert params["pattern"] is None
-        assert params["fit"] is None
-        assert item.photo_path == "user-a/abc-shirt.jpg"
+        params = session.execute.call_args_list[1].args[1]
+        assert params["formality"] == "black_tie"
+        assert params["warmth"] == 0
+        assert params["season"] == ["summer"]
 
     def test_supplied_attributes_pass_through_unchanged(self, patch_session_scope) -> None:
         set_config_result = MagicMock()

@@ -32,7 +32,16 @@ describe("AddItemFlow", () => {
       data: {
         photo_path: "user-a/x.jpg",
         extraction_ok: true,
-        extracted: { category: "top", colors: ["#1b2a4a"], fabric: "cotton" },
+        extracted: {
+          category: "top",
+          colors: ["#1b2a4a"],
+          fabric: "cotton",
+          formality: "casual",
+          warmth: 2,
+          season: ["spring"],
+          pattern: "solid",
+          fit: "regular",
+        },
         color_names: ["navy"],
       },
       error: undefined,
@@ -44,7 +53,11 @@ describe("AddItemFlow", () => {
 
     expect(await screen.findByLabelText("Group")).toHaveValue("top");
     expect(screen.getByLabelText("Fabric")).toHaveValue("cotton");
-    expect(screen.getByLabelText("Color")).toHaveValue("navy");
+    // The colour is a TagInput chip showing the derived name, with the
+    // detected hex kept behind it.
+    expect(screen.getByText("navy")).toBeInTheDocument();
+    expect(screen.getByLabelText("Formality")).toHaveValue("casual");
+    expect(screen.getByLabelText("Warmth")).toHaveValue("2");
   });
 
   it("shows the empty state (not an error) when no garment is found", async () => {
@@ -98,7 +111,13 @@ describe("AddItemFlow", () => {
         data: {
           photo_path: "user-a/x.jpg",
           extraction_ok: true,
-          extracted: { category: "top", colors: ["#1b2a4a"] },
+          extracted: {
+            category: "top",
+            colors: ["#1b2a4a"],
+            formality: "casual",
+            warmth: 2,
+            season: ["spring"],
+          },
           color_names: ["navy"],
         },
         error: undefined,
@@ -115,7 +134,16 @@ describe("AddItemFlow", () => {
     expect(onClose).toHaveBeenCalled();
     expect(mockedPost).toHaveBeenCalledWith(
       "/api/v1/closet/items/from-upload",
-      expect.objectContaining({ body: expect.objectContaining({ colors: ["navy"] }) })
+      // Hex, and every detected attribute — not the six-field subset that
+      // used to drop formality/warmth/season/pattern/fit (design-decisions §30).
+      expect.objectContaining({
+        body: expect.objectContaining({
+          colors: ["#1b2a4a"],
+          formality: "casual",
+          warmth: 2,
+          season: ["spring"],
+        }),
+      })
     );
   });
 });

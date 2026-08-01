@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { ReviewCard, type ReviewCardFields } from "./ReviewCard";
+import { buildFromUploadBody } from "./fromUploadBody";
 import { apiClient } from "@/lib/api/client";
 import { addItemCopy } from "@/lib/add-item-copy";
 import type { components } from "@/lib/api/schema";
@@ -138,14 +139,7 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
     }
     setEntries((prev) => prev.map((e, idx) => (idx === currentIndex ? { ...e, status: "saving" } : e)));
     const { error } = await apiClient.POST("/api/v1/closet/items/from-upload", {
-      body: {
-        photo_path: current.photoPath,
-        category: fields.category,
-        colors: [fields.color],
-        name: fields.name || null,
-        fabric: fields.fabric || null,
-        notes: fields.notes || null,
-      },
+      body: buildFromUploadBody(current.photoPath, fields),
     });
     if (error) {
       // Not thrown — `saveError` is a prop ReviewCard already reads
@@ -201,8 +195,14 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
         initial={{
           category: current.extracted?.category ?? "",
           fabric: current.extracted?.fabric ?? "",
-          color: current.colorNames?.[0] ?? "",
+          colors: current.extracted?.colors ?? [],
+          formality: current.extracted?.formality ?? "",
+          warmth: current.extracted?.warmth == null ? "" : String(current.extracted.warmth),
+          season: current.extracted?.season ?? [],
+          pattern: current.extracted?.pattern ?? "",
+          fit: current.extracted?.fit ?? "",
         }}
+        initialColorNames={current.colorNames ?? []}
         saveLabel={isLast ? "Save to Closet" : "Save & next"}
         saveError={current.status === "save-error"}
         onSave={handleSave}

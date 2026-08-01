@@ -33,12 +33,6 @@ from ..schema import CreateWardrobeItemFromUploadRequest, WardrobeItem, Wardrobe
 if TYPE_CHECKING:
     from ..memory.preferences import FeedbackRecord
 
-# Documented, conservative defaults applied when the scan (or the user)
-# left one of these three NOT-NULL columns unset (research.md §4). Never
-# blocks a save; always correctable afterward via 005's edit form.
-_DEFAULT_FORMALITY = "casual"
-_DEFAULT_WARMTH = 3
-_DEFAULT_SEASON: list[str] = ["spring", "summer", "autumn", "winter"]
 
 # `get_session` is written as a single-yield generator with a try/finally —
 # exactly the shape `@contextmanager` expects — so it's reused as a plain
@@ -196,10 +190,13 @@ class SupabaseClosetRepository:
         """Feature 006. Not part of `ports.ClosetRepository` — same reason
         the four write methods above aren't (handoff trap 5): the AI
         pipeline's Protocol stays exactly as feature 007 defined it.
-        `formality`/`warmth`/`season` fall back to the documented defaults
-        above when the request omitted them (they're NOT NULL columns);
-        `fabric`/`pattern`/`fit` insert as `NULL` when omitted, matching
-        the database's own nullability."""
+        `formality`/`warmth`/`season` are required by the request model and
+        inserted as given — no defaulting. They used to fall back to
+        module-level constants when omitted, which meant every photo-added
+        item stored `casual`/`3`/all-four-seasons no matter what the VLM had
+        detected (design-decisions.md §30). `fabric`/`pattern`/`fit` insert
+        as `NULL` when omitted, matching the database's own nullability —
+        an honest "not supplied" rather than an invented value."""
         with _session_scope() as session:
             _set_jwt_claim(session, user_id)
             row = session.execute(
@@ -215,9 +212,9 @@ class SupabaseClosetRepository:
                     "user_id": user_id,
                     "category": request.category,
                     "colors": request.colors,
-                    "formality": request.formality or _DEFAULT_FORMALITY,
-                    "warmth": request.warmth if request.warmth is not None else _DEFAULT_WARMTH,
-                    "season": request.season or _DEFAULT_SEASON,
+                    "formality": request.formality,
+                    "warmth": request.warmth,
+                    "season": request.season,
                     "fabric": request.fabric,
                     "pattern": request.pattern,
                     "fit": request.fit,

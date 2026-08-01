@@ -176,17 +176,25 @@ class PhotoExtractionResponse(BaseModel):
 
 class CreateWardrobeItemFromUploadRequest(BaseModel):
     """Body of a wardrobe-item-from-upload request — the user-confirmed
-    (possibly corrected) attributes. `photo_path`, `category` and `colors`
-    are the review-card fields with no safe default and stay required.
-    `formality`/`warmth`/`season`/`fabric`/`pattern`/`fit` are optional,
-    matching `WardrobeItemPatch`'s existing shape — the six-field review
-    card the design specifies covers Name/Category/Group/Fabric/Color/Notes
-    only, so nothing outside it may block a save (design-decisions.md
-    §23.3, specs/006-photo-upload-vision/research.md §4). The route (not
-    this model) applies a documented conservative default for
-    formality/warmth/season when omitted, since those three columns are
-    NOT NULL in the database; fabric/pattern/fit are simply stored NULL,
-    since the database already allows it.
+    (possibly corrected) attributes.
+
+    `formality`/`warmth`/`season` are REQUIRED, reversing design-decisions
+    §23.3. They were briefly optional, on the reasoning that the design's
+    six-field review card must not be blocked by anything outside it — but
+    the frontend then simply never sent them, and this route substituted
+    defaults. Every item added by photo landed as
+    `formality='casual', warmth=3, season=[all four]` regardless of what
+    the VLM had actually detected, which is worse than either a blocked
+    save or an honest null: it is fabricated data, indistinguishable from
+    a real reading, feeding a styling pipeline that reasons over exactly
+    these fields. The review card now carries all eight extracted
+    attributes (design-decisions.md §30), so requiring them here is what
+    makes "the scan's findings are what gets stored" enforceable rather
+    than merely intended — the legacy app's own SC-003 guarantee.
+
+    `fabric`/`pattern`/`fit` stay optional: the database allows NULL for
+    them, so an honest "not detected, not supplied" is representable and
+    no default has to be invented.
 
     `name`/`notes` are on the review card too but are never scan-filled —
     `vision.py`'s `_EXTRACTION_SCHEMA` has no such fields (the VLM prompt
@@ -197,9 +205,9 @@ class CreateWardrobeItemFromUploadRequest(BaseModel):
     photo_path: str
     category: str
     colors: list[str] = Field(min_length=1)
-    formality: Formality | None = None
-    warmth: int | None = Field(default=None, ge=0, le=5)
-    season: list[Season] | None = None
+    formality: Formality
+    warmth: int = Field(ge=0, le=5)
+    season: list[Season] = Field(min_length=1)
     fabric: str | None = None
     pattern: str | None = None
     fit: str | None = None

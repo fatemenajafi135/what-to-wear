@@ -29,3 +29,10 @@
   flex-wrap: wrap;
   gap: var(--space-sm);
 }
+
+/* Form-level validation message — distinct from a field's own inline error,
+   which Input renders in its own slot. */
+.formError {
+  color: var(--color-error);
+  margin: 0;
+}

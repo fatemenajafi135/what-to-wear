@@ -1189,3 +1189,65 @@ and is unrequested scope for this slice. Rejected: dropping `{name}` from the gr
 ---
 
 *Every item above is decided except those explicitly marked **deferred** (§21), which are recorded gaps awaiting a decision rather than open questions blocking work.*
+
+## 30. Feature 006 — the review card carries every extracted attribute
+
+**Status: decided.** Reverses §23.3 and amends §23.4.
+
+### The defect this fixes
+
+`vision.py` extracts eight attributes: `category, colors, fabric, warmth,
+formality, season, pattern, fit`. §23.3 decided that the design system's
+six-field Add-item review card (Name, Category, Group, Fabric, Color, Notes)
+should not be blocked by anything outside it, and relaxed
+`CreateWardrobeItemFromUploadRequest` accordingly. The frontend then never sent
+the other five, and the write path substituted constants for the three that are
+`NOT NULL`.
+
+Measured on real uploads: four photos of visibly different garments all stored
+`formality='casual'`, `warmth=3`, `season=[spring,summer,autumn,winter]`,
+`pattern=NULL`, `fit=NULL`. That is not a conservative default, it is fabricated
+data — indistinguishable from a real reading, and fed straight into a styling
+pipeline whose scorers reason over exactly these fields (`formality_coherence`,
+`weather_fitness`). The scan appeared to work while contributing nothing.
+
+§23.4 compounded it for colour: the card displayed a derived NAME and sent that
+name back, so `hex → nearest name → palette hex` replaced the detected value
+(`#22345d` stored as navy's `#1b2a4a`), and a multi-colour garment collapsed to
+one entry.
+
+### The decision
+
+The review card carries **all eight** extracted attributes, plus Name, Group and
+Notes. `formality`/`warmth`/`season` are required by the request model; the write
+path never defaults. Colour is a `TagInput` of hex values displayed by name — an
+untouched chip is sent as its original detected hex, and anything typed is sent
+as typed for the backend to resolve.
+
+This is a **deliberate deviation from design-system.md's Add-item field table**,
+which lists six fields. The table describes what a person edits, and was written
+against a prototype with no real extraction behind it; it cannot reasonably be
+read as an instruction to discard three quarters of what the scan produces. The
+legacy app's own `ExtractedItemForm` carried all eight and enforced "100% of
+saved items populated, none blank" (its SC-003) — this restores that guarantee.
+
+### Options considered
+
+| Option | Rejected because |
+|---|---|
+| Keep six fields, pass the other five through invisibly | Preserves the data, but a user cannot see or correct a wrong `formality` before it reaches the styling pipeline — and a wrong one is worse than a missing one, because nothing downstream can tell. Also leaves the scan's actual findings unauditable, which is how the original defect stayed invisible for two features. |
+| Keep six fields, show the other five read-only | Same visibility gain, but a wrong value then has no in-flow correction — the user must save a known-wrong item and edit it afterwards. |
+| Keep §23.3, make the three columns nullable instead | Removes the fabrication but not the loss: the pipeline would then reason over NULLs for every scanned item. The extractor already produces these values; the fix is to stop dropping them, not to make dropping them representable. |
+| **All eight, editable (chosen)** | — |
+
+### Consequences
+
+- Save is blocked when Category, Formality, Warmth or Season is empty
+  (`add_item.incomplete`). The scan fills these in nearly every case, so this
+  surfaces only on a genuine extraction failure — where the legacy behaved the
+  same way.
+- Both `Select`s carry a leading "Not detected — pick one" option. A native
+  `<select>` whose value matches no option silently selects its first, which
+  would have reintroduced exactly the invented-value problem.
+- `fabric`/`pattern`/`fit` stay optional: the column is nullable, so an honest
+  "not detected" is representable without inventing anything.

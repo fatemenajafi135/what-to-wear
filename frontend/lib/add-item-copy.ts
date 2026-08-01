@@ -34,6 +34,10 @@ export const addItemCopy = {
     required: "This field is required.",
     notRecognized: "I don't recognize that color. Try a name like navy, charcoal or olive.",
   },
+  // The scan fills Category/Formality/Warmth/Season in almost every case, so
+  // this only surfaces when it genuinely failed on them. Names the problem
+  // and the one recovery action, per the design's error-copy convention.
+  incomplete: "I still need Category, Formality, Warmth and Season before I can save this piece.",
 } as const;
 
 export const cameraPrimerCopy = {

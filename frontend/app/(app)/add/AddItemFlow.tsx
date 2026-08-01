@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { Dropzone } from "./Dropzone";
 import { ReviewCard, type ReviewCardFields } from "./ReviewCard";
+import { buildFromUploadBody } from "./fromUploadBody";
 import { apiClient } from "@/lib/api/client";
 import { addItemCopy } from "@/lib/add-item-copy";
 import type { components } from "@/lib/api/schema";
@@ -89,17 +90,7 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
   const handleSave = async (fields: ReviewCardFields, photoPath: string) => {
     setSaveError(false);
     const { error } = await apiClient.POST("/api/v1/closet/items/from-upload", {
-      body: {
-        photo_path: photoPath,
-        category: fields.category,
-        // ReviewCard validates color is non-empty and recognized before
-        // ever calling onSave — the backend resolves the name to hex
-        // (schema.py's _colors_resolve_name_or_hex, research.md §5).
-        colors: [fields.color],
-        name: fields.name || null,
-        fabric: fields.fabric || null,
-        notes: fields.notes || null,
-      },
+      body: buildFromUploadBody(photoPath, fields),
     });
     if (error) {
       // Not thrown — ReviewCard's own submit handler awaits onSave inside
@@ -156,10 +147,16 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
         initial={{
           category: e?.category ?? "",
           fabric: e?.fabric ?? "",
-          // Pre-filled with the derived NAME (research.md §5), not the raw
-          // hex extracted.colors carries.
-          color: state.colorNames[0] ?? "",
+          // Hex, exactly as detected — the card displays the derived names
+          // via initialColorNames but sends the hex back untouched.
+          colors: e?.colors ?? [],
+          formality: e?.formality ?? "",
+          warmth: e?.warmth == null ? "" : String(e.warmth),
+          season: e?.season ?? [],
+          pattern: e?.pattern ?? "",
+          fit: e?.fit ?? "",
         }}
+        initialColorNames={state.colorNames}
         saveLabel="Save to Closet"
         saveError={saveError}
         onSave={(fields) => handleSave(fields, state.photoPath)}

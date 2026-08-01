@@ -15,7 +15,16 @@ function extractResponse(photoPath: string, category: string) {
     data: {
       photo_path: photoPath,
       extraction_ok: true,
-      extracted: { category, colors: ["#1b2a4a"] },
+      extracted: {
+        category,
+        colors: ["#1b2a4a"],
+        formality: "casual",
+        warmth: 2,
+        season: ["spring"],
+        fabric: "cotton",
+        pattern: "solid",
+        fit: "regular",
+      },
       color_names: ["navy"],
     },
     error: undefined,

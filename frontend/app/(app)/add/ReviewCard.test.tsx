@@ -3,44 +3,93 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ReviewCard } from "./ReviewCard";
 
+/** A complete scan result — what the VLM produces for a garment it read
+ * successfully. Every one of these eight attributes must survive to onSave;
+ * five of them used to be dropped between here and the request body. */
+const SCANNED = {
+  name: "",
+  category: "t-shirt",
+  colors: ["#22345d"],
+  formality: "smart_casual",
+  warmth: "2",
+  season: ["spring", "autumn"] as ("spring" | "summer" | "autumn" | "winter")[],
+  fabric: "cotton",
+  pattern: "solid",
+  fit: "regular",
+  notes: "",
+};
+
 describe("ReviewCard", () => {
-  it("pre-fills fields from the scan result", () => {
+  it("pre-fills every scanned attribute, not just the six-field subset", () => {
     render(
       <ReviewCard
         photoUrl="blob:fake"
-        initial={{ name: "Navy tee", category: "top", fabric: "cotton", color: "navy", notes: "" }}
+        initial={SCANNED}
+        initialColorNames={["navy"]}
         saveLabel="Save to Closet"
         onSave={vi.fn()}
       />
     );
-    expect(screen.getByLabelText("Name")).toHaveValue("Navy tee");
+    expect(screen.getByLabelText("Group")).toHaveValue("t-shirt");
     expect(screen.getByLabelText("Fabric")).toHaveValue("cotton");
-    expect(screen.getByLabelText("Color")).toHaveValue("navy");
+    expect(screen.getByLabelText("Formality")).toHaveValue("smart_casual");
+    expect(screen.getByLabelText("Warmth")).toHaveValue("2");
+    expect(screen.getByLabelText("Pattern")).toHaveValue("solid");
+    expect(screen.getByLabelText("Fit")).toHaveValue("regular");
+    expect(screen.getByRole("button", { name: "Spring" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Summer" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText("navy")).toBeInTheDocument();
+  });
+
+  it("sends all eight attributes on save, with colour as the DETECTED hex", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ReviewCard
+        photoUrl="blob:fake"
+        initial={SCANNED}
+        initialColorNames={["navy"]}
+        saveLabel="Save to Closet"
+        onSave={onSave}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save to Closet" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      name: "",
+      category: "t-shirt",
+      // #22345d, not navy's palette hex #1b2a4a — the round-trip through a
+      // name used to destroy the detected value.
+      colors: ["#22345d"],
+      formality: "smart_casual",
+      warmth: "2",
+      season: ["spring", "autumn"],
+      fabric: "cotton",
+      pattern: "solid",
+      fit: "regular",
+      notes: "",
+    });
   });
 
   it("starts blank when initial is empty (no garment found / Enter manually)", () => {
     render(<ReviewCard photoUrl="blob:fake" initial={{}} saveLabel="Save to Closet" onSave={vi.fn()} />);
     expect(screen.getByLabelText("Name")).toHaveValue("");
-    expect(screen.getByLabelText("Color")).toHaveValue("");
+    expect(screen.getByLabelText("Formality")).toHaveValue("");
   });
 
-  it("submits the edited fields on save", async () => {
+  it("keeps a colour the user typed themselves", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(
       <ReviewCard
         photoUrl="blob:fake"
-        initial={{ name: "", category: "", fabric: "", color: "", notes: "" }}
+        initial={{ ...SCANNED, colors: [] }}
         saveLabel="Save to Closet"
         onSave={onSave}
       />
     );
-    await userEvent.type(screen.getByLabelText("Name"), "My blazer");
-    await userEvent.type(screen.getByLabelText("Color"), "navy");
+    await userEvent.type(screen.getByLabelText("Color"), "charcoal{Enter}");
     await userEvent.click(screen.getByRole("button", { name: "Save to Closet" }));
 
-    expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "My blazer", color: "navy" })
-    );
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ colors: ["charcoal"] }));
   });
 
   it("blocks save and shows an error for an unrecognized color, without calling onSave", async () => {
@@ -48,24 +97,24 @@ describe("ReviewCard", () => {
     render(
       <ReviewCard
         photoUrl="blob:fake"
-        initial={{ name: "", category: "", fabric: "", color: "", notes: "" }}
+        initial={{ ...SCANNED, colors: [] }}
         saveLabel="Save to Closet"
         onSave={onSave}
       />
     );
-    await userEvent.type(screen.getByLabelText("Color"), "mauve");
+    await userEvent.type(screen.getByLabelText("Color"), "mauve{Enter}");
     await userEvent.click(screen.getByRole("button", { name: "Save to Closet" }));
 
     expect(screen.getByText(/I don't recognize that color/)).toBeInTheDocument();
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it("blocks save and shows a required message when color is left blank", async () => {
+  it("blocks save and shows a required message when colour is left blank", async () => {
     const onSave = vi.fn();
     render(
       <ReviewCard
         photoUrl="blob:fake"
-        initial={{ name: "", category: "", fabric: "", color: "", notes: "" }}
+        initial={{ ...SCANNED, colors: [] }}
         saveLabel="Save to Closet"
         onSave={onSave}
       />
@@ -75,14 +124,14 @@ describe("ReviewCard", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  // Colour is the only field that can block a save, and it sits above a
-  // submit button that on a phone can be tapped with the error rendered
-  // off-screen — which reads as "the button does nothing".
-  it("moves focus to Color when validation blocks the save, so the error can't be missed", async () => {
+  // Colour sits well above the submit button, so on a phone the button can
+  // be tapped with the error rendered off-screen — which reads as "the
+  // button does nothing".
+  it("moves focus to Color when validation blocks the save", async () => {
     render(
       <ReviewCard
         photoUrl="blob:fake"
-        initial={{ name: "", category: "", fabric: "", color: "", notes: "" }}
+        initial={{ ...SCANNED, colors: [] }}
         saveLabel="Save to Closet"
         onSave={vi.fn()}
       />
@@ -91,41 +140,52 @@ describe("ReviewCard", () => {
     expect(screen.getByLabelText("Color")).toHaveFocus();
   });
 
-  it("says up front why Color is needed, rather than only on failure", () => {
+  // The legacy form's SC-003 guarantee: an item saved through the scan flow
+  // has every attribute populated, none blank.
+  it("blocks save when the scan failed to find formality, warmth or season", async () => {
+    const onSave = vi.fn();
     render(
       <ReviewCard
         photoUrl="blob:fake"
-        initial={{ color: "" }}
+        initial={{ category: "top", colors: ["#22345d"] }}
+        initialColorNames={["navy"]}
         saveLabel="Save to Closet"
-        onSave={vi.fn()}
+        onSave={onSave}
       />
     );
-    expect(screen.getByText(/Needed so I can match this piece/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save to Closet" }));
+
+    expect(screen.getByText(/I still need Category, Formality, Warmth and Season/)).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("clicking Category chips sets both the chip and the Group input", async () => {
+    render(<ReviewCard photoUrl="blob:fake" initial={{}} saveLabel="Save to Closet" onSave={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Outerwear" }));
+    expect(screen.getByLabelText("Group")).toHaveValue("outerwear");
+    expect(screen.getByRole("button", { name: "Outerwear" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("toggles a season chip off on a second click", async () => {
     render(
       <ReviewCard
         photoUrl="blob:fake"
-        initial={{ name: "", category: "", fabric: "", color: "", notes: "" }}
+        initial={SCANNED}
+        initialColorNames={["navy"]}
         saveLabel="Save to Closet"
         onSave={vi.fn()}
       />
     );
-    await userEvent.click(screen.getByRole("button", { name: "Outerwear" }));
-    expect(screen.getByLabelText("Group")).toHaveValue("outerwear");
+    await userEvent.click(screen.getByRole("button", { name: "Spring" }));
+    expect(screen.getByRole("button", { name: "Spring" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("renders the Error treatment when saveError is true", () => {
     render(
-      <ReviewCard
-        photoUrl="blob:fake"
-        initial={{}}
-        saveLabel="Save to Closet"
-        onSave={vi.fn()}
-        saveError
-      />
+      <ReviewCard photoUrl="blob:fake" initial={SCANNED} saveLabel="Save to Closet" onSave={vi.fn()} saveError />
     );
+    // Button's error state swaps its label for `errorLabel` ("Try again").
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save to Closet" })).not.toBeInTheDocument();
   });
 });
