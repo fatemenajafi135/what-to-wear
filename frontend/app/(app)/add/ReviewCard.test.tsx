@@ -75,6 +75,34 @@ describe("ReviewCard", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  // Colour is the only field that can block a save, and it sits above a
+  // submit button that on a phone can be tapped with the error rendered
+  // off-screen — which reads as "the button does nothing".
+  it("moves focus to Color when validation blocks the save, so the error can't be missed", async () => {
+    render(
+      <ReviewCard
+        photoUrl="blob:fake"
+        initial={{ name: "", category: "", fabric: "", color: "", notes: "" }}
+        saveLabel="Save to Closet"
+        onSave={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save to Closet" }));
+    expect(screen.getByLabelText("Color")).toHaveFocus();
+  });
+
+  it("says up front why Color is needed, rather than only on failure", () => {
+    render(
+      <ReviewCard
+        photoUrl="blob:fake"
+        initial={{ color: "" }}
+        saveLabel="Save to Closet"
+        onSave={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/Needed so I can match this piece/)).toBeInTheDocument();
+  });
+
   it("clicking Category chips sets both the chip and the Group input", async () => {
     render(
       <ReviewCard

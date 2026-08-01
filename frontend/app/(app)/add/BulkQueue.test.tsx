@@ -91,4 +91,81 @@ describe("BulkQueue", () => {
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
+
+  // A failed UPLOAD (no photo_path) used to be marked `ready` like any other
+  // card, and Save then bailed on a bare `if (!current?.photoPath) return;` —
+  // no error, no request, nothing. Every test above mocks a successful
+  // extract, which is why the whole class of failure went unnoticed until a
+  // real batch produced fifteen extract calls and zero saves.
+  describe("a photo whose upload failed", () => {
+    it("says so instead of rendering a card whose Save button does nothing", async () => {
+      mockedPost.mockResolvedValueOnce({
+        data: undefined,
+        error: { detail: "storage unreachable" },
+        response: new Response(),
+      });
+
+      render(<BulkQueue files={makeFiles(1)} onClose={vi.fn()} />);
+
+      expect(await screen.findByText("That upload didn't go through.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+      // The unsaveable card is never offered as a review form at all.
+      expect(screen.queryByRole("button", { name: "Save to Closet" })).not.toBeInTheDocument();
+    });
+
+    it("retries just that photo and recovers into a normal review card", async () => {
+      mockedPost
+        .mockResolvedValueOnce({ data: undefined, error: { detail: "nope" }, response: new Response() })
+        .mockResolvedValueOnce(extractResponse("user-a/0.jpg", "top"));
+
+      render(<BulkQueue files={makeFiles(1)} onClose={vi.fn()} />);
+      await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
+
+      expect(await screen.findByRole("button", { name: "Save to Closet" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Group")).toHaveValue("top");
+    });
+
+    it("can be skipped so one bad photo doesn't strand the rest of the batch", async () => {
+      mockedPost
+        .mockResolvedValueOnce({ data: undefined, error: { detail: "nope" }, response: new Response() })
+        .mockResolvedValueOnce(extractResponse("user-a/1.jpg", "bottom"));
+
+      render(<BulkQueue files={makeFiles(2)} onClose={vi.fn()} />);
+      await userEvent.click(await screen.findByRole("button", { name: "Skip this photo" }));
+
+      expect(await screen.findByText("Reviewing item 2 of 2")).toBeInTheDocument();
+      expect(screen.getByLabelText("Group")).toHaveValue("bottom");
+    });
+
+    it("closes the overlay when the only failing photo is also the last one", async () => {
+      mockedPost.mockResolvedValueOnce({ data: undefined, error: { detail: "nope" }, response: new Response() });
+
+      const onClose = vi.fn();
+      render(<BulkQueue files={makeFiles(1)} onClose={onClose} />);
+      await userEvent.click(await screen.findByRole("button", { name: "Skip and finish" }));
+
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+    });
+  });
+
+  // Extraction SUCCEEDING but finding no colour is a different case: the
+  // photo did land in Storage, so the card is saveable once the user fills
+  // colour in. It must stay a normal review card, not an error.
+  it("still offers a saveable card when the scan found no colour", async () => {
+    mockedPost.mockResolvedValueOnce({
+      data: {
+        photo_path: "user-a/0.jpg",
+        extraction_ok: true,
+        extracted: { category: null, colors: null },
+        color_names: [],
+      },
+      error: undefined,
+      response: new Response(),
+    });
+
+    render(<BulkQueue files={makeFiles(1)} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole("button", { name: "Save to Closet" })).toBeInTheDocument();
+    expect(screen.queryByText("That upload didn't go through.")).not.toBeInTheDocument();
+  });
 });

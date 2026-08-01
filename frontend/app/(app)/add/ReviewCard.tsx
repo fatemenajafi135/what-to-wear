@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Chip } from "@/components/ui/Chip/Chip";
 import { Input } from "@/components/ui/Input/Input";
 import { Textarea } from "@/components/ui/Textarea/Textarea";
@@ -56,6 +56,19 @@ export function ReviewCard({ photoUrl, initial, saveLabel, onSave, saveError = f
   const [notes, setNotes] = useState(initial.notes ?? "");
   const [colorError, setColorError] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
+  const colorFieldRef = useRef<HTMLDivElement>(null);
+
+  /** Colour is the only field that can block a save, and it sits low in a
+   * form whose submit button is lower still — so on a phone the button can
+   * be tapped with the error rendered off-screen, which reads as "nothing
+   * happened". Moving focus scrolls it into view and announces it. Focusing
+   * through a wrapper rather than adding a ref to the shared `Input`: that
+   * primitive is used across every form in the app and this is not a good
+   * enough reason to change its contract. */
+  const failColorValidation = (message: string) => {
+    setColorError(message);
+    colorFieldRef.current?.querySelector("input")?.focus();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,11 +76,11 @@ export function ReviewCard({ photoUrl, initial, saveLabel, onSave, saveError = f
     // item with no color at all isn't meaningfully saveable, unlike the
     // five attributes research.md §4 defaults instead.
     if (!color.trim()) {
-      setColorError(addItemCopy.color.required);
+      failColorValidation(addItemCopy.color.required);
       return;
     }
     if (!isRecognizedColorName(color)) {
-      setColorError(addItemCopy.color.notRecognized);
+      failColorValidation(addItemCopy.color.notRecognized);
       return;
     }
     setColorError(undefined);
@@ -107,15 +120,18 @@ export function ReviewCard({ photoUrl, initial, saveLabel, onSave, saveError = f
 
       <Input label="Group" value={category} onChange={setCategory} />
       <Input label="Fabric" value={fabric} onChange={setFabric} />
-      <Input
-        label="Color"
-        value={color}
-        onChange={(v) => {
-          setColor(v);
-          if (colorError) setColorError(undefined);
-        }}
-        error={colorError}
-      />
+      <div ref={colorFieldRef}>
+        <Input
+          label="Color"
+          value={color}
+          onChange={(v) => {
+            setColor(v);
+            if (colorError) setColorError(undefined);
+          }}
+          error={colorError}
+          helpText="Needed so I can match this piece — e.g. navy, charcoal, olive."
+        />
+      </div>
       <Textarea label="Notes" value={notes} onChange={setNotes} />
 
       <Button type="submit" state={saveError ? "error" : saving ? "loading" : "default"} width="stretch">
