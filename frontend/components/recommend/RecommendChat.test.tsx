@@ -152,6 +152,29 @@ describe("RecommendChat", () => {
     expect(screen.getByText(/working with a small closet/)).toBeInTheDocument();
   });
 
+  it("US5: renders the calendar context line in the hero state", async () => {
+    render(<RecommendChat />);
+    expect(await screen.findByText("Style for an event from calendar")).toBeInTheDocument();
+  });
+
+  it("US5: renders the calendar context line in the chat state too", async () => {
+    render(<RecommendChat />);
+    await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
+    expect(screen.getByText("Style for an event from calendar")).toBeInTheDocument();
+  });
+
+  it("US5: shows the picked event when one exists", async () => {
+    vi.mocked(apiClient.GET).mockReset().mockImplementation(((url: string) =>
+      url === "/api/v1/recommend/readiness"
+        ? Promise.resolve({ data: { ready: true, sparse: false, missing: [] } })
+        : Promise.resolve({
+            data: { picked: true, event: { title: "Dinner with Sam" } },
+          })) as never);
+
+    render(<RecommendChat />);
+    expect(await screen.findByText(/Styling for Dinner with Sam · Change/)).toBeInTheDocument();
+  });
+
   it("US2: a second Start-styling call echoes the first response's thread_id", async () => {
     vi.mocked(apiClient.POST).mockResolvedValueOnce({
       data: { thread_id: "thread-1", reply_text: null, outfit: mockOutfit, citations: mockCitations },
