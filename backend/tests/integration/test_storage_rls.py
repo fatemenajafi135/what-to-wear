@@ -24,13 +24,33 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterator
 
+import jwt
 import psycopg
 import pytest
+import requests
 
 # Direct Postgres connection (not the transaction-mode pooler) — SET ROLE
 # needs to persist for the query that follows it, matching
 # test_wardrobe_rls.py's own reasoning exactly.
 _DIRECT_DSN = "postgresql://authenticator:postgres@127.0.0.1:54322/postgres"
+_STORAGE_URL = "http://127.0.0.1:54321/storage/v1"
+
+# Supabase CLI's fixed, publicly-documented local-dev demo JWT secret —
+# identical on every `supabase start` that doesn't override
+# [auth.jwt_secret] in config.toml (this project doesn't), not a
+# per-project or production credential. Used only to mint a service_role
+# token for test cleanup below, against 127.0.0.1.
+_LOCAL_DEMO_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"
+
+
+def _service_role_token() -> str:
+    """Admin-level token for teardown ONLY. `storage.objects` has a
+    `protect_delete()` trigger that rejects a direct SQL `DELETE` for
+    every role, including the bypass-privileged one this file's fixture
+    otherwise uses to seed rows — confirmed against the live stack.
+    Cleanup has to go through the Storage HTTP API instead."""
+    return jwt.encode({"role": "service_role", "iss": "supabase-demo"}, _LOCAL_DEMO_JWT_SECRET, algorithm="HS256")
+
 
 USER_A = str(uuid.uuid4())
 USER_B = str(uuid.uuid4())
@@ -60,10 +80,15 @@ def user_a_object() -> Iterator[str]:
             "INSERT INTO storage.objects (bucket_id, name) VALUES (%s, %s)",
             (BUCKET, object_name),
         )
-    yield object_name
-    with conn.cursor() as cur:
-        cur.execute("DELETE FROM storage.objects WHERE bucket_id = %s AND name = %s", (BUCKET, object_name))
     conn.close()
+
+    yield object_name
+
+    requests.delete(
+        f"{_STORAGE_URL}/object/{BUCKET}/{object_name}",
+        headers={"Authorization": f"Bearer {_service_role_token()}"},
+        timeout=10,
+    )
 
 
 class TestWardrobePhotosRLS:
@@ -92,13 +117,26 @@ class TestWardrobePhotosRLS:
             assert cur.rowcount == 0  # RLS blocks the row match, not just a permission error
         conn.close()
 
-    def test_other_user_cannot_delete_object(self, user_a_object: str) -> None:
-        conn = _connect_as(USER_B)
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM storage.objects WHERE bucket_id = %s AND name = %s", (BUCKET, user_a_object))
-            assert cur.rowcount == 0
-        conn.close()
-
+    # No test_other_user_cannot_delete_object here — deliberately, not an
+    # oversight. `storage.objects`' `protect_delete()` trigger rejects a
+    # direct SQL `DELETE` unconditionally, for every role, including the
+    # `postgres`-equivalent bypass-privileged connection this file's own
+    # fixture uses to seed rows (confirmed live: `psycopg.errors.
+    # InsufficientPrivilege` fires before RLS is ever reached). A version
+    # of this test previously existed and appeared to pass — `rowcount ==
+    # 0` — but for the wrong reason: the trigger, not the policy, blocked
+    # it, so it proved nothing about RLS and would have "passed" identically
+    # against a broken or missing policy. The `wardrobe_photos_owner_rw`
+    # policy is `for all`, one `using` clause gating SELECT/UPDATE/DELETE
+    # alike — the exact clause DELETE would be checked against is already
+    # exercised, at the SQL level, by `test_other_user_cannot_read_object`
+    # (SELECT) and `test_other_user_cannot_overwrite_object` (UPDATE).
+    # Proving DELETE specifically would require a real signed-up Supabase
+    # Auth user (there's no SQL-role-simulation path around the trigger),
+    # which is meaningfully more integration-test machinery — sign-up,
+    # session exchange, user cleanup — for a claim the `using` clause
+    # already covers. Not worth it now; revisit if this policy ever stops
+    # being a single unified `for all` grant.
     def test_other_user_cannot_upload_under_someone_elses_prefix(self) -> None:
         # Mirrors what `adapters.storage.upload_photo` would attempt if a
         # caller tried to write under a foreign user_id prefix — the

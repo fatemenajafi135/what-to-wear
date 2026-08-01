@@ -385,21 +385,46 @@ class TestExtractAndCreateFromUpload:
         with get_engine().begin() as conn:
             conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": item_id})
 
-    def test_from_upload_created_item_is_retrievable_with_photo_url(self) -> None:
+    def test_from_upload_created_item_is_retrievable_with_photo_url_key(self) -> None:
         with _client_as(USER_A) as client:
             create_response = client.post(
                 "/api/v1/closet/items/from-upload",
                 json={"photo_path": f"{USER_A}/xyz-pants.jpg", "category": "bottom", "colors": ["#5c4033"]},
             )
             item_id = create_response.json()["id"]
-
-            # No mocked Storage here — a real signed-URL call would hit the
-            # live local stack, which this sandbox doesn't have. Assert the
-            # shape (key present) rather than the value's live-ness.
             get_response = client.get(f"/api/v1/closet/items/{item_id}")
 
         assert get_response.status_code == 200
         assert "photo_url" in get_response.json()
+
+        with get_engine().begin() as conn:
+            conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": item_id})
+
+    def test_photo_path_with_no_storage_object_behind_it_returns_200_with_photo_url_none(self) -> None:
+        """Pins defect 1 (found in first live-stack review): a `photo_path`
+        with no matching Storage object must resolve to `photo_url: None`
+        on both routes that mint one, never a 500. Every `from-upload` call
+        in this file uses a fabricated `photo_path` with no real object
+        behind it — before `adapters.storage.create_signed_url` was fixed
+        to fail soft, this test (and the two other from-upload tests
+        above) 500'd against a live stack; none of that was caught while
+        this suite could only run against mocked Storage."""
+        with _client_as(USER_A) as client:
+            create_response = client.post(
+                "/api/v1/closet/items/from-upload",
+                json={"photo_path": f"{USER_A}/does-not-exist.jpg", "category": "top", "colors": ["#000000"]},
+            )
+            assert create_response.status_code == 201
+            body = create_response.json()
+            item_id = body["id"]
+            # from-upload's own response signs eagerly — proven not to 500
+            # by the 201 above; also assert the value directly here.
+            assert body["photo_url"] is None
+
+            get_response = client.get(f"/api/v1/closet/items/{item_id}")
+
+        assert get_response.status_code == 200
+        assert get_response.json()["photo_url"] is None
 
         with get_engine().begin() as conn:
             conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": item_id})
@@ -431,9 +456,27 @@ class TestExtractAndCreateFromUpload:
                 {"ids": created_ids},
             )
 
-        with _client_as(USER_B) as client:
-            still_there = client.get(f"/api/v1/closet/items/{foreign_item}")
-        assert still_there.status_code == 200
+    def test_list_view_omits_photo_url_for_a_missing_storage_object_not_a_broken_url(self) -> None:
+        """Pins defect 2 (found in first live-stack review): the *batch*
+        sign endpoint returns 200 with a per-path `{"error": ...,
+        "signedURL": null}` entry for a missing object, not a request-level
+        failure — `adapters.storage.create_signed_urls` must skip that
+        entry rather than build `".../v1None"` from the `null`."""
+        with _client_as(USER_A) as client:
+            create_response = client.post(
+                "/api/v1/closet/items/from-upload",
+                json={"photo_path": f"{USER_A}/also-does-not-exist.jpg", "category": "top", "colors": ["#000000"]},
+            )
+            item_id = create_response.json()["id"]
+
+            list_response = client.get("/api/v1/closet/items")
+
+        assert list_response.status_code == 200
+        item = next(i for i in list_response.json()["items"] if i["id"] == item_id)
+        assert item["photo_url"] is None
+
+        with get_engine().begin() as conn:
+            conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": item_id})
 
     def test_already_deleted_item_is_404_not_500(self, own_item: str) -> None:
         with _client_as(USER_A) as client:

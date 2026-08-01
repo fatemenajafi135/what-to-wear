@@ -18,6 +18,7 @@ the same reason (specs/005-closet-write/research.md §5).
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Literal
 
@@ -38,6 +39,8 @@ from whattowear.schema import (
     WardrobeItemPatch,
 )
 from whattowear.vision import extract_attributes_from_image
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -313,9 +316,19 @@ def extract_closet_item(
         extracted = extract_attributes_from_image(file_bytes, photo.content_type)
         extraction_ok = True
     except Exception:
-        # Extraction failure (blurry photo, no garment, VLM/gateway error) is
-        # never a 5xx — the photo is already uploaded, so the user can
-        # proceed to manual entry without re-uploading.
+        # This is always a genuine CALL failure (network, gateway auth,
+        # rate limit, a response the structured-output parser couldn't
+        # handle) — never a legitimate "no garment visible" result.
+        # _EXTRACTION_SCHEMA (vision.py) makes every field nullable
+        # specifically so the VLM can express "I don't see a garment" by
+        # returning nulls in an otherwise-successful call; that path
+        # never raises and never reaches this except block. Still never a
+        # 5xx (the photo is already uploaded, so the user can proceed to
+        # manual entry without re-uploading) — but it must not be
+        # invisible either: without this, a misconfigured gateway and a
+        # genuine no-garment photo were indistinguishable from the logs
+        # (defect 3, found in first live-stack review).
+        logger.exception("Photo extraction failed for photo_path=%r", photo_path)
         extracted = ExtractedAttributes()
         extraction_ok = False
 
