@@ -977,4 +977,93 @@ BottomSheet row can hold).
 
 ---
 
+## 23. Feature 006 (Photo upload + vision) — six named gaps plus two `known-gaps.md` items
+
+Full reasoning and rejected alternatives for every entry below live in
+`specs/006-photo-upload-vision/research.md` (the same split feature 012 used for §16) — this
+section exists so each decision is discoverable from the same document every other cross-cutting
+choice lives in, not to duplicate the argument.
+
+### 23.1 Storage bucket privacy and signed URLs
+
+**Decision**: private bucket (`wardrobe-photos`), declared in `infra/supabase/config.toml`, not
+created by hand in Studio. The backend mints a 1-hour signed URL at read time
+(`GET /closet/items`, `GET /closet/items/{item_id}`), returned as a new `photo_url` field —
+nothing signed is ever stored. A public bucket was rejected: these are photos of a person's
+clothes in their home, the same privacy class `wardrobe_items` itself already gets RLS
+protection for, and a public bucket has no revocation story if a path ever leaks. Full
+reasoning: `research.md` §2.
+
+### 23.2 Maximum upload file size
+
+**Decision**: 10 MiB, enforced in the extract route before the file is read or forwarded, and
+mirrored as the bucket's own `file_size_limit` in `config.toml` as a second backstop. Full
+reasoning: `research.md` §3.
+
+### 23.3 Review-card / required-attribute mismatch
+
+**Decision**: `CreateWardrobeItemFromUploadRequest` relaxes Formality, Warmth, Season, Fabric,
+Pattern and Fit from required to optional, matching `WardrobeItemPatch`'s existing shape. The
+three columns that are `NOT NULL` in the database (Formality, Warmth, Season) get a documented,
+conservative default when neither the scan nor the user supplied a value (`"casual"` / `3` /
+all four seasons); Fabric, Pattern and Fit are simply stored `NULL`, since the database already
+allows it. Nothing blocks a save. The alternative of extending the review card itself was
+rejected as a direct Principle VIII violation; the alternative of blocking save on any missing
+field was rejected as reproducing the exact "extraction failure must be a 200" problem the
+handoff calls out. Full reasoning and a fourth option (migrating the columns to nullable
+instead) considered and rejected: `research.md` §4.
+
+### 23.4 Color text field writing into a hex column
+
+**Decision**: the review card's Color field pre-fills with the derived name of the scanned hex
+(`colors.nearest_names`, the same function `ItemEditForm`'s own Colour field already uses). On
+save, the text is matched case-insensitively against `FASHION_COLOR_PALETTE`'s exact keys
+(`colors.name_to_hex`, unchanged); an unmatched value is rejected with a clear message rather
+than silently approximated. A swatch-picker was rejected as contradicting the design's stated
+"Color (text)" field; a fuzzy "nearest string" match was rejected because it can silently store
+a materially wrong color with nothing telling the user a substitution happened. Full reasoning:
+`research.md` §5.
+
+### 23.5 Partial bulk-save failure
+
+**Decision**: per-card isolation. A failed card shows `Button`'s existing Error treatment
+("Try again") in place; cards already saved before it are unaffected and the queue does not
+silently skip or auto-advance past the failure. Aborting/rolling back the whole batch was
+rejected (it would delete a user's already-successful saves to "fix" an unrelated item);
+silently skipping was rejected as the literal failure mode this decision exists to prevent. Full
+reasoning, plus a fourth "explicit skip affordance" option considered and deferred: `research.md`
+§6.
+
+### 23.6 Camera permission primer — copy
+
+**Decision**: follows design-decisions §18's established bespoke-`<dialog>` shape exactly.
+
+| Element | Copy |
+|---|---|
+| Title | Before you scan |
+| Body | I'll use your camera to scan the garment so I can fill in its details automatically. Nothing is saved until you review and confirm. |
+| Primary action | Continue |
+| Secondary action | Not now |
+
+Full reasoning, including why "Continue" (not "Continue to Camera") was chosen: `research.md`
+§7.
+
+### 23.7 Review progress bar — animates
+
+**Decision**: the "Reviewing item X of Y" progress bar transitions with the existing
+`--motion-duration-base`/`--motion-easing-standard` token pairing, gated by
+`prefers-reduced-motion` (falls back to an instant jump). From `design-system.md`'s own Open
+Questions list, folded into this feature's scope per the handoff §10. Full reasoning:
+`research.md` §8.
+
+### 23.8 "Enter manually" — same review form, blank
+
+**Decision**: the "no garment found" empty state's "Enter manually" action advances to the
+identical six-field review card already built for the scanned case, every field blank, the same
+uploaded photo still attached. No second, purpose-built manual-entry form is built — doing so
+would contradict the handoff's own "every form control already exists, do not build new ones."
+Also from `design-system.md`'s Open Questions list. Full reasoning: `research.md` §8.
+
+---
+
 *Every item above is decided except those explicitly marked **deferred** (§21), which are recorded gaps awaiting a decision rather than open questions blocking work.*
