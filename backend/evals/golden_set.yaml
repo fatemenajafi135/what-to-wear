@@ -232,14 +232,14 @@ cases:
 # before trusting this check for anything real.
 vision_cases:
   - id: v01
-    image: fixtures/vision_samples/navy_top_placeholder.png
+    image: vision_samples/navy_top_placeholder.png
     expected:
       category: top
       formality_in: [casual, smart_casual, business_casual]
       warmth_range: [0, 3]
 
   - id: v02
-    image: fixtures/vision_samples/beige_trousers_placeholder.png
+    image: vision_samples/beige_trousers_placeholder.png
     expected:
       category: bottom
       formality_in: [casual, smart_casual, business_casual, semi_formal]

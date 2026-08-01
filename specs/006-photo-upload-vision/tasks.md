@@ -241,21 +241,21 @@ half already covered by T010).
 
 ## Phase 6: Polish & cross-cutting
 
-- [ ] T031 Source/generate the two vision golden-set fixture images at
+- [X] T031 Source/generate the two vision golden-set fixture images at
   `backend/evals/fixtures/vision_samples/navy_top_placeholder.png` and
   `beige_trousers_placeholder.png` (`research.md` §9 — synthetic, programmatically generated;
   documented limitation, not a real photograph). Confirm
   `uv run python -m whattowear.eval.vision_harness` no longer fails on a missing file.
   **Running it to a pass/fail verdict needs a live `AI_GATEWAY_API_KEY`**, explicitly not
   configured in this sandbox (`research.md` §13) — report as skipped, not faked.
-- [ ] T032 Regenerate `frontend/lib/api/schema.d.ts`: `cd backend && uv run uvicorn
+- [X] T032 Regenerate `frontend/lib/api/schema.d.ts`: `cd backend && uv run uvicorn
   whattowear.main:app &` then `cd frontend && npm run generate:api-types`.
-- [ ] T033 [P] Backend quality gate: `uv run ruff check .`, `uv run ruff format --check .`,
+- [X] T033 [P] Backend quality gate: `uv run ruff check .`, `uv run ruff format --check .`,
   `uv run mypy .`, `uv run pytest`, `uv run lint-imports` — all clean; test count not below
   577 (§9 DoD). Integration tests requiring a live Supabase stack (T003, T010, and the extended
   cases in T015/T027) cannot execute in this sandbox — reported explicitly, not skipped
   silently or faked green.
-- [ ] T034 [P] Frontend quality gate: `npm run lint`, `npm run typecheck`, `npm test`, `npm run
+- [X] T034 [P] Frontend quality gate: `npm run lint`, `npm run typecheck`, `npm test`, `npm run
   build` — all clean; test count not below 143 (§9 DoD).
 - [ ] T035 Manual browser verification per `quickstart.md`'s full walkthrough, at both
   `localhost:3000` and `127.0.0.1:3000`, both themes, all three breakpoints (§9 DoD, trap 8 —
