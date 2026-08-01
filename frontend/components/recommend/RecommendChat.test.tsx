@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { RecommendChat } from "./RecommendChat";
 
 vi.mock("@/lib/api/client", () => ({
-  apiClient: { GET: vi.fn().mockResolvedValue({ data: { picked: false, event: null } }), POST: vi.fn() },
+  apiClient: { GET: vi.fn(), POST: vi.fn() },
 }));
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
@@ -13,6 +13,13 @@ vi.mock("@/lib/supabase/client", () => ({
 }));
 
 import { apiClient } from "@/lib/api/client";
+
+function mockGetByUrl(url: string) {
+  if (url === "/api/v1/recommend/readiness") {
+    return Promise.resolve({ data: { ready: true, sparse: false, missing: [] } });
+  }
+  return Promise.resolve({ data: { picked: false, event: null } });
+}
 
 const mockOutfit = {
   rationale_text: "A relaxed pairing that works well here.[1]",
@@ -26,6 +33,7 @@ const mockCitations = [{ number: 1, text: "Casual pieces pair well together." }]
 describe("RecommendChat", () => {
   beforeEach(() => {
     vi.mocked(apiClient.POST).mockReset();
+    vi.mocked(apiClient.GET).mockReset().mockImplementation(mockGetByUrl as never);
     Object.defineProperty(window.navigator, "onLine", { value: true, configurable: true });
   });
 
@@ -34,7 +42,7 @@ describe("RecommendChat", () => {
     vi.mocked(apiClient.POST).mockReturnValue(new Promise((resolve) => (resolvePost = resolve)) as never);
 
     render(<RecommendChat />);
-    await userEvent.type(screen.getByLabelText("Message"), "business casual{Enter}");
+    await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
 
     const startButton = screen.getByText("Start styling");
     expect(startButton).toBeEnabled();
@@ -73,7 +81,7 @@ describe("RecommendChat", () => {
     } as never);
 
     render(<RecommendChat />);
-    await userEvent.type(screen.getByLabelText("Message"), "black tie gala{Enter}");
+    await userEvent.type(await screen.findByLabelText("Message"), "black tie gala{Enter}");
     await userEvent.click(screen.getByText("Start styling"));
 
     await waitFor(() => {
@@ -92,7 +100,7 @@ describe("RecommendChat", () => {
     } as never);
 
     render(<RecommendChat />);
-    await userEvent.type(screen.getByLabelText("Message"), "business casual{Enter}");
+    await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
     await userEvent.click(screen.getByText("Start styling"));
 
     await waitFor(() => {
@@ -116,9 +124,32 @@ describe("RecommendChat", () => {
     });
   });
 
-  it("Start styling is hidden in the hero state (0 messages)", () => {
+  it("Start styling is hidden in the hero state (0 messages)", async () => {
     render(<RecommendChat />);
+    await screen.findByLabelText("Message");
     expect(screen.queryByText("Start styling")).not.toBeInTheDocument();
+  });
+
+  it("shows the insufficient-closet gate and no composer when the closet isn't ready", async () => {
+    vi.mocked(apiClient.GET).mockReset().mockImplementation(((url: string) =>
+      url === "/api/v1/recommend/readiness"
+        ? Promise.resolve({ data: { ready: false, sparse: false, missing: ["a pair of shoes"] } })
+        : Promise.resolve({ data: { picked: false, event: null } })) as never);
+
+    render(<RecommendChat />);
+    expect(await screen.findByText("Add items to your closet")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Message")).not.toBeInTheDocument();
+  });
+
+  it("shows the sparse-closet banner when ready but sparse", async () => {
+    vi.mocked(apiClient.GET).mockReset().mockImplementation(((url: string) =>
+      url === "/api/v1/recommend/readiness"
+        ? Promise.resolve({ data: { ready: true, sparse: true, missing: [] } })
+        : Promise.resolve({ data: { picked: false, event: null } })) as never);
+
+    render(<RecommendChat />);
+    await screen.findByLabelText("Message");
+    expect(screen.getByText(/working with a small closet/)).toBeInTheDocument();
   });
 
   it("US2: a second Start-styling call echoes the first response's thread_id", async () => {
@@ -129,7 +160,7 @@ describe("RecommendChat", () => {
     } as never);
 
     render(<RecommendChat />);
-    await userEvent.type(screen.getByLabelText("Message"), "business casual{Enter}");
+    await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
     await userEvent.click(screen.getByText("Start styling"));
     await waitFor(() => {
       expect(screen.getByText(/A relaxed pairing that works well here\./)).toBeInTheDocument();
@@ -141,7 +172,7 @@ describe("RecommendChat", () => {
       response: new Response(),
     } as never);
 
-    await userEvent.type(screen.getByLabelText("Message"), "something warmer{Enter}");
+    await userEvent.type(await screen.findByLabelText("Message"), "something warmer{Enter}");
     await userEvent.click(screen.getByText("Start styling"));
 
     await waitFor(() => {
