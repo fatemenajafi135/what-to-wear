@@ -82,6 +82,19 @@ service-role key would bypass the one RLS check in this feature that isn't just 
   window an intercepted URL stays valid; 1 hour is short enough to bound that exposure and long
   enough that a single page session never sees a URL expire mid-view.
 
+**Addendum — batch signing, not one call per item (found in `/speckit-analyze`).** Minting a
+signed URL per item on every `GET /closet/items` page (up to `wtw_closet_page_size`, 20 items)
+via 20 sequential HTTP calls to Supabase Storage would add real, avoidable latency to the
+screen the user sees most often. **Decision: use Supabase Storage's bulk-sign endpoint**
+(`POST /storage/v1/object/sign/{bucket}`, accepting `{"paths": [...]}`, returning a
+path→signed-URL map in one round trip) for `list_closet_items`; the single-item
+`GET /closet/items/{id}` route keeps the single-path sign call, where batching has no benefit.
+**Alternative considered**: parallelize N sequential calls with `asyncio`/a thread pool instead
+of using the bulk endpoint. Rejected — Supabase Storage already exposes the batch operation
+natively; reimplementing client-side concurrency to fan out N HTTP calls is strictly more code
+for a worse result (still N round trips over the wire, just concurrent) than one request that
+already returns all N URLs.
+
 ---
 
 ## 3. Maximum upload file size — §23.2
@@ -227,6 +240,20 @@ same handler) or abandons the whole overlay, in which case only the already-save
   equivalent (if coarser) escape hatch. Worth revisiting if bulk upload sees real use and this
   friction shows up in practice.
 
+**Addendum — bulk photo count ceiling (found in `/speckit-analyze`).** spec.md's Assumptions
+promise "a reasonable practical ceiling is assumed and enforced" for how many photos one bulk
+session can queue, but no concrete number was ever picked. **Decision: 20 photos per bulk
+session**, enforced client-side on the picker's selection (a selection beyond it is truncated to
+the first 20 with a brief inline notice, not a hard rejection of the whole action). Chosen to
+match `wtw_closet_page_size`'s existing 20 — already the project's precedent for "one screenful"
+— and because a queue much longer than that turns a bounded review task into an open-ended one
+with no save-progress mechanism beyond what's already saved. **Alternatives considered**: no
+limit — rejected, an unbounded queue of full-resolution photos held in browser memory
+simultaneously (each up to `wtw_max_upload_bytes`, 10 MiB) risks a real memory problem on a
+phone, the primary capture device for this flow; a much smaller cap (e.g. 5) — rejected as overly
+restrictive for someone cataloging a whole wardrobe in one sitting, the exact scenario bulk
+upload exists for.
+
 ---
 
 ## 7. Camera permission primer — copy — §23.6
@@ -266,6 +293,21 @@ pattern ("You can disconnect anytime from Settings").
   string in the Add-item flow the user is mid-way through (`add_item.upload.placeholder`,
   `add_item.empty.body`), for no stated exception in §9's copy conventions (system voice is
   reserved for connection/sync *status*, not a user-initiated action's own explanation).
+
+**Addendum — what "Not now" actually does (found in `/speckit-analyze`, closes spec.md
+SC-006).** Unlike the calendar primer (where declining just returns to a screen with nothing
+lost — there's always a "Connect" action to try again), declining the camera primer must not
+strand the user mid-upload with no way to pick a photo at all. **Decision: accepting sets
+`wtw_camera_primed` and opens the file input *with* `capture="environment"` (jumps straight to
+the camera app on a device that supports it); declining closes the primer *without* setting the
+flag and opens the identical file input *without* the `capture` attribute** — the browser's
+normal file/photo picker, which on most platforms still offers "take photo" as one option among
+several, just not as the forced default. The primer therefore only gates the camera-jump
+shortcut, never file access itself, and reappears on the next upload attempt since declining
+doesn't persist a "primed" state — consistent with the flag's own name (*camera*-primed, not
+*upload*-primed). **Alternative considered**: declining disables the whole Dropzone for that
+session. Rejected outright — it directly contradicts SC-006's explicit requirement and would
+make declining the primer indistinguishable from being offline.
 
 ---
 

@@ -60,6 +60,15 @@ is mocked at the `requests` boundary.
   `list_closet_items` and `get_closet_item` to accept the new `get_current_access_token`
   dependency and pass each item's `photo_path` (when not `None`) through
   `storage.create_signed_url` to populate it — `None` stays `None` when there's no photo.
+  **`list_closet_items` uses `adapters.storage.create_signed_urls` (plural, batch — see below),
+  not one call per item**, per `research.md` §2's batching addendum.
+- [ ] T009a [P] Add `create_signed_urls(access_token: str, photo_paths: list[str], expires_in:
+  int | None = None) -> dict[str, str]` to `adapters/storage.py` alongside T006's
+  `create_signed_url`: one `POST {SUPABASE_URL}/storage/v1/object/sign/wardrobe-photos`
+  (Supabase Storage's bulk-sign endpoint, `{"paths": [...]}`) instead of N sequential calls,
+  returning a `{path: signed_url}` map (`research.md` §2 addendum). `get_closet_item` (a single
+  item) still uses the single-path `create_signed_url` from T006 — no batching benefit there.
+  Unit test alongside T007's.
 - [ ] T010 [P] Integration test `backend/tests/integration/test_storage_rls.py`: user A uploads
   an object under their own prefix (via `adapters.storage.upload_photo` with a real local-stack
   access token, mirroring `test_wardrobe_rls.py`'s existing two-real-user technique); user B's
@@ -103,15 +112,19 @@ offline, color validation).
   attributes omitted inserts with the three documented defaults and `NULL` fabric/pattern/fit.
 - [ ] T014 [US1] `POST /closet/items/from-upload` in `closet.py`
   (`contracts/wardrobe-items-create-from-upload.md`): body is
-  `CreateWardrobeItemFromUploadRequest`, calls T013's repository method, returns
+  `CreateWardrobeItemFromUploadRequest`, **validates `photo_path` starts with `{user_id}/`
+  (the caller's own prefix — the same convention `upload_photo` writes and Storage RLS
+  matches on) and 422s otherwise**, calls T013's repository method, returns
   `ClosetItemView.from_wardrobe_item(...)` with `photo_url` populated (reuse the T009 signing
   helper). Depends on T008, T009, T013.
 - [ ] T015 [P] [US1] Integration tests in `backend/tests/integration/test_closet_routes.py`:
-  extract with a mocked-success VLM returns `extraction_ok: true` and populated `extracted`;
-  extract with a mocked extraction failure returns `200`, `extraction_ok: false`, all-`null`
-  fields; from-upload with only the six review-card fields set creates an item with the three
-  documented defaults applied; from-upload's created item is retrievable via
-  `GET /closet/items/{id}` with a non-null `photo_url`. Depends on T012, T014.
+  extract with a mocked-success VLM returns `extraction_ok: true` and populated `extracted`,
+  **and a follow-up `GET /closet/items` for that user shows no new item — extract alone
+  persists nothing (FR-002)**; extract with a mocked extraction failure returns `200`,
+  `extraction_ok: false`, all-`null` fields; from-upload with only the six review-card fields
+  set creates an item with the three documented defaults applied; from-upload's created item is
+  retrievable via `GET /closet/items/{id}` with a non-null `photo_url`; from-upload with a
+  `photo_path` not prefixed with the caller's own `user_id` → 422. Depends on T012, T014.
 - [ ] T016 [P] [US1] `frontend/lib/camera/primed.ts`: `isCameraPrimed`/`setCameraPrimed` against
   `wtw_camera_primed` in `localStorage`, mirroring `lib/calendar/primed.ts` exactly (SSR-safe).
 - [ ] T017 [P] [US1] `frontend/components/camera/CameraPrimer.tsx` + `.module.css` +
@@ -127,9 +140,14 @@ offline, color validation).
   `name_to_hex` conversion) avoids duplicating `colors.py`'s hex values in two languages.
 - [ ] T019 [US1] `frontend/app/(app)/add/Dropzone.tsx` + `.module.css` + `.test.tsx`: full-width
   `height: 220px`, `16px` radius dropzone per design-system §"Image treatment", disabled (via
-  `useOnlineStatus`) with no retry-promise copy when offline (FR-014), gates the
-  `<input type="file" accept="image/*" capture="environment">` behind `CameraPrimer` (T017) the
-  first time (`isCameraPrimed()` false) using `add_item.upload.placeholder` copy.
+  `useOnlineStatus`) with no retry-promise copy when offline (FR-014), using
+  `add_item.upload.placeholder` copy. Tap behavior per `research.md` §7: **first tap ever**
+  (`isCameraPrimed()` false) shows `CameraPrimer` (T017); accepting ("Continue") sets primed and
+  opens `<input type="file" accept="image/*" capture="environment">`; declining ("Not now")
+  closes the primer **without** setting primed and opens the same input **without** the
+  `capture` attribute, so the flow is never blocked on a decline (SC-006) — only the
+  camera-jump behavior is gated, not file access itself. Once primed (accepted at least once),
+  every subsequent tap opens the `capture`-attributed input directly with no primer.
 - [ ] T020 [US1] `frontend/app/(app)/add/ReviewCard.tsx` + `.module.css` + `.test.tsx`: the
   six-field card (Name `Input`, Category `Chip` group, Group `Input`, Fabric `Input`, Color
   `Input` validated via T018 on submit, Notes `Textarea`) at `150px` review-card photo height,
@@ -167,7 +185,10 @@ the overlay with everything saved.
   `.test.tsx`: the bespoke "Add to Closet" sheet (icon+title+description rows, design-system §3's
   named bespoke-variant exception — not `BottomSheet` itself) with copy keys
   `add_item.bulk.title`/`.subtitle`/`.option_title`/`.option_subtitle`, offering "Add bulk
-  items" alongside the existing single-photo entry.
+  items" alongside the existing single-photo entry. The file picker opened from this option
+  uses `multiple`, capped client-side at **20 photos per bulk session** (`research.md` §6
+  addendum — chosen as generous-but-bounded for a single review sitting; a picker selection
+  beyond it is truncated to the first 20 with a brief inline notice, not a hard rejection).
 - [ ] T024 [US2] Wire `BulkChoiceSheet` as `/add`'s entry point in `page.tsx`/`AddItemFlow.tsx`:
   choosing bulk supplies multiple files and transitions into `BulkQueue` (T025) instead of a
   single `AddItemFlow` run; choosing single-photo (or the default, unchanged path) keeps T022's
