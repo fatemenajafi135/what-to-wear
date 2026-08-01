@@ -125,20 +125,20 @@ offline, color validation).
   set creates an item with the three documented defaults applied; from-upload's created item is
   retrievable via `GET /closet/items/{id}` with a non-null `photo_url`; from-upload with a
   `photo_path` not prefixed with the caller's own `user_id` → 422. Depends on T012, T014.
-- [ ] T016 [P] [US1] `frontend/lib/camera/primed.ts`: `isCameraPrimed`/`setCameraPrimed` against
+- [X] T016 [P] [US1] `frontend/lib/camera/primed.ts`: `isCameraPrimed`/`setCameraPrimed` against
   `wtw_camera_primed` in `localStorage`, mirroring `lib/calendar/primed.ts` exactly (SSR-safe).
-- [ ] T017 [P] [US1] `frontend/components/camera/CameraPrimer.tsx` + `.module.css` +
+- [X] T017 [P] [US1] `frontend/components/camera/CameraPrimer.tsx` + `.module.css` +
   `.test.tsx`, modeled directly on `components/calendar/CalendarPrimer.tsx` (same
   `showModal`/trigger-refocus-on-close `<dialog>` pattern): title "Before you scan", body copy
   and button labels "Continue"/"Not now" per `design-decisions.md` §23.6. Test mirrors
   `CalendarPrimer.test.tsx`'s assertions.
-- [ ] T018 [P] [US1] `frontend/lib/colors/validateColorName.ts` + `.test.ts`: a small
+- [X] T018 [P] [US1] `frontend/lib/colors/validateColorName.ts` + `.test.ts`: a small
   client-side mirror of `FASHION_COLOR_PALETTE`'s keys (case-insensitive/trimmed match) used to
   validate the Color field before submit, returning either a resolved name or `null`
   (`data-model.md` §7's `field.color.notRecognized` message shown when `null`). Keeping this as
   a name-only check (not hex resolution — the backend still does the authoritative
   `name_to_hex` conversion) avoids duplicating `colors.py`'s hex values in two languages.
-- [ ] T019 [US1] `frontend/app/(app)/add/Dropzone.tsx` + `.module.css` + `.test.tsx`: full-width
+- [X] T019 [US1] `frontend/app/(app)/add/Dropzone.tsx` + `.module.css` + `.test.tsx`: full-width
   `height: 220px`, `16px` radius dropzone per design-system §"Image treatment", disabled (via
   `useOnlineStatus`) with no retry-promise copy when offline (FR-014), using
   `add_item.upload.placeholder` copy. Tap behavior per `research.md` §7: **first tap ever**
@@ -148,7 +148,7 @@ offline, color validation).
   `capture` attribute, so the flow is never blocked on a decline (SC-006) — only the
   camera-jump behavior is gated, not file access itself. Once primed (accepted at least once),
   every subsequent tap opens the `capture`-attributed input directly with no primer.
-- [ ] T020 [US1] `frontend/app/(app)/add/ReviewCard.tsx` + `.module.css` + `.test.tsx`: the
+- [X] T020 [US1] `frontend/app/(app)/add/ReviewCard.tsx` + `.module.css` + `.test.tsx`: the
   six-field card (Name `Input`, Category `Chip` group, Group `Input`, Fabric `Input`, Color
   `Input` validated via T018 on submit, Notes `Textarea`) at `150px` review-card photo height,
   `16px` radius, matching `ItemEditForm.tsx`'s Category/Group dual-write pattern; submit calls
@@ -156,7 +156,7 @@ offline, color validation).
   server-side (client sends the resolved name, server does the hex lookup — the client only
   gates *whether* to submit, per `research.md` §5's "backend still does the authoritative
   conversion").
-- [ ] T021 [US1] `frontend/app/(app)/add/AddItemFlow.tsx` + `.module.css` + `.test.tsx`: the
+- [X] T021 [US1] `frontend/app/(app)/add/AddItemFlow.tsx` + `.module.css` + `.test.tsx`: the
   state machine `dropzone → scanning → review → saved`, calling `POST /closet/items/extract`
   (T012) on file selection, rendering the "no garment found" empty state
   (`add_item.empty.body`/`add_item.empty.retake_cta`) when `extraction_ok: false` with an
@@ -165,7 +165,7 @@ offline, color validation).
   (`add_item.error.body`/`add_item.error.cta`) distinct from the empty state when the extract
   call itself fails (network/5xx). On save, closes the overlay via the existing
   `CloseAddOverlay`.
-- [ ] T022 [US1] Replace `frontend/app/(app)/add/page.tsx`'s stub body with `AddItemFlow`
+- [X] T022 [US1] Replace `frontend/app/(app)/add/page.tsx`'s stub body with `AddItemFlow`
   (single-item path; T024 adds the bulk branch's entry choice on top of this same page).
   Depends on T021.
 

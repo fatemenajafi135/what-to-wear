@@ -1,0 +1,97 @@
+/* Same dialog shape as CalendarPrimer.module.css/BottomSheet.module.css —
+   bottom-anchored on mobile, centered dialog at tablet+, reduced-motion
+   gated. Duplicated rather than shared since each is a distinct bespoke
+   variant of the same escape hatch (design-decisions.md §23.6). */
+
+.dialog {
+  border: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  max-height: 85dvh;
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  inset-block-end: 0;
+  inset-inline: 0;
+  position: fixed;
+}
+
+.dialog::backdrop {
+  background-color: var(--color-overlay);
+  opacity: 0;
+  transition: opacity var(--motion-duration-base) var(--motion-easing-decelerate);
+}
+.dialog[open]::backdrop {
+  opacity: 1;
+}
+
+.dialog {
+  transform: translateY(100%);
+  transition: transform var(--motion-duration-base) var(--motion-easing-decelerate);
+}
+.dialog[open] {
+  transform: translateY(0);
+}
+
+@media (min-width: 768px) {
+  .dialog {
+    inset-block-end: auto;
+    top: 50%;
+    inset-inline-start: 50%;
+    inset-inline-end: auto;
+    max-width: 420px;
+    border-radius: var(--radius-lg);
+    transform: translate(-50%, -50%) scale(0.96);
+    opacity: 0;
+    transition:
+      transform var(--motion-duration-base) var(--motion-easing-decelerate),
+      opacity var(--motion-duration-base) var(--motion-easing-decelerate);
+  }
+  .dialog[open] {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .dialog::backdrop {
+    transition: none;
+  }
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  padding-bottom: calc(30px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+.title {
+  margin: 0;
+}
+
+.body {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.notNow {
+  composes: hitArea from global;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  padding: var(--space-sm) 0;
+}
+
+@media (hover: hover) {
+  .notNow:hover {
+    opacity: 0.7;
+  }
+}

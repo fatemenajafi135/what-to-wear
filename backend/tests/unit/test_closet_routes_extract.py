@@ -85,7 +85,7 @@ def test_valid_upload_calls_storage_and_vision(
     from whattowear.schema import ExtractedAttributes
 
     upload_mock, extract_mock = _mock_storage_and_vision
-    extract_mock.return_value = ExtractedAttributes(category="top")
+    extract_mock.return_value = ExtractedAttributes(category="top", colors=["#1b2a4a"])
 
     resp = client.post(
         "/api/v1/closet/items/extract",
@@ -96,6 +96,9 @@ def test_valid_upload_calls_storage_and_vision(
     body = resp.json()
     assert body["extraction_ok"] is True
     assert body["extracted"]["category"] == "top"
+    # Route-local computed field (research.md §5) — the review card
+    # pre-fills Color with a name, not the raw hex.
+    assert body["color_names"] == ["navy"]
     upload_mock.assert_called_once()
     extract_mock.assert_called_once()
 

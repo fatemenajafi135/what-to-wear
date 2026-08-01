@@ -274,12 +274,23 @@ def delete_closet_item(
 # --- feature 006: photo upload + vision -------------------------------------
 
 
+class PhotoExtractionView(PhotoExtractionResponse):
+    """`PhotoExtractionResponse` plus a display-only computed field, same
+    pattern as `ClosetItemView` over `WardrobeItem`: the review card's
+    Color field pre-fills with a NAME (`colors.nearest_names`), not the
+    raw hex `extracted.colors` carries — computed here, route-local, so
+    `PhotoExtractionResponse`/`ExtractedAttributes` (feature 007's AI-layer
+    contract) stay untouched (design-decisions.md §23.4, research.md §5)."""
+
+    color_names: list[str]
+
+
 @router.post("/closet/items/extract")
 def extract_closet_item(
     photo: UploadFile = File(...),  # noqa: B008
     user_id: str = Depends(get_current_user_id),  # noqa: B008
     access_token: str = Depends(get_current_access_token),  # noqa: B008
-) -> PhotoExtractionResponse:
+) -> PhotoExtractionView:
     """Draft extraction only — persists nothing to `wardrobe_items`
     (contracts/wardrobe-items-extract.md). Extraction failure is always a
     200 with `extraction_ok: false`; only a genuine Storage failure 5xxs
@@ -308,7 +319,12 @@ def extract_closet_item(
         extracted = ExtractedAttributes()
         extraction_ok = False
 
-    return PhotoExtractionResponse(photo_path=photo_path, extracted=extracted, extraction_ok=extraction_ok)
+    return PhotoExtractionView(
+        photo_path=photo_path,
+        extracted=extracted,
+        extraction_ok=extraction_ok,
+        color_names=nearest_names(extracted.colors or []),
+    )
 
 
 @router.post("/closet/items/from-upload", status_code=status.HTTP_201_CREATED)

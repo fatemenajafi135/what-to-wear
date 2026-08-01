@@ -1,0 +1,161 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/Button/Button";
+import { Dropzone } from "./Dropzone";
+import { ReviewCard, type ReviewCardFields } from "./ReviewCard";
+import { apiClient } from "@/lib/api/client";
+import { addItemCopy } from "@/lib/add-item-copy";
+import type { components } from "@/lib/api/schema";
+import styles from "./AddItemFlow.module.css";
+
+type ExtractedAttributes = components["schemas"]["ExtractedAttributes"];
+
+type FlowState =
+  | { step: "dropzone" }
+  | { step: "scanning" }
+  | {
+      step: "review";
+      photoUrl: string;
+      photoPath: string;
+      extracted: ExtractedAttributes | null;
+      colorNames: string[];
+    }
+  | { step: "empty"; photoUrl: string; photoPath: string }
+  | { step: "error" }
+  | { step: "saved" };
+
+export interface AddItemFlowProps {
+  onClose: () => void;
+}
+
+/**
+ * design/design-system.md § Add item: dropzone → scan → review card →
+ * saved (spec.md User Story 1). Extraction failure ("no garment found") is
+ * a distinct, non-error empty state (FR-003); a genuine upload/scan
+ * service failure is its own error state (FR-004) — never the same UI.
+ * "Enter manually" from the empty state advances to the SAME review card,
+ * blank, rather than a second form (FR-016, research.md §8).
+ */
+export function AddItemFlow({ onClose }: AddItemFlowProps) {
+  const [state, setState] = useState<FlowState>({ step: "dropzone" });
+
+  const handleFileSelected = async (file: File) => {
+    setState({ step: "scanning" });
+    try {
+      const formData = new FormData();
+      formData.append("photo", file);
+      // Multipart request bodies don't type usefully through
+      // openapi-typescript (research.md §10) — raw FormData is passed
+      // directly; openapi-fetch skips its JSON-stringify step for it. The
+      // *response* type is still fully generated.
+      const { data, error } = await apiClient.POST("/api/v1/closet/items/extract", {
+        // @ts-expect-error — multipart request body isn't usefully typed (research.md §10)
+        body: formData,
+      });
+      if (error || !data) {
+        setState({ step: "error" });
+        return;
+      }
+      const photoUrl = URL.createObjectURL(file);
+      if (data.extraction_ok) {
+        setState({
+          step: "review",
+          photoUrl,
+          photoPath: data.photo_path,
+          extracted: data.extracted,
+          colorNames: data.color_names,
+        });
+      } else {
+        setState({ step: "empty", photoUrl, photoPath: data.photo_path });
+      }
+    } catch {
+      setState({ step: "error" });
+    }
+  };
+
+  const handleEnterManually = () => {
+    if (state.step !== "empty") return;
+    setState({
+      step: "review",
+      photoUrl: state.photoUrl,
+      photoPath: state.photoPath,
+      extracted: null,
+      colorNames: [],
+    });
+  };
+
+  const handleSave = async (fields: ReviewCardFields, photoPath: string) => {
+    const { error } = await apiClient.POST("/api/v1/closet/items/from-upload", {
+      body: {
+        photo_path: photoPath,
+        category: fields.category,
+        // ReviewCard validates color is non-empty and recognized before
+        // ever calling onSave — the backend resolves the name to hex
+        // (schema.py's _colors_resolve_name_or_hex, research.md §5).
+        colors: [fields.color],
+        name: fields.name || null,
+        fabric: fields.fabric || null,
+        notes: fields.notes || null,
+      },
+    });
+    if (error) throw new Error("save failed");
+    setState({ step: "saved" });
+    onClose();
+  };
+
+  if (state.step === "dropzone") {
+    return <Dropzone onFileSelected={handleFileSelected} />;
+  }
+
+  if (state.step === "scanning") {
+    return <div className={styles.scanning} aria-live="polite">Scanning…</div>;
+  }
+
+  if (state.step === "empty") {
+    return (
+      <div className={styles.stateBlock}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset */}
+        <img src={state.photoUrl} alt="" className={styles.photo} />
+        <p className={`textBody ${styles.stateBody}`}>{addItemCopy.empty.body}</p>
+        <Button width="intrinsic" onClick={() => setState({ step: "dropzone" })}>
+          {addItemCopy.empty.retakeCta}
+        </Button>
+        <button type="button" className={styles.manualLink} onClick={handleEnterManually}>
+          {addItemCopy.empty.enterManuallyCta}
+        </button>
+      </div>
+    );
+  }
+
+  if (state.step === "error") {
+    return (
+      <div className={styles.stateBlock}>
+        <p className={`textBody ${styles.stateBody}`}>{addItemCopy.error.body}</p>
+        <Button width="intrinsic" onClick={() => setState({ step: "dropzone" })}>
+          {addItemCopy.error.cta}
+        </Button>
+      </div>
+    );
+  }
+
+  if (state.step === "review") {
+    const e = state.extracted;
+    return (
+      <ReviewCard
+        photoUrl={state.photoUrl}
+        initial={{
+          category: e?.category ?? "",
+          fabric: e?.fabric ?? "",
+          // Pre-filled with the derived NAME (research.md §5), not the raw
+          // hex extracted.colors carries.
+          color: state.colorNames[0] ?? "",
+        }}
+        saveLabel="Save to Closet"
+        onSave={(fields) => handleSave(fields, state.photoPath)}
+      />
+    );
+  }
+
+  return null;
+}

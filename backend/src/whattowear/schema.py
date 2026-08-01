@@ -23,7 +23,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from .colors import normalize_hex
+from .colors import is_hex, name_to_hex, normalize_hex
 
 # --- controlled vocabularies -------------------------------------------------
 
@@ -208,8 +208,25 @@ class CreateWardrobeItemFromUploadRequest(BaseModel):
 
     @field_validator("colors")
     @classmethod
-    def _colors_must_be_hex(cls, v: list[str]) -> list[str]:
-        return [normalize_hex(c) for c in v]
+    def _colors_resolve_name_or_hex(cls, v: list[str]) -> list[str]:
+        """Unlike `WardrobeItem`/`WardrobeItemPatch` (hex-only — the review
+        card never reaches those directly), the review card's Color field
+        is free text pre-filled with a *name* (`colors.nearest_names`), so
+        this is the one write path that must resolve a name back to hex
+        itself (design-decisions.md §23.4, research.md §5) — the frontend
+        only gates *whether* to submit (`isRecognizedColorName`); this is
+        the authoritative resolution. Raises naming the unresolved value,
+        never silently drops or guesses one."""
+        resolved: list[str] = []
+        for value in v:
+            if is_hex(value):
+                resolved.append(normalize_hex(value))
+                continue
+            try:
+                resolved.append(name_to_hex(value))
+            except KeyError:
+                raise ValueError(f"{value!r} isn't a recognized color name or hex code") from None
+        return resolved
 
 
 # --- outputs -----------------------------------------------------------------

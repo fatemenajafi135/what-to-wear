@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from whattowear.schema import (
     SCORE_DIMENSIONS,
     Context,
+    CreateWardrobeItemFromUploadRequest,
     DimensionScore,
     ExtractedAttributes,
     ScoredOutfit,
@@ -84,6 +85,41 @@ class TestExtractedAttributes:
     def test_colors_normalized_when_present(self) -> None:
         attrs = ExtractedAttributes(colors=["1B2A4A"])
         assert attrs.colors == ["#1b2a4a"]
+
+
+class TestCreateWardrobeItemFromUploadRequest:
+    """Feature 006. The review card's Color field is a NAME (`nearest_names`
+    pre-fill), not hex — unlike WardrobeItem/WardrobeItemPatch, this is the
+    one write path that must resolve a name to hex itself
+    (design-decisions.md §23.4, research.md §5)."""
+
+    def test_five_extra_attributes_are_optional(self) -> None:
+        req = CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["navy"])
+        assert req.formality is None
+        assert req.warmth is None
+        assert req.season is None
+        assert req.fabric is None
+
+    def test_color_name_resolves_to_hex(self) -> None:
+        req = CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["navy"])
+        assert req.colors == ["#1b2a4a"]
+
+    def test_color_hex_passes_through_normalized(self) -> None:
+        req = CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["1B2A4A"])
+        assert req.colors == ["#1b2a4a"]
+
+    def test_unrecognized_color_name_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["mauve"])
+
+    def test_empty_colors_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=[])
+
+    def test_name_and_notes_optional(self) -> None:
+        req = CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["navy"])
+        assert req.name is None
+        assert req.notes is None
 
 
 class TestContext:
