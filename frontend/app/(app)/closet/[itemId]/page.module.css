@@ -2,27 +2,47 @@
   padding: 0 var(--space-lg) var(--space-lg);
 }
 
+/* design/design-system.md §5: stacked on mobile; 40% width photo on the
+   left, details on the right, from tablet up (handoff §5.5). */
+@media (min-width: 768px) {
+  .wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-lg);
+  }
+
+  .photo,
+  .noPhoto {
+    flex: 0 0 40%;
+    margin-bottom: 0;
+  }
+
+  .card {
+    flex: 1;
+  }
+}
+
 /* design/design-system.md § Image treatment — full-width, fixed 220px,
-   16px radius, same diagonal-stripe treatment as the Closet grid tile. */
+   16px radius. The diagonal-stripe placeholder is gone (feature 006) —
+   a real photo renders here now; research.md §11's flat no-photo
+   treatment (.noPhoto) is the only fallback that remains. */
 .photo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
+  width: 100%;
   height: 220px;
   border-radius: 16px;
   border: 1px solid var(--color-border);
-  background-image: repeating-linear-gradient(
-    135deg,
-    var(--color-surface-sunken) 0 8px,
-    var(--color-background) 8px 16px
-  );
+  object-fit: cover;
   margin-bottom: var(--space-lg);
 }
 
-.placeholderLabel {
-  font-family: monospace;
-  font-size: var(--font-size-2xs);
-  color: var(--color-text-secondary);
+/* Sizing/radius wrapper only — components/ui/NoPhoto owns the fill/icon. */
+.noPhoto {
+  height: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  margin-bottom: var(--space-lg);
 }
 
 .card {

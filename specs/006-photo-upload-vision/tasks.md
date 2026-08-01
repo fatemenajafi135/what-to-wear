@@ -221,19 +221,19 @@ half already covered by T010).
 
 **Independent test**: `quickstart.md` steps 4–5, 11.
 
-- [ ] T028 [US3] `frontend/app/(app)/closet/ClosetGrid.tsx` + `.module.css`: grid tile renders
+- [X] T028 [US3] `frontend/app/(app)/closet/ClosetGrid.tsx` + `.module.css`: grid tile renders
   `<img src={item.photo_url} alt="" />` filling the existing `120px` tile box when `photo_url`
   is set; renders the no-photo treatment (`research.md` §11 — static `--color-surface-sunken`
   fill + centered Lucide icon, `aria-hidden`) when it's `null`; **delete** the diagonal-stripe
   `background-image` rule and `.placeholderLabel` span/usage for the has-photo case (keep the
   `--color-surface-sunken` fill, now shared with the no-photo treatment, per
   `ClosetGrid.module.css`).
-- [ ] T029 [US3] `frontend/app/(app)/closet/[itemId]/page.tsx` + `.module.css`: `ItemDetailCard`'s
+- [X] T029 [US3] `frontend/app/(app)/closet/[itemId]/page.tsx` + `.module.css`: `ItemDetailCard`'s
   `.photo` block renders the real photo (full-width, `220px`, `16px` radius per design-system,
   40%-width at tablet+ per the existing two-pane rule) when `item.photo_url` is set, the same
   no-photo treatment otherwise; delete the placeholder `<span>`/debug-label usage for the
   has-photo case.
-- [ ] T030 [P] [US3] Frontend tests: `ClosetGrid` renders an `<img>` for an item with
+- [X] T030 [P] [US3] Frontend tests: `ClosetGrid` renders an `<img>` for an item with
   `photo_url` and the no-photo treatment (not the old placeholder markup) for one without;
   same pair of assertions for the item-detail page's photo block.
 
