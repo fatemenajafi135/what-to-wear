@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button/Button";
 import { RecommendCalendarContext } from "@/components/calendar/RecommendCalendarContext";
@@ -15,13 +15,29 @@ import styles from "./RecommendChat.module.css";
 type Status = "idle" | "sending" | "error";
 type Readiness = { ready: boolean; sparse: boolean; missing: string[] };
 
+export interface RecommendChatHandle {
+  /** Resets to the hero state with a fresh (absent) thread_id — the
+   * TopHeader's "New chat" action (docs/design-decisions.md §25: no
+   * archival call in this slice, that's 011's job). */
+  newChat: () => void;
+}
+
+export interface RecommendChatProps {
+  /** Lets the page's TopHeader disable "New chat" on an empty thread
+   * (design-system.md anatomy item 1 — visible but disabled, not hidden). */
+  onHasUserMessageChange?: (hasUserMessage: boolean) => void;
+}
+
 /**
  * Owns the whole Recommend chat surface: the pending-vs-sent message split
  * and the single real network trigger ("Start styling") that docs/
  * design-decisions.md §28 resolves, and `thread_id` continuity (§25 — held
  * in memory only, never persisted, echoed on every subsequent call).
  */
-export function RecommendChat() {
+export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>(function RecommendChat(
+  { onHasUserMessageChange },
+  ref,
+) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pendingTexts, setPendingTexts] = useState<string[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -37,6 +53,21 @@ export function RecommendChat() {
       cancelled = true;
     };
   }, []);
+
+  const hasUserMessage = messages.some((m) => m.role === "user");
+
+  useEffect(() => {
+    onHasUserMessageChange?.(hasUserMessage);
+  }, [hasUserMessage, onHasUserMessageChange]);
+
+  useImperativeHandle(ref, () => ({
+    newChat: () => {
+      setMessages([]);
+      setPendingTexts([]);
+      setThreadId(null);
+      setStatus("idle");
+    },
+  }));
 
   function handleSend(text: string) {
     setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text }]);
@@ -69,8 +100,6 @@ export function RecommendChat() {
     setPendingTexts([]);
     setStatus("idle");
   }
-
-  const hasUserMessage = messages.some((m) => m.role === "user");
 
   if (readiness === null) {
     return (
@@ -119,4 +148,4 @@ export function RecommendChat() {
       <Composer onSend={handleSend} inFlight={status === "sending"} />
     </div>
   );
-}
+});

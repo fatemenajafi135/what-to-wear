@@ -78,7 +78,9 @@ const DEFAULT_LABELS: Record<IconKeyword, string> = {
 export interface IconButtonProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon: IconKeyword;
-  size?: 28 | 34 | 40 | 48;
+  /** design-system.md §3: "Visual size 28-48px (default 34)" — 36 is the
+   * Recommend TopHeader's own pair of action icons (feature 008). */
+  size?: 28 | 34 | 36 | 40 | 48;
   label?: string;
   /** Renders as a Next.js Link with the same visual treatment instead of a <button>. */
   href?: string;
