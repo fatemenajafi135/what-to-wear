@@ -174,3 +174,147 @@ def test_pagination_has_more_flag() -> None:
     finally:
         with get_engine().begin() as conn:
             conn.execute(text("DELETE FROM wardrobe_items WHERE id = ANY(:ids)"), {"ids": ids})
+
+
+# --- feature 005: closet write --------------------------------------------
+
+
+@pytest.fixture
+def own_item() -> Iterator[str]:
+    item_id = _insert_item(USER_A, "t-shirt", name="Original name")
+    yield item_id
+    with get_engine().begin() as conn:
+        conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": item_id})
+
+
+@pytest.fixture
+def foreign_item() -> Iterator[str]:
+    item_id = _insert_item(USER_B, "jeans", name="B's jeans")
+    yield item_id
+    with get_engine().begin() as conn:
+        conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": item_id})
+
+
+class TestUpdateClosetItem:
+    def test_partial_update_changes_only_sent_fields_and_persists(self, own_item: str) -> None:
+        with _client_as(USER_A) as client:
+            response = client.patch(f"/api/v1/closet/items/{own_item}", json={"notes": "Needs ironing"})
+            assert response.status_code == 200
+            body = response.json()
+            assert body["notes"] == "Needs ironing"
+            assert body["name"] == "Original name"  # untouched
+
+            refetch = client.get(f"/api/v1/closet/items/{own_item}").json()
+            assert refetch["notes"] == "Needs ironing"
+            assert refetch["name"] == "Original name"
+
+    def test_colors_text_resolves_names_to_hex(self, own_item: str) -> None:
+        with _client_as(USER_A) as client:
+            response = client.patch(f"/api/v1/closet/items/{own_item}", json={"colors_text": "navy, white"})
+        assert response.status_code == 200
+        assert response.json()["colors"] == ["#1b2a4a", "#ffffff"]
+
+    def test_unknown_color_name_is_422(self, own_item: str) -> None:
+        with _client_as(USER_A) as client:
+            response = client.patch(f"/api/v1/closet/items/{own_item}", json={"colors_text": "not-a-real-color"})
+        assert response.status_code == 422
+
+    def test_foreign_item_is_404_and_unchanged(self, foreign_item: str) -> None:
+        with _client_as(USER_A) as client:
+            response = client.patch(f"/api/v1/closet/items/{foreign_item}", json={"name": "Hijacked"})
+        assert response.status_code == 404
+
+        with _client_as(USER_B) as client:
+            still_owned = client.get(f"/api/v1/closet/items/{foreign_item}").json()
+        assert still_owned["name"] == "B's jeans"
+
+    def test_nonexistent_item_is_404(self) -> None:
+        with _client_as(USER_A) as client:
+            response = client.patch(f"/api/v1/closet/items/{uuid.uuid4()}", json={"name": "x"})
+        assert response.status_code == 404
+
+    def test_malformed_id_is_404(self) -> None:
+        with _client_as(USER_A) as client:
+            response = client.patch("/api/v1/closet/items/not-a-uuid", json={"name": "x"})
+        assert response.status_code == 404
+
+
+class TestFavoriteToggle:
+    def test_toggles_true_then_false(self, own_item: str) -> None:
+        with _client_as(USER_A) as client:
+            first = client.post(f"/api/v1/closet/items/{own_item}/favorite")
+            second = client.post(f"/api/v1/closet/items/{own_item}/favorite")
+        assert first.status_code == 200
+        assert first.json() == {"favorite": True}
+        assert second.json() == {"favorite": False}
+
+    def test_foreign_item_is_404(self, foreign_item: str) -> None:
+        with _client_as(USER_A) as client:
+            response = client.post(f"/api/v1/closet/items/{foreign_item}/favorite")
+        assert response.status_code == 404
+
+
+class TestLogWorn:
+    def test_first_call_logs_a_wear(self, own_item: str) -> None:
+        with _client_as(USER_A) as client:
+            response = client.post(f"/api/v1/closet/items/{own_item}/wear")
+        assert response.status_code == 204
+
+        with get_engine().begin() as conn:
+            count = conn.execute(
+                text("SELECT COUNT(*) FROM item_wears WHERE item_id = :id"), {"id": own_item}
+            ).scalar_one()
+        assert count == 1
+
+    def test_second_call_same_day_does_not_duplicate(self, own_item: str) -> None:
+        with _client_as(USER_A) as client:
+            first = client.post(f"/api/v1/closet/items/{own_item}/wear")
+            second = client.post(f"/api/v1/closet/items/{own_item}/wear")
+        assert first.status_code == 204
+        assert second.status_code == 204
+
+        with get_engine().begin() as conn:
+            count = conn.execute(
+                text("SELECT COUNT(*) FROM item_wears WHERE item_id = :id"), {"id": own_item}
+            ).scalar_one()
+        assert count == 1
+
+    def test_foreign_item_is_404(self, foreign_item: str) -> None:
+        with _client_as(USER_A) as client:
+            response = client.post(f"/api/v1/closet/items/{foreign_item}/wear")
+        assert response.status_code == 404
+
+
+class TestDeleteClosetItem:
+    def test_delete_removes_item_and_404s_afterward(self, own_item: str) -> None:
+        with _client_as(USER_A) as client:
+            delete_response = client.delete(f"/api/v1/closet/items/{own_item}")
+            assert delete_response.status_code == 204
+            get_response = client.get(f"/api/v1/closet/items/{own_item}")
+            assert get_response.status_code == 404
+
+    def test_delete_cascades_to_item_wears(self, own_item: str) -> None:
+        with _client_as(USER_A) as client:
+            client.post(f"/api/v1/closet/items/{own_item}/wear")
+            client.delete(f"/api/v1/closet/items/{own_item}")
+
+        with get_engine().begin() as conn:
+            count = conn.execute(
+                text("SELECT COUNT(*) FROM item_wears WHERE item_id = :id"), {"id": own_item}
+            ).scalar_one()
+        assert count == 0
+
+    def test_foreign_item_is_404_and_not_deleted(self, foreign_item: str) -> None:
+        with _client_as(USER_A) as client:
+            response = client.delete(f"/api/v1/closet/items/{foreign_item}")
+        assert response.status_code == 404
+
+        with _client_as(USER_B) as client:
+            still_there = client.get(f"/api/v1/closet/items/{foreign_item}")
+        assert still_there.status_code == 200
+
+    def test_already_deleted_item_is_404_not_500(self, own_item: str) -> None:
+        with _client_as(USER_A) as client:
+            client.delete(f"/api/v1/closet/items/{own_item}")
+            second_delete = client.delete(f"/api/v1/closet/items/{own_item}")
+        assert second_delete.status_code == 404

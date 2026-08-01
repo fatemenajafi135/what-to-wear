@@ -888,4 +888,93 @@ same problem the same way.
 
 ---
 
+## 22. Feature 005 (Closet write) — two gaps the handoff asked to be decided here
+
+### 22.1 Wear history shape, and same-day double-tap semantics
+
+The handoff (`docs/handoffs/005-closet-write.md` §5.1, §2.3) named this as a modelling decision,
+not a column choice, and asked for the "tapped twice in one day" question to be resolved
+explicitly rather than assumed.
+
+**Decision: an `item_wears` table, one row per item per calendar day (unique on
+`(item_id, worn_date)`), not one row per tap.**
+
+A `worn_count` integer was rejected first and for the reason the handoff already gives: it
+can't answer "most worn this month" (Outfits' specified sort) and can't be undone. That leaves
+the real question — does a table record one row per *tap* or one row per item per *day*?
+
+**One row per day.** "Log as worn today" reads as a same-day boolean claim about the garment
+("I wore this today"), not an event counter the user is aware they're incrementing. The design
+gives this action no confirmation step and no on-page feedback (§2.3: Item detail shows no worn
+indicator at all) — so a user has no way to notice a second tap even happened. If a second tap
+inserted a second row, an accidental double-tap (fat finger, an impatient repeat-tap while a
+request is in flight, a retried network request) would silently inflate that item's future
+"most worn" ranking with nothing on screen to catch it. A per-day-unique row makes the action
+naturally idempotent: the second tap the same day is a harmless no-op against the existing row,
+matching what the button's own label already promises and nothing more.
+
+Implementation: `item_wears(id, item_id, user_id, worn_date date not null default current_date,
+created_at timestamptz not null default now())`, unique constraint on `(item_id, worn_date)`.
+The route issues an upsert (`ON CONFLICT (item_id, worn_date) DO NOTHING`) so a repeat tap the
+same day returns success without a second row or a client-visible error — consistent with there
+being nothing on the page to show a difference between "just logged" and "already logged today"
+either way.
+
+**Alternatives considered:**
+- *One row per tap, no uniqueness constraint.* Rejected — this is what the handoff already
+  flags as the option that answers "most worn" and supports undo, so it isn't obviously wrong;
+  it was rejected specifically because it's the option most exposed to the accidental-double-tap
+  failure mode above, and nothing in the design gives the user a way to see or correct an
+  inflated count. If a future feature wants true multi-wear-per-day tracking (rare for
+  clothing — the closest real case is a swim then change scenario), it can relax the unique
+  constraint then, with a reason attached to that feature's own decision record; loosening a
+  constraint later is cheap, and recovering historical per-tap data after the fact is not.
+- *A `last_worn_at` timestamp column on `wardrobe_items` instead of a separate table.* Rejected
+  for the same reason `worn_count` was: it answers "when was this last worn" but not "most worn
+  this month" (Outfits' sort needs a count over a window, not a single latest timestamp), and a
+  single mutable column can't be an audit trail.
+
+### 22.2 Delete confirmation
+
+The handoff (§5.4) flags this as a real gap: the design specifies no confirmation before the
+overflow menu's `danger`-tone Delete row fires, and asks for a decision plus alternatives to be
+recorded rather than silently picking either way.
+
+**Decision: add a confirmation step.** A single tap in a four-row menu triggering an
+unrecoverable hard delete of a garment the user photographed themselves is a harsh outcome for
+one mis-tap, and the four rows (Edit, Log as worn today, Favorite, Delete) sit close enough
+together in the same sheet that a fast or imprecise tap choosing the wrong one is a realistic
+failure mode, not a hypothetical one. The cost side of this trade is small — one extra
+deliberate tap — against a cost on the other side that cannot be undone at all.
+
+Implementation follows the same escape hatch design-system.md §3 and this document's §18
+(calendar permission primer) already use and name explicitly: *"Bespoke variants not on this
+component... richer than BottomSheet's plain label rows."* A small bespoke confirmation card,
+real `<dialog>` modal semantics (`showModal()`, focus trap/restore, safe-area-aware bottom
+padding — matching BottomSheet's own treatment), title "Delete {item name}?", body "This can't
+be undone.", a secondary "Cancel" and a danger-toned "Delete" action. This is content shown in
+response to a destructive action, not a new form control, so it isn't the kind of invented
+component §VIII warns against — it's the same pattern already used once in this codebase for
+exactly this situation (an irreversible or consequential action needing more explanation than a
+BottomSheet row can hold).
+
+**Alternatives considered:**
+- *No confirmation, matching the design literally.* Rejected — the handoff itself calls this
+  gap out as real rather than asking it to be silently accepted, and the danger-tone treatment
+  on the row is itself evidence the design already recognizes this action needs to read as
+  risky; a risky-looking action with no actual friction before it fires is the worst of both
+  options; it *looks* dangerous without *behaving* carefully.
+- *Soft delete with an "Undo" toast instead of a blocking confirmation.* Considered
+  seriously — it's the more modern pattern and avoids an extra tap on the common path. Rejected
+  because the handoff's own scope table (§5.2) states plainly "Delete — Hard delete", and a
+  `deleted_at` column plus a restore path is materially more schema and route surface than
+  either the handoff or this feature's spec describes; that trade belongs to a future feature
+  making it deliberately, not to this gap-fill inventing it as a side effect.
+- *Browser-native `confirm()`.* Rejected — untestable in the design system's terms (no tokens,
+  no control over copy or button styling, inconsistent across browsers), and the codebase
+  already has a documented bespoke-dialog pattern (§18) that does the same job with the design
+  system's own visual language.
+
+---
+
 *Every item above is decided except those explicitly marked **deferred** (§21), which are recorded gaps awaiting a decision rather than open questions blocking work.*

@@ -1,11 +1,15 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
 import { Button } from "@/components/ui/Button/Button";
 import { apiClient } from "@/lib/api/client";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { ClosetGrid } from "../ClosetGrid";
+import { ItemOverflowSheet } from "./ItemOverflowSheet";
+import { ItemEditForm } from "./ItemEditForm";
+import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import type { components } from "@/lib/api/schema";
 import twoPaneStyles from "../page.module.css";
 import styles from "./page.module.css";
@@ -15,8 +19,9 @@ type ClosetItemView = components["schemas"]["ClosetItemView"];
 /**
  * `/closet/:itemId` — design/design-system.md § Item detail: header with
  * back + overflow (dots) trigger, photo placeholder, and the details card.
- * The overflow sheet itself is feature 005's — the trigger is wired here
- * but opens nothing yet (this feature ships no sheet content).
+ * Feature 005 fills in the overflow sheet 004 wired the trigger for
+ * (Edit / Log as worn today / Favorite / Delete), the edit-mode form, and
+ * the delete confirmation dialog (docs/design-decisions.md §22.2).
  *
  * At ≥1024px (design-system.md §5's two-pane master-detail), the closet
  * grid renders in a pane to the left of this content, mirroring
@@ -24,10 +29,14 @@ type ClosetItemView = components["schemas"]["ClosetItemView"];
  */
 export default function ItemDetailPage({ params }: { params: Promise<{ itemId: string }> }) {
   const { itemId } = use(params);
+  const router = useRouter();
   const [item, setItem] = useState<ClosetItemView | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const isOnline = useOnlineStatus();
 
   const load = useCallback(async () => {
@@ -63,6 +72,30 @@ export default function ItemDetailPage({ params }: { params: Promise<{ itemId: s
 
   const showError = error && isOnline; // offline suppresses the screen-level error (design-system §6)
 
+  const handleToggleFavorite = async () => {
+    await apiClient.POST("/api/v1/closet/items/{item_id}/favorite", {
+      params: { path: { item_id: itemId } },
+    });
+    // Never reflected on Item detail (design-system §2.3) — no local state
+    // update needed beyond the request itself.
+  };
+
+  const handleLogWorn = async () => {
+    await apiClient.POST("/api/v1/closet/items/{item_id}/wear", {
+      params: { path: { item_id: itemId } },
+    });
+  };
+
+  const handleDeleteConfirmed = async () => {
+    setDeleteDialogOpen(false);
+    const { response } = await apiClient.DELETE("/api/v1/closet/items/{item_id}", {
+      params: { path: { item_id: itemId } },
+    });
+    if (response.ok) {
+      router.push("/closet");
+    }
+  };
+
   return (
     <div className={twoPaneStyles.twoPane}>
       <div className={twoPaneStyles.gridPane}>
@@ -73,7 +106,7 @@ export default function ItemDetailPage({ params }: { params: Promise<{ itemId: s
         <TopHeader
           title="Item details"
           backHref="/closet"
-          rightSlot={{ kind: "icon", icon: "dots", onClick: () => {} }}
+          rightSlot={{ kind: "icon", icon: "dots", onClick: () => setSheetOpen(true) }}
         />
 
         {loading && (
@@ -108,7 +141,38 @@ export default function ItemDetailPage({ params }: { params: Promise<{ itemId: s
           </div>
         )}
 
-        {!loading && !notFound && !error && item && <ItemDetailCard item={item} />}
+        {!loading && !notFound && !error && item && !editing && <ItemDetailCard item={item} />}
+
+        {!loading && !notFound && !error && item && editing && (
+          <ItemEditForm
+            item={item}
+            isOnline={isOnline}
+            onSaved={(updated) => {
+              setItem(updated);
+              setEditing(false);
+            }}
+          />
+        )}
+
+        {item && (
+          <>
+            <ItemOverflowSheet
+              open={sheetOpen}
+              onClose={() => setSheetOpen(false)}
+              isOnline={isOnline}
+              onEdit={() => setEditing(true)}
+              onLogWorn={handleLogWorn}
+              onToggleFavorite={handleToggleFavorite}
+              onDelete={() => setDeleteDialogOpen(true)}
+            />
+            <DeleteConfirmDialog
+              open={deleteDialogOpen}
+              itemName={item.name ?? "this item"}
+              onConfirm={handleDeleteConfirmed}
+              onCancel={() => setDeleteDialogOpen(false)}
+            />
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,16 +1,19 @@
-"""GET /api/v1/closet/items and GET /api/v1/closet/items/{item_id} — see
-specs/004-closet-read/contracts/closet.md.
+"""Closet read routes (GET, feature 004, specs/004-closet-read/contracts/
+closet.md) and write routes (PATCH/favorite/wear/DELETE, feature 005,
+specs/005-closet-write/contracts/closet-write.md).
 
-Ownership is enforced twice, independently: the repository's `WHERE user_id
-= ...` (the actual guarantee for this backend's own traffic — see
-specs/004-closet-read/research.md §1) and the RLS policy on `wardrobe_items`
-(the convention, proven independent of this backend's own connection). Category
-filtering and pagination happen here, in Python, over the full list
-`list_wardrobe_items` returns — `ports.ClosetRepository`'s signature takes no
-page/limit parameters and stays exactly as feature 007 defined it
-(research.md §5); the AI pipeline's own callers need the full wardrobe every
-time, so a paginated repository method would silently break them if ever
-reused there.
+Ownership is enforced twice, independently, on every route: the repository's
+`WHERE user_id = ...` (the actual guarantee for this backend's own traffic —
+see specs/004-closet-read/research.md §1) and the RLS policy on
+`wardrobe_items`/`item_wears` (the convention, proven independent of this
+backend's own connection). Category filtering and pagination happen here, in
+Python, over the full list `list_wardrobe_items` returns — `ports.
+ClosetRepository`'s signature takes no page/limit parameters and stays
+exactly as feature 007 defined it (research.md §5); the AI pipeline's own
+callers need the full wardrobe every time, so a paginated repository method
+would silently break them if ever reused there. The four write routes are
+all extra methods on `SupabaseClosetRepository`, not on the Protocol, for
+the same reason (specs/005-closet-write/research.md §5).
 """
 
 from __future__ import annotations
@@ -23,10 +26,10 @@ from pydantic import BaseModel
 
 from whattowear.auth import get_current_user_id
 from whattowear.categories import CategoryGroup, group_of
-from whattowear.colors import nearest_names
+from whattowear.colors import is_hex, name_to_hex, nearest_names, normalize_hex
 from whattowear.core.config import get_settings
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
-from whattowear.schema import WardrobeItem
+from whattowear.schema import WardrobeItem, WardrobeItemPatch
 
 router = APIRouter()
 
@@ -77,6 +80,58 @@ def _get_repository() -> SupabaseClosetRepository:
     return SupabaseClosetRepository()
 
 
+def _parse_item_id(item_id: str) -> None:
+    """Raises the same 404 the existing GET route uses for a syntactically
+    invalid id — never reaching the database's `uuid` column comparison,
+    which would otherwise raise a raw, unhandled `DataError` (004's own
+    fix, repeated here for every write route)."""
+    try:
+        uuid.UUID(item_id)
+    except ValueError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found") from None
+
+
+def _parse_colors_text(text: str) -> list[str]:
+    """Splits the edit form's single Colour text field (a comma-separated
+    list of color names or hex codes) into the hex list `WardrobeItemPatch.
+    colors` requires. `colors.py` draws the hex-is-truth line; this is the
+    one place a UI-facing name is translated across it (data-model.md §
+    "API-facing shapes"). Raises `ValueError` naming the first unrecognized
+    token — never silently drops or guesses one."""
+    hexes: list[str] = []
+    for token in text.split(","):
+        value = token.strip()
+        if not value:
+            continue
+        if is_hex(value):
+            hexes.append(normalize_hex(value))
+            continue
+        try:
+            hexes.append(name_to_hex(value))
+        except KeyError:
+            raise ValueError(f"{value!r} isn't a recognized color name or hex code") from None
+    return hexes
+
+
+class ClosetItemEditRequest(BaseModel):
+    """Route-local edit-form body — deliberately not `WardrobeItemPatch`
+    itself. Every field optional (partial update); `colors_text` is the
+    one bridge `WardrobeItemPatch` doesn't need, since it stays hex-only
+    (research.md §4/§ "API-facing shapes"). `category` covers both the
+    read view's "Category" (group) and "Group" (specific type) rows — both
+    write the same underlying column, see research.md §4."""
+
+    name: str | None = None
+    category: str | None = None
+    fabric: str | None = None
+    colors_text: str | None = None
+    notes: str | None = None
+
+
+class FavoriteToggleResponse(BaseModel):
+    favorite: bool
+
+
 @router.get("/closet/items")
 def list_closet_items(
     category: ClosetChipFilter | None = Query(default=None),  # noqa: B008
@@ -107,16 +162,13 @@ def get_closet_item(
     user_id: str = Depends(get_current_user_id),  # noqa: B008
     repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
 ) -> ClosetItemView:
-    try:
-        uuid.UUID(item_id)
-    except ValueError:
-        # A syntactically invalid id can never match a row — treated
-        # identically to "doesn't exist" (spec.md's URL-tampering edge
-        # case) rather than reaching the database, where the `uuid` column
-        # comparison would otherwise raise a raw DataError (caught in
-        # review: a malformed id crashed with an unhandled 500 instead of
-        # the same 404 every other not-found case gets).
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found") from None
+    # A syntactically invalid id can never match a row — treated identically
+    # to "doesn't exist" (spec.md's URL-tampering edge case) rather than
+    # reaching the database, where the `uuid` column comparison would
+    # otherwise raise a raw DataError (caught in review: a malformed id
+    # crashed with an unhandled 500 instead of the same 404 every other
+    # not-found case gets). Same helper every write route below reuses.
+    _parse_item_id(item_id)
 
     item = repository.get_wardrobe_item(user_id, item_id)
     if item is None:
@@ -124,3 +176,68 @@ def get_closet_item(
         # another user — never reveals which (contracts/closet.md).
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
     return ClosetItemView.from_wardrobe_item(item)
+
+
+@router.patch("/closet/items/{item_id}")
+def update_closet_item(
+    item_id: str,
+    body: ClosetItemEditRequest,
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
+) -> ClosetItemView:
+    _parse_item_id(item_id)
+
+    fields = body.model_dump(exclude_unset=True, exclude={"colors_text"})
+    if "colors_text" in body.model_fields_set:
+        colors_text = body.colors_text
+        if colors_text is not None:
+            try:
+                fields["colors"] = _parse_colors_text(colors_text)
+            except ValueError as e:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+        else:
+            fields["colors"] = None
+
+    patch = WardrobeItemPatch(**fields)
+    item = repository.update_wardrobe_item(user_id, item_id, patch)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    return ClosetItemView.from_wardrobe_item(item)
+
+
+@router.post("/closet/items/{item_id}/favorite")
+def toggle_closet_item_favorite(
+    item_id: str,
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
+) -> FavoriteToggleResponse:
+    _parse_item_id(item_id)
+
+    favorite = repository.toggle_favorite(user_id, item_id)
+    if favorite is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    return FavoriteToggleResponse(favorite=favorite)
+
+
+@router.post("/closet/items/{item_id}/wear", status_code=status.HTTP_204_NO_CONTENT)
+def log_closet_item_worn(
+    item_id: str,
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
+) -> None:
+    _parse_item_id(item_id)
+
+    if not repository.record_wear(user_id, item_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+
+
+@router.delete("/closet/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_closet_item(
+    item_id: str,
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
+) -> None:
+    _parse_item_id(item_id)
+
+    if not repository.delete_wardrobe_item(user_id, item_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")

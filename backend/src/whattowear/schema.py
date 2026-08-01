@@ -90,6 +90,11 @@ class WardrobeItem(BaseModel):
     # as None, which is valid since both are optional.
     name: str | None = None
     notes: str | None = None
+    # Added for feature 005 (closet write). Never read back by this
+    # feature's own UI (design-system §2.3 excludes a favourite indicator
+    # from Item detail) — consumed by future features (Outfits, favourites
+    # views). Additive-only, defaults False, no eval regression.
+    favorite: bool = False
 
     @field_validator("colors")
     @classmethod
