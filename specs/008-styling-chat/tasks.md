@@ -89,11 +89,16 @@ and every citation traces to something actually retrieved.
          `{"detail": "Your closet isn't ready for a styling request yet."}` if not ready, pipeline
          never invoked (FR-007, contracts/recommend.md).
       2. Build `SuggestRequest(occasion=body.message, thread_id=body.thread_id)`.
-      3. `await asyncio.wait_for(anyio.to_thread.run_sync(lambda: get_compiled_graph(repository).invoke(...)), timeout=get_settings().wtw_styling_request_timeout_seconds)`
-         (or the project's existing async/sync bridging convention for the graph — check how
-         `pipeline.graph.get_compiled_graph(...).invoke` is called from an async FastAPI route
-         elsewhere, if anywhere, before introducing a new pattern) with `configurable.thread_id`
-         set; on `TimeoutError` return `504` with `{"detail": "That took too long. Try again."}`.
+      3. Every existing route in this codebase is a sync `def`, not `async def`
+         (confirmed: `closet.py`, `calendar.py`) — FastAPI already runs these off the event loop,
+         so there is no event loop to `await` against and `asyncio.wait_for` does not apply. Use
+         `concurrent.futures.ThreadPoolExecutor(max_workers=1).submit(compiled_graph.invoke, input,
+         config={"configurable": {"thread_id": ...}}).result(timeout=get_settings().
+         wtw_styling_request_timeout_seconds)`, catching `concurrent.futures.TimeoutError` → `504`
+         `{"detail": "That took too long. Try again."}`. (The invocation isn't truly cancelled on
+         timeout — the submitted thread keeps running to completion in the background; this is the
+         accepted characteristic of this timeout pattern in Python and is fine for a backstop that
+         exists to bound the *response*, not to reclaim compute.)
       4. From `result.outfits`, take `[0]` if non-empty; resolve its item ids via
          `repository.list_wardrobe_items(user_id)` (already fetched for the readiness check —
          reuse, don't re-fetch) + `storage.create_signed_urls` (research.md §1).
@@ -121,7 +126,9 @@ and every citation traces to something actually retrieved.
 - [ ] T017 [P] [US1] `frontend/components/recommend/HeroState.tsx` + `.module.css`: 60×60 brand
       mark, "What to Wear" wordmark (26px/700), `useGreeting()` line, one static welcome bubble
       (surface-sunken, tail `14px 14px 14px 4px`), 3 `Chip`-based suggestion chips ("Rainy day
-      commute", "Dinner date outfit", "Business casual") that populate the composer on tap.
+      commute", "Dinner date outfit", "Business casual") that populate the composer on tap. Copy
+      check (FR-018): the welcome bubble's copy must not imply personalization or memory of past
+      feedback — preference memory is inert this slice (handoff §2.2).
 - [ ] T018 [P] [US1] `frontend/components/recommend/HeroState.test.tsx`: renders greeting from a
       mocked hour, renders all 3 chips, tapping a chip populates the composer (via a passed
       callback prop).
@@ -140,7 +147,9 @@ and every citation traces to something actually retrieved.
       styling since none is specified), assistant reply bubbles (left-aligned, surface-sunken,
       tail `14px 14px 14px 4px`) with inline text + numbered `Badge tone="citation"` markers
       parsed from `[n]`-style tokens in `rationale_text`, and a "Thinking…" row while a
-      Start-styling request is in flight.
+      Start-styling request is in flight. Copy check (FR-018): no assistant copy anywhere in this
+      list may imply personalization or memory of past feedback (preference memory is inert this
+      slice).
 - [ ] T022 [US1] `frontend/components/recommend/ItemThumbnailRow.tsx` + `.module.css`: wrapped row
       of 56×56 (`radius-sm`, bordered) thumbnails below an assistant reply with a rendered outfit,
       each an `<a href="/closet/{itemId}">` wrapping the `photo_url` image.
@@ -153,11 +162,17 @@ and every citation traces to something actually retrieved.
       list rows match `citations` 1:1, "Thinking…" row visibility tied to an `inFlight` prop.
 - [ ] T025 [US1] `frontend/components/recommend/StartStylingButton.tsx` + `.module.css`:
       full-width primary `Button`, caption "Uses everything you have told me so far" beneath;
-      visible once the transcript has ≥1 user message; `disabled` when there is no message pending
-      since the last successful Start-styling call (design-decisions §28).
+      visible once the transcript has ≥1 user message; `disabled` when **any** of: no message is
+      pending since the last successful Start-styling call (design-decisions §28), a Start-styling
+      request is already in flight (`status === "sending"` — FR-012, no second concurrent send;
+      analyze pass finding U1), or the client is offline (`!useOnlineStatus()` — Start styling is
+      the only control that actually makes a network call under §28's local-only composer, so it
+      must carry its own offline gate rather than relying on `Composer`'s; FR-013/SC-007, finding
+      U2).
 - [ ] T026 [P] [US1] `frontend/components/recommend/StartStylingButton.test.tsx`: hidden with 0
       messages, visible+enabled with 1 pending message, disabled immediately after a successful
-      call with nothing new typed since.
+      call with nothing new typed since, disabled while `status === "sending"` even with a pending
+      message, disabled while offline even with a pending message.
 - [ ] T027 [US1] `frontend/components/recommend/RecommendChat.tsx` + `.module.css`: owns
       `messages`, `pendingSinceLastStyle`, `threadId` (`null` initially), `status`
       (`"idle"|"sending"|"error"`); wires `HeroState` (shown when `messages.length === 0`),
