@@ -157,6 +157,7 @@ class TestSendMessage:
         assert body["outfit"]["match_label"] == "great"
         assert len(body["citations"]) == 1
         assert body["citations"][0]["number"] == 1
+        assert "[1]" in body["outfit"]["rationale_text"]
         assert "rank_score" not in body["outfit"]
         assert "score" not in str(body).lower().replace("scores", "")  # no stray numeric score field
         assert body["thread_id"]

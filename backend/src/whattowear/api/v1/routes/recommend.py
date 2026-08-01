@@ -147,17 +147,25 @@ def _resolve_outfit(
         if item_id in wardrobe_by_id
     ]
 
+    # The pipeline's `Rationale.cites` associates rule_ids with a whole
+    # segment of text, not a mid-sentence position — so `[n]` markers are
+    # appended after each segment's own text, using that segment's own
+    # cites, rather than guessed at a finer-grained position the pipeline
+    # never gives us.
     seen: dict[str, int] = {}
     citations: list[CitedRule] = []
     text_parts: list[str] = []
     for rationale in outfit.rationale:
-        text_parts.append(rationale.text)
+        segment_numbers: list[int] = []
         for rule_id in rationale.cites:
             if rule_id not in sources:
                 continue  # ungrounded cites are already filtered upstream; defensive only
             if rule_id not in seen:
                 seen[rule_id] = len(citations) + 1
                 citations.append(CitedRule(number=seen[rule_id], text=sources[rule_id]))
+            segment_numbers.append(seen[rule_id])
+        markers = "".join(f"[{n}]" for n in segment_numbers)
+        text_parts.append(f"{rationale.text} {markers}".rstrip() if markers else rationale.text)
 
     styling_outfit = StylingOutfit(
         rationale_text=" ".join(text_parts),
