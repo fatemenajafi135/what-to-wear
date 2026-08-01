@@ -105,6 +105,15 @@ class Settings(BaseSettings):
     # (e.g. re-navigating to /closet) mints a fresh one.
     wtw_photo_signed_url_ttl_seconds: int = 3600
 
+    # --- Styling chat (feature 008) ---------------------------------------------
+    # design-decisions.md §11's three-band gate: below the floor, blocked; below
+    # the sparse threshold, allowed with a dismissible expectation-setting banner.
+    wtw_wardrobe_min_items: int = 5
+    wtw_wardrobe_sparse_threshold: int = 15
+    # Backstop only, not a UX-driven cap (spec.md Clarifications, research.md §3)
+    # — bounds a genuinely stuck request, not ordinary multi-second latency.
+    wtw_styling_request_timeout_seconds: int = 120
+
     @property
     def judge_model(self) -> str:
         return self.wtw_judge_model or self.wtw_chat_model

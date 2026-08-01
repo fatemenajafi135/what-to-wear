@@ -1169,6 +1169,23 @@ endpoint for text that is discarded, ephemeral, and has no reason to be server-a
 Quality Bar's simplicity rule counsels against server surface with no measured need. Full
 reasoning: `specs/008-styling-chat/research.md` §7.
 
+## 29. Feature 008 (Styling chat) — where the greeting's `{name}` comes from
+
+design-system.md's Recommend hero state twice specifies the greeting as literal `"{greeting},
+{name}"` copy, but no `{name}` source exists anywhere in the app: Settings' Account section
+(design-system.md §4's Settings table) has only an email field, sign-up collects only
+email/password, and no display-name field appears anywhere in the design system's Settings spec
+or `known-gaps.md`.
+
+**Decision**: derive `{name}` from the signed-in user's email local-part (the part before `@`,
+already read client-side via `supabase.auth.getSession()` — the same call `app/(app)/profile/
+page.tsx` already makes for the same purpose), title-cased on `.`/`_`/`-`/`+` separators
+("jane.doe@x.com" → "Jane Doe"; "maya@x.com" → "Maya"). Rejected: adding a new display-name
+field to Settings/the profile schema — invents a field the design system never specifies
+anywhere (a Principle VIII violation the other direction, same shape as §28's rejected option),
+and is unrequested scope for this slice. Rejected: dropping `{name}` from the greeting entirely
+— contradicts the literal, twice-stated copy pattern.
+
 ---
 
 *Every item above is decided except those explicitly marked **deferred** (§21), which are recorded gaps awaiting a decision rather than open questions blocking work.*
