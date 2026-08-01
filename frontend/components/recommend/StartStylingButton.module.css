@@ -1,0 +1,9 @@
+.wrap {
+  padding: 0 var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+.caption {
+  text-align: center;
+  margin: var(--space-xs) 0 0;
+}

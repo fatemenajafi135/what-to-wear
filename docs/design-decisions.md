@@ -1066,4 +1066,126 @@ Also from `design-system.md`'s Open Questions list. Full reasoning: `research.md
 
 ---
 
+## 24. Feature 008 (Styling chat) — item resolution
+
+**Decision**: outfit items are resolved to full closet items (name, category, signed
+`photo_url`, etc.) **server-side**, inside the same request that already calls the pipeline —
+reusing `closet.py`'s existing `ClosetItemView.from_wardrobe_item` + one batched
+`storage.create_signed_urls` call, the identical pattern `GET /closet/items` already uses for a
+page of items. Rejected: the client fetching each item individually after the reply arrives (N
+sequential round trips stacked after an already multi-second pipeline call — exactly the
+"works but takes a fortune" experience the handoff calls out); a new batch
+get-items-by-ids endpoint (solves the round-trip count but not the added-latency problem, and
+duplicates logic the styling route can already do inline with data it has in hand). Full
+reasoning: `specs/008-styling-chat/research.md` §1.
+
+## 25. Feature 008 (Styling chat) — thread identity
+
+**Decision**: `thread_id` is owned by the server — the pipeline's own existing `uuid.uuid4()`
+fallback (unmodified, Principle I) mints it when a request omits one, and the route always
+echoes it back. The client never invents an id and never persists one beyond the mounted
+conversation (no `localStorage`/`sessionStorage` in this slice); "New chat" simply drops the
+held value so the next send gets a fresh server-minted id. Consequence, stated explicitly since
+011 builds chat history on top of this: a full page reload starts a new *visible* conversation
+client-side even though the old thread's checkpointed state may still exist in Postgres — 011's
+"Continue" flow is what closes this gap by persisting session metadata (including its
+`thread_id`) somewhere durable, which is out of scope here. Rejected: client-generated UUIDs
+(duplicates identity-minting logic the pipeline already owns, and lets a client pick an
+arbitrary/guessable id with no benefit); one eternal thread per user (conflicts with both "New
+chat" and 011 needing genuinely distinct, independently listable conversations). Full reasoning,
+including the bounded cross-thread risk this leaves unaddressed and why: `specs/008-styling-chat/
+research.md` §2.
+
+## 26. Feature 008 (Styling chat) — request shape and latency
+
+**Decision**: plain synchronous request/response (one `POST`, one JSON reply) — the same shape
+every other route in this codebase already uses — with **no user-experience-driven wait cap**
+and a **120-second backstop timeout** at the request layer so a genuinely stuck request still
+surfaces a retryable error instead of hanging forever. This overrides the handoff's own
+suggestion to "set a real timeout" in the tighter sense: asked directly, the repo owner chose "no
+fixed cap, but a generous backstop" over any specific shorter number (`specs/008-styling-chat/
+spec.md` Clarifications, 2026-08-01). Rejected: streaming (the pipeline's only real entry point
+is `graph.invoke()`, used unmodified by every existing caller including the eval harness;
+switching to `.stream()` is new, unevaluated invocation behavior forbidden without an eval
+re-run, and the generation node's LLM call isn't incremental anyway); async job + polling (no
+job-queue concept exists anywhere in this codebase, and introducing one contradicts the Quality
+Bar's simplicity rule once the motivating problem — a long blocking wait — is exactly what the
+repo owner said doesn't need solving). Full reasoning: `specs/008-styling-chat/research.md` §3.
+
+## 27. Feature 008 (Styling chat) — the checkpointer's self-created tables
+
+**Decision**: accept `PostgresSaver.setup()` as the bootstrap mechanism (documented, not
+silent), and make it run once, deterministically, at backend process startup — `main.py`'s
+existing `lifespan` context manager already eagerly constructs the DB engine at startup rather
+than at first request for exactly this reason; this feature adds one more line to that same
+function to warm `pipeline.graph.get_compiled_graph(...)`, which creates the checkpoint tables as
+a side effect before any request is served. No migration `0007` is added. Rejected:
+hand-authoring a migration that pins `PostgresSaver`'s internal schema (that schema is
+LangGraph's to change; a checked-in copy can silently drift the moment LangGraph changes it
+internally, without the migration file itself changing — the same two-sources-of-truth failure
+the constitution's Alembic-vs-Supabase rationale already warns about, aimed at a library's
+internals instead of a second migration tool); doing nothing / fully lazy on first request (works,
+but pays the one-time DDL cost inside whatever the first real user's request happens to be, and
+risks a multi-worker race under concurrent test setups — both avoidable for one line at startup).
+Full reasoning: `specs/008-styling-chat/research.md` §4.
+
+## 28. Feature 008 (Styling chat) — what the composer's send actually does, vs. "Start styling"
+
+Not one of the handoff's four named decisions, but a real gap the anatomy spec surfaces without
+resolving: design-system.md's Recommend anatomy lists **both** a pinned composer with its own
+28px send button (item 6) **and** a full-width "Start styling" button that "appears once the
+user has sent a message," captioned "Uses everything you have told me so far" (item 5) — two
+distinct controls, and the spec never states what each one actually triggers against a real
+backend. The reference prototype's own (unshipped) simulation code resolves the ambiguity
+unambiguously: `sendMessage()` only ever appends to local chat state and returns a canned,
+non-AI acknowledgement; `startStyling()` is the one path that joins the accumulated user text and
+runs the (simulated) generation (`design/prototype/What to Wear.dc.html:1834-1861`).
+
+**Decision**: the composer's send is **local-only** — it appends the user's message to the
+on-screen transcript and does not call the backend. "Start styling" is the **sole** trigger for
+`POST /recommend/messages`; it sends everything typed since the *last* Start-styling call (on the
+first tap, that is every message so far, which is exactly what "uses everything you have told me
+so far" describes) as `message`, with the held `thread_id` (§25) carrying continuity so the
+pipeline's own refinement parsing (unmodified, `_parse_refinement_intent`) treats a later tap's
+batch as a refinement utterance rather than a fresh, unrelated request. The button is visible once
+the conversation has at least one user message, and disabled specifically when there is nothing
+new pending since the last tap (avoids a no-op duplicate call, not specified either way by the
+design system but a reasonable implementation-level safeguard). No intermediate assistant
+"acknowledgement" bubble is built — the prototype's keyword-sniffed canned acknowledgements
+("Got it, a rainy day commute...") are demo flavor, not text in design-system.md's own copy
+tables (§6), so inventing and shipping them would violate Principle VIII's "nothing visual is
+invented in code" the other direction (inventing unspecified copy, not omitting specified copy).
+The composer's own "Thinking…" row and input/send disabling (design-system.md "Chat input
+behavior") apply while a Start-styling call is in flight, not on ordinary composer sends, which
+are instant and local.
+
+**Rejected**: (a) every composer send calling the real pipeline immediately, dropping "Start
+styling" as prototype-only flourish — directly contradicts design-system.md's explicit,
+verbatim-required anatomy item 5 and its copy, and produces a full retrieval+LLM call on every
+single message with no user control over when the expensive call fires, worsening exactly the
+latency/cost concern the handoff raises. (b) routing the composer's send through a real, trivial
+backend endpoint that returns a canned acknowledgement — adds a network round trip and a new
+endpoint for text that is discarded, ephemeral, and has no reason to be server-authoritative;
+Quality Bar's simplicity rule counsels against server surface with no measured need. Full
+reasoning: `specs/008-styling-chat/research.md` §7.
+
+## 29. Feature 008 (Styling chat) — where the greeting's `{name}` comes from
+
+design-system.md's Recommend hero state twice specifies the greeting as literal `"{greeting},
+{name}"` copy, but no `{name}` source exists anywhere in the app: Settings' Account section
+(design-system.md §4's Settings table) has only an email field, sign-up collects only
+email/password, and no display-name field appears anywhere in the design system's Settings spec
+or `known-gaps.md`.
+
+**Decision**: derive `{name}` from the signed-in user's email local-part (the part before `@`,
+already read client-side via `supabase.auth.getSession()` — the same call `app/(app)/profile/
+page.tsx` already makes for the same purpose), title-cased on `.`/`_`/`-`/`+` separators
+("jane.doe@x.com" → "Jane Doe"; "maya@x.com" → "Maya"). Rejected: adding a new display-name
+field to Settings/the profile schema — invents a field the design system never specifies
+anywhere (a Principle VIII violation the other direction, same shape as §28's rejected option),
+and is unrequested scope for this slice. Rejected: dropping `{name}` from the greeting entirely
+— contradicts the literal, twice-stated copy pattern.
+
+---
+
 *Every item above is decided except those explicitly marked **deferred** (§21), which are recorded gaps awaiting a decision rather than open questions blocking work.*

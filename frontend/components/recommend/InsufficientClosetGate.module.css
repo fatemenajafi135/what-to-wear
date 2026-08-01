@@ -1,0 +1,10 @@
+.gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-lg);
+  padding: var(--space-3xl) var(--space-lg);
+  min-height: 50vh;
+  justify-content: center;
+}

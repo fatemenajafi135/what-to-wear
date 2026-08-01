@@ -13,6 +13,7 @@ import {
   ThumbsUp,
   Eye,
   EyeOff,
+  SquarePen,
   type LucideIcon,
 } from "lucide-react";
 import styles from "./IconButton.module.css";
@@ -33,7 +34,10 @@ export type IconKeyword =
   // Password show/hide toggle — docs/design-decisions.md §1.2, not part of
   // design-system.md §3's own keyword table but the same IconButton pattern.
   | "eye"
-  | "eyeOff";
+  | "eyeOff"
+  // Recommend TopHeader's "New chat" action (design-system.md Screen anatomy
+  // → Recommend, item 1) — feature 008.
+  | "newChat";
 
 const ICONS: Record<IconKeyword, LucideIcon> = {
   back: ArrowLeft,
@@ -50,6 +54,7 @@ const ICONS: Record<IconKeyword, LucideIcon> = {
   thumbsDown: ThumbsUp,
   eye: Eye,
   eyeOff: EyeOff,
+  newChat: SquarePen,
 };
 
 const DEFAULT_LABELS: Record<IconKeyword, string> = {
@@ -67,12 +72,15 @@ const DEFAULT_LABELS: Record<IconKeyword, string> = {
   thumbsDown: "Not helpful",
   eye: "Show password",
   eyeOff: "Hide password",
+  newChat: "New chat",
 };
 
 export interface IconButtonProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon: IconKeyword;
-  size?: 28 | 34 | 40 | 48;
+  /** design-system.md §3: "Visual size 28-48px (default 34)" — 36 is the
+   * Recommend TopHeader's own pair of action icons (feature 008). */
+  size?: 28 | 34 | 36 | 40 | 48;
   label?: string;
   /** Renders as a Next.js Link with the same visual treatment instead of a <button>. */
   href?: string;

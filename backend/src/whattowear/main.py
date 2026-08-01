@@ -17,9 +17,12 @@ from sqlalchemy import text
 from whattowear.api.v1.routes.calendar import router as calendar_router
 from whattowear.api.v1.routes.closet import router as closet_router
 from whattowear.api.v1.routes.profile import router as profile_router
+from whattowear.api.v1.routes.recommend import router as recommend_router
 from whattowear.api.v1.routes.whoami import router as whoami_router
 from whattowear.core.db import get_engine
 from whattowear.core.logging import configure_logging
+from whattowear.pipeline.graph import get_compiled_graph
+from whattowear.repositories.supabase_closet import SupabaseClosetRepository
 
 # The Next.js dev server's origins — port 3000 for `npm run dev`, port 3100
 # for the e2e suite (frontend/playwright.config.ts runs its own `next dev`
@@ -59,6 +62,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # (research.md §1's refinement; the two are different, and only the
     # former is what "must import with zero env vars" forbids).
     get_engine()
+    # Feature 008: warms the checkpointer's PostgresSaver.setup() call at
+    # boot rather than on whichever request happens to invoke the graph
+    # first — same rationale as get_engine() above, one line further.
+    # docs/design-decisions.md §27: this is deliberately not a migration,
+    # since PostgresSaver's schema is LangGraph's to change, not ours to pin.
+    # Degrades to lazy (first-request) setup on failure rather than blocking
+    # boot — /health already reports DB reachability independently.
+    try:
+        get_compiled_graph(SupabaseClosetRepository())
+    except Exception:
+        logger.exception("Checkpointer warm-up failed at startup; will retry lazily on first request")
     yield
 
 
@@ -78,6 +92,7 @@ app.include_router(whoami_router, prefix="/api/v1")
 app.include_router(closet_router, prefix="/api/v1")
 app.include_router(profile_router, prefix="/api/v1")
 app.include_router(calendar_router, prefix="/api/v1")
+app.include_router(recommend_router, prefix="/api/v1")
 
 
 def _database_reachable() -> bool:
