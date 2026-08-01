@@ -117,7 +117,7 @@ offline, color validation).
   matches on) and 422s otherwise**, calls T013's repository method, returns
   `ClosetItemView.from_wardrobe_item(...)` with `photo_url` populated (reuse the T009 signing
   helper). Depends on T008, T009, T013.
-- [ ] T015 [P] [US1] Integration tests in `backend/tests/integration/test_closet_routes.py`:
+- [X] T015 [P] [US1] Integration tests in `backend/tests/integration/test_closet_routes.py`:
   extract with a mocked-success VLM returns `extraction_ok: true` and populated `extracted`,
   **and a follow-up `GET /closet/items` for that user shows no new item — extract alone
   persists nothing (FR-002)**; extract with a mocked extraction failure returns `200`,

@@ -11,18 +11,29 @@ is about the closet routes' own behavior (ownership, filtering, pagination,
 404 shape), not re-proving JWT verification. RLS's own guarantee — which
 this backend's connection doesn't benefit from directly (BYPASSRLS) — is
 proven independently by test_wardrobe_rls.py.
+
+Feature 006 added `get_current_access_token` to the read routes (Storage
+signed-URL minting) — `_client_as` overrides it with a placeholder string
+alongside `get_current_user_id`. It's never used against a real Storage
+call in this file: every seeded item here has `photo_path=None` by default
+(the extract/from-upload flow itself is covered separately in
+`TestExtractAndCreateFromUpload` below), so `create_signed_url(s)` either
+isn't invoked or short-circuits on an empty path list before any network
+call.
 """
 
 from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from whattowear.auth import get_current_user_id
+from whattowear.api.v1.routes import closet as closet_routes
+from whattowear.auth import get_current_access_token, get_current_user_id
 from whattowear.core.db import get_engine
 from whattowear.main import app
 
@@ -66,6 +77,7 @@ def seeded_items() -> Iterator[dict[str, list[str]]]:
 
 def _client_as(user_id: str) -> TestClient:
     app.dependency_overrides[get_current_user_id] = lambda: user_id
+    app.dependency_overrides[get_current_access_token] = lambda: "fake-access-token"
     return TestClient(app)
 
 
@@ -308,6 +320,116 @@ class TestDeleteClosetItem:
         with _client_as(USER_A) as client:
             response = client.delete(f"/api/v1/closet/items/{foreign_item}")
         assert response.status_code == 404
+
+
+class TestExtractAndCreateFromUpload:
+    """Feature 006. Storage and the VLM are both mocked at the route
+    module's imported names (matches test_closet_routes_extract.py's unit
+    tests) — this class is still an integration test in the sense that
+    matters here: it exercises the real database for from-upload's INSERT
+    and the real GET routes' re-fetch, which the unit tests never touch."""
+
+    def test_extract_persists_nothing_to_wardrobe_items(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # FR-002: a scan alone must never create a closet item.
+        from whattowear.schema import ExtractedAttributes
+
+        monkeypatch.setattr(closet_routes.storage, "upload_photo", MagicMock(return_value=f"{USER_A}/fake.jpg"))
+        monkeypatch.setattr(
+            closet_routes, "extract_attributes_from_image", MagicMock(return_value=ExtractedAttributes(category="top"))
+        )
+        with _client_as(USER_A) as client:
+            extract_response = client.post(
+                "/api/v1/closet/items/extract",
+                files={"photo": ("shirt.jpg", b"fake-bytes", "image/jpeg")},
+            )
+            assert extract_response.status_code == 200
+            assert extract_response.json()["extraction_ok"] is True
+
+            list_response = client.get("/api/v1/closet/items")
+            assert list_response.json()["total"] == 0
+
+    def test_extraction_failure_is_200_with_extraction_ok_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(closet_routes.storage, "upload_photo", MagicMock(return_value=f"{USER_A}/fake.jpg"))
+        monkeypatch.setattr(
+            closet_routes, "extract_attributes_from_image", MagicMock(side_effect=RuntimeError("gateway down"))
+        )
+        with _client_as(USER_A) as client:
+            response = client.post(
+                "/api/v1/closet/items/extract",
+                files={"photo": ("shirt.jpg", b"fake-bytes", "image/jpeg")},
+            )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["extraction_ok"] is False
+        assert body["extracted"]["category"] is None
+
+    def test_from_upload_with_only_review_card_fields_applies_documented_defaults(self) -> None:
+        with _client_as(USER_A) as client:
+            response = client.post(
+                "/api/v1/closet/items/from-upload",
+                json={
+                    "photo_path": f"{USER_A}/abc-shirt.jpg",
+                    "category": "top",
+                    "colors": ["#1b2a4a"],
+                    "name": "Navy tee",
+                },
+            )
+        assert response.status_code == 201
+        body = response.json()
+        assert body["formality"] == "casual"
+        assert body["warmth"] == 3
+        assert sorted(body["season"]) == ["autumn", "spring", "summer", "winter"]
+        assert body["fabric"] is None
+        item_id = body["id"]
+
+        with get_engine().begin() as conn:
+            conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": item_id})
+
+    def test_from_upload_created_item_is_retrievable_with_photo_url(self) -> None:
+        with _client_as(USER_A) as client:
+            create_response = client.post(
+                "/api/v1/closet/items/from-upload",
+                json={"photo_path": f"{USER_A}/xyz-pants.jpg", "category": "bottom", "colors": ["#5c4033"]},
+            )
+            item_id = create_response.json()["id"]
+
+            # No mocked Storage here — a real signed-URL call would hit the
+            # live local stack, which this sandbox doesn't have. Assert the
+            # shape (key present) rather than the value's live-ness.
+            get_response = client.get(f"/api/v1/closet/items/{item_id}")
+
+        assert get_response.status_code == 200
+        assert "photo_url" in get_response.json()
+
+        with get_engine().begin() as conn:
+            conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": item_id})
+
+    def test_from_upload_rejects_a_photo_path_outside_the_caller_prefix(self) -> None:
+        with _client_as(USER_A) as client:
+            response = client.post(
+                "/api/v1/closet/items/from-upload",
+                json={"photo_path": f"{USER_B}/stolen.jpg", "category": "top", "colors": ["#000000"]},
+            )
+        assert response.status_code == 422
+
+    def test_three_sequential_uploads_create_three_distinct_items(self) -> None:
+        created_ids: list[str] = []
+        with _client_as(USER_A) as client:
+            for i in range(3):
+                response = client.post(
+                    "/api/v1/closet/items/from-upload",
+                    json={"photo_path": f"{USER_A}/photo-{i}.jpg", "category": "top", "colors": ["#000000"]},
+                )
+                assert response.status_code == 201
+                created_ids.append(response.json()["id"])
+
+        assert len(set(created_ids)) == 3
+
+        with get_engine().begin() as conn:
+            conn.execute(
+                text("DELETE FROM wardrobe_items WHERE id = ANY(:ids)"),
+                {"ids": created_ids},
+            )
 
         with _client_as(USER_B) as client:
             still_there = client.get(f"/api/v1/closet/items/{foreign_item}")
