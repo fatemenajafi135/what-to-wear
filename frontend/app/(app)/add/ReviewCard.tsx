@@ -3,11 +3,9 @@
 import { useRef, useState } from "react";
 import { Chip } from "@/components/ui/Chip/Chip";
 import { Input } from "@/components/ui/Input/Input";
-import { Select } from "@/components/ui/Select/Select";
-import { TagInput } from "@/components/ui/TagInput/TagInput";
 import { Textarea } from "@/components/ui/Textarea/Textarea";
 import { Button } from "@/components/ui/Button/Button";
-import { isRecognizedColorName } from "@/lib/colors/validateColorName";
+import { ColorField, isHex } from "./ColorField";
 import { addItemCopy } from "@/lib/add-item-copy";
 import styles from "./ReviewCard.module.css";
 
@@ -19,14 +17,15 @@ const CATEGORY_CHIPS: { value: string; label: string }[] = [
   { value: "accessory", label: "Accessory" },
 ];
 
-/** Leading empty option on both Selects: a native <select> whose value
- * matches no option falls back to the FIRST one, so without this an
- * undetected formality would silently display (and save) as "casual" —
- * the same class of invented value this whole change removes. */
-const NOT_DETECTED = { value: "", label: "Not detected — pick one" };
-
-const FORMALITY_OPTIONS = [
-  NOT_DETECTED,
+/** Chip groups, not `Select`s. A native dropdown is a poor control on a
+ * phone — it hides every option behind a tap and an OS sheet, for two
+ * fields the scan usually pre-answers and the user is only verifying. It
+ * also had a hazard of its own: a `<select>` whose value matches no option
+ * silently selects its FIRST, so an undetected formality displayed (and
+ * would have saved) as "casual". A chip group shows nothing selected, which
+ * is the truth. Same treatment as Category and Season, so all four
+ * taxonomy fields on this card behave identically. */
+const FORMALITY_CHIPS = [
   { value: "casual", label: "Casual" },
   { value: "smart_casual", label: "Smart casual" },
   { value: "business_casual", label: "Business casual" },
@@ -36,15 +35,15 @@ const FORMALITY_OPTIONS = [
 ];
 
 /** 0–5 per the frozen taxonomy (`warmth smallint check between 0 and 5`).
- * Labelled rather than bare numerals — the scale is meaningless as digits. */
-const WARMTH_OPTIONS = [
-  NOT_DETECTED,
-  { value: "0", label: "0 — airy" },
-  { value: "1", label: "1 — light" },
-  { value: "2", label: "2 — mild" },
-  { value: "3", label: "3 — medium" },
-  { value: "4", label: "4 — warm" },
-  { value: "5", label: "5 — heaviest" },
+ * Worded, because the bare digits mean nothing to a person; the number is
+ * what gets stored and is kept in the accessible name. */
+const WARMTH_CHIPS = [
+  { value: "0", label: "Airy" },
+  { value: "1", label: "Light" },
+  { value: "2", label: "Mild" },
+  { value: "3", label: "Medium" },
+  { value: "4", label: "Warm" },
+  { value: "5", label: "Heaviest" },
 ];
 
 const SEASON_CHIPS = ["spring", "summer", "autumn", "winter"] as const;
@@ -53,8 +52,7 @@ type Season = (typeof SEASON_CHIPS)[number];
 export interface ReviewCardFields {
   name: string;
   category: string;
-  /** Hex where the scan detected it, otherwise whatever the user typed —
-   * the backend resolves a name to hex and passes a hex through unchanged. */
+  /** Always `#rrggbb`, lowercased. */
   colors: string[];
   formality: string;
   warmth: string;
@@ -72,11 +70,6 @@ export interface ReviewCardProps {
    * for "no garment found"/"Enter manually" is just this with empty
    * initial values, not a distinct form). */
   initial: Partial<ReviewCardFields>;
-  /** Display names for `initial.colors`, positionally aligned. The card
-   * shows these (a human can read "navy"; nobody reads "#1b2a4a") while
-   * `initial.colors` keeps the exact hex the VLM detected — see the colour
-   * note in the component docstring. */
-  initialColorNames?: string[];
   saveLabel: string;
   onSave: (fields: ReviewCardFields) => Promise<void>;
   /** Set by the caller when a previous save attempt failed — renders the
@@ -102,19 +95,14 @@ export interface ReviewCardProps {
  * deviation from the design's six-field table, recorded in
  * docs/design-decisions.md §30.
  *
- * Colour is hex, not a name. `colors.py`'s docstring is explicit that hex
- * is the source of truth and names are derived, and the extractor returns
- * hex. Showing a name but SENDING one meant hex → nearest name → the
- * palette's canonical hex, so a detected `#22345d` was stored as navy's
- * `#1b2a4a`, and a multi-colour garment collapsed to one. Here the field
- * displays names and remembers the hex behind each: a chip the user did not
- * touch is sent as its original hex, and anything they type is sent as
- * typed for the backend to resolve.
+ * Colour is hex and is SHOWN as colour — see `ColorField`. It was briefly a
+ * name-only text field, which both destroyed the detected value (hex →
+ * nearest palette name → that name's canonical hex) and told the user
+ * nothing: "navy" does not say which navy the scan read.
  */
 export function ReviewCard({
   photoUrl,
   initial,
-  initialColorNames = [],
   saveLabel,
   onSave,
   saveError = false,
@@ -130,14 +118,7 @@ export function ReviewCard({
   const [fit, setFit] = useState(initial.fit ?? "");
   const [notes, setNotes] = useState(initial.notes ?? "");
 
-  // Display names, with the detected hex remembered per name so an untouched
-  // chip round-trips exactly.
-  const hexByName = useRef<Map<string, string>>(
-    new Map((initial.colors ?? []).map((hex, i) => [initialColorNames[i] ?? hex, hex]))
-  );
-  const [colorTags, setColorTags] = useState<string[]>(
-    (initial.colors ?? []).map((hex, i) => initialColorNames[i] ?? hex)
-  );
+  const [colors, setColors] = useState<string[]>(initial.colors ?? []);
 
   const [error, setError] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
@@ -148,22 +129,34 @@ export function ReviewCard({
 
   /** Colour is the only field whose control sits well above the submit
    * button, so on a phone the button can be tapped with its error rendered
-   * off-screen — which reads as "the button does nothing". */
+   * off-screen — which reads as "the button does nothing".
+   *
+   * Falls back to the first focusable control in the field rather than
+   * assuming an input exists: with no colours added yet there are no rows,
+   * and the only thing to move to is the "Add color" button — which is
+   * precisely the state that triggers the "required" error. */
   const failColor = (message: string) => {
     setError(message);
-    colorFieldRef.current?.querySelector("input")?.focus();
+    const field = colorFieldRef.current;
+    if (!field) return;
+    const hexInputs = [...field.querySelectorAll<HTMLInputElement>('input[type="text"]')];
+    // The offending row, not merely the first one — with several colours the
+    // error is meaningless if focus lands on a valid entry. Falls back to
+    // "Add color" when there are no rows at all, which is the state that
+    // raises the "required" error.
+    const target = hexInputs.find((input) => !isHex(input.value)) ?? hexInputs[0] ?? field.querySelector("button");
+    (target as HTMLElement | null)?.focus();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (colorTags.length === 0) {
+    if (colors.length === 0) {
       failColor(addItemCopy.color.required);
       return;
     }
-    const unknown = colorTags.find((tag) => !hexByName.current.has(tag) && !isRecognizedColorName(tag));
-    if (unknown) {
-      failColor(addItemCopy.color.notRecognized);
+    if (colors.some((c) => !isHex(c))) {
+      failColor(addItemCopy.color.notHex);
       return;
     }
     // The legacy form's SC-003 guarantee: an item saved through the scan
@@ -180,7 +173,7 @@ export function ReviewCard({
       await onSave({
         name,
         category,
-        colors: colorTags.map((tag) => hexByName.current.get(tag) ?? tag),
+        colors: colors.map((c) => c.trim().toLowerCase()),
         formality,
         warmth: String(warmth),
         season,
@@ -224,19 +217,41 @@ export function ReviewCard({
       <Input label="Fabric" value={fabric} onChange={setFabric} />
 
       <div ref={colorFieldRef}>
-        <TagInput
-          label="Color"
-          values={colorTags}
+        <ColorField
+          values={colors}
           onChange={(next) => {
-            setColorTags(next);
+            setColors(next);
             if (error) setError(undefined);
           }}
-          placeholder="navy, charcoal…"
         />
       </div>
 
-      <Select label="Formality" value={formality} onChange={setFormality} options={FORMALITY_OPTIONS} />
-      <Select label="Warmth" value={String(warmth)} onChange={setWarmth} options={WARMTH_OPTIONS} />
+      <div className={styles.field}>
+        <span className={`textLabel ${styles.chipGroupLabel}`}>Formality</span>
+        <div className={styles.chipGroup} role="group" aria-label="Formality">
+          {FORMALITY_CHIPS.map((chip) => (
+            <Chip key={chip.value} active={formality === chip.value} onClick={() => setFormality(chip.value)}>
+              {chip.label}
+            </Chip>
+          ))}
+        </div>
+      </div>
+
+      <div className={styles.field}>
+        <span className={`textLabel ${styles.chipGroupLabel}`}>Warmth</span>
+        <div className={styles.chipGroup} role="group" aria-label="Warmth">
+          {WARMTH_CHIPS.map((chip) => (
+            <Chip
+              key={chip.value}
+              active={String(warmth) === chip.value}
+              onClick={() => setWarmth(chip.value)}
+              aria-label={`Warmth ${chip.value} — ${chip.label}`}
+            >
+              {chip.label}
+            </Chip>
+          ))}
+        </div>
+      </div>
 
       <div className={styles.field}>
         <span className={`textLabel ${styles.chipGroupLabel}`}>Season</span>

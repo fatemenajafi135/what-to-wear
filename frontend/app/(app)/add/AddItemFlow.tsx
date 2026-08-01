@@ -156,7 +156,6 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
           pattern: e?.pattern ?? "",
           fit: e?.fit ?? "",
         }}
-        initialColorNames={state.colorNames}
         saveLabel="Save to Closet"
         saveError={saveError}
         onSave={(fields) => handleSave(fields, state.photoPath)}

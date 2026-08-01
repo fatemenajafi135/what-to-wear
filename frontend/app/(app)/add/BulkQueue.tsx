@@ -202,7 +202,6 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
           pattern: current.extracted?.pattern ?? "",
           fit: current.extracted?.fit ?? "",
         }}
-        initialColorNames={current.colorNames ?? []}
         saveLabel={isLast ? "Save to Closet" : "Save & next"}
         saveError={current.status === "save-error"}
         onSave={handleSave}

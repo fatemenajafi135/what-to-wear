@@ -53,11 +53,11 @@ describe("AddItemFlow", () => {
 
     expect(await screen.findByLabelText("Group")).toHaveValue("top");
     expect(screen.getByLabelText("Fabric")).toHaveValue("cotton");
-    // The colour is a TagInput chip showing the derived name, with the
-    // detected hex kept behind it.
-    expect(screen.getByText("navy")).toBeInTheDocument();
-    expect(screen.getByLabelText("Formality")).toHaveValue("casual");
-    expect(screen.getByLabelText("Warmth")).toHaveValue("2");
+    // Hex, shown as colour — the swatch and the literal code, not a name.
+    expect(screen.getByLabelText("Color 1 hex")).toHaveValue("#1b2a4a");
+    expect(screen.getByLabelText("Color 1 swatch")).toHaveValue("#1b2a4a");
+    expect(screen.getByRole("button", { name: "Casual" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Warmth 2 — Mild" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("shows the empty state (not an error) when no garment is found", async () => {
@@ -92,7 +92,7 @@ describe("AddItemFlow", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Enter manually" }));
 
     expect(screen.getByLabelText("Name")).toHaveValue("");
-    expect(screen.getByLabelText("Color")).toHaveValue("");
+    expect(screen.queryByLabelText("Color 1 hex")).not.toBeInTheDocument();
   });
 
   it("shows the distinct error state on a genuine extract failure", async () => {

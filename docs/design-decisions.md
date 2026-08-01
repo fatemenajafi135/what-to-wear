@@ -1246,8 +1246,21 @@ saved items populated, none blank" (its SC-003) — this restores that guarantee
   (`add_item.incomplete`). The scan fills these in nearly every case, so this
   surfaces only on a genuine extraction failure — where the legacy behaved the
   same way.
-- Both `Select`s carry a leading "Not detected — pick one" option. A native
-  `<select>` whose value matches no option silently selects its first, which
-  would have reintroduced exactly the invented-value problem.
+- **Every taxonomy field on this card is a chip group** — Category, Formality,
+  Warmth and Season alike. `Select` was tried for Formality and Warmth and
+  rejected: a native dropdown hides every option behind a tap and an OS sheet
+  on a phone, for two fields the scan usually pre-answers and the user is only
+  verifying. It also carried a hazard of its own — a `<select>` whose value
+  matches no option silently selects its FIRST, so an undetected formality
+  displayed, and would have saved, as "casual". A chip group shows nothing
+  selected, which is the truth.
+- **Colour is hex, and is shown as colour.** A swatch (`<input type="color">`,
+  which gives a real OS picker on both mobile platforms and cannot produce a
+  non-hex value) beside the literal `#rrggbb`, with add/remove per entry —
+  the same control the legacy app used. An intermediate version displayed the
+  derived NAME instead: that both destroyed the detected value on the round
+  trip and told the user nothing, since "navy" does not say which navy the
+  scan read. Names are still derived for display elsewhere (`color_names` on
+  the closet item), just never as the editable representation.
 - `fabric`/`pattern`/`fit` stay optional: the column is nullable, so an honest
   "not detected" is representable without inventing anything.
