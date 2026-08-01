@@ -28,6 +28,7 @@ ORM concern, and Postgres connection info now comes from
 
 from __future__ import annotations
 
+import logging
 from contextlib import ExitStack
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -48,6 +49,8 @@ if TYPE_CHECKING:
 
 _store = InMemoryStore()
 
+logger = logging.getLogger(__name__)
+
 _checkpointer_stack = ExitStack()
 _checkpointer: InMemorySaver | PostgresSaver | None = None
 
@@ -62,6 +65,48 @@ def _reachable(url: str | None, timeout: float = 5.0) -> bool:
             return True
     except psycopg.OperationalError:
         return False
+
+
+def _harden_checkpointer_tables(pool: ConnectionPool[Connection[dict[str, object]]]) -> None:
+    """Revoke `authenticated`/`anon` access to LangGraph's checkpointer
+    tables and enable RLS on them (with NO policy, so RLS denies by
+    default).
+
+    These tables are created by `PostgresSaver.setup()` above, not by a
+    migration, so they never passed through `0002`'s RLS-and-GRANT
+    convention — and Postgres' default ACL for objects created in `public`
+    handed `authenticated` full SELECT/INSERT/UPDATE/DELETE on them. Since
+    PostgREST exposes the whole `public` schema, that made every user's
+    checkpointed graph state readable and writable by ANY signed-in user
+    over `/rest/v1/checkpoints`: `GET /rest/v1/checkpoint_blobs` with a
+    brand-new account's token returned other users' rows, and those blobs
+    carry the serialized `Context` — wardrobe items with names, colors and
+    photo_paths, the caller's `user_id`, and their free-text occasion.
+    Confirmed by exploiting it against the local stack, then re-running
+    the same probe after this fix.
+
+    Applied here rather than in a migration because the tables do not
+    exist until `setup()` has run: a migration would be a silent no-op on
+    a database reset from empty, which is precisely the state a fresh
+    deploy starts in. Table names are discovered from the catalog rather
+    than hardcoded so a future LangGraph release that adds another
+    `checkpoint*` table is covered without a code change here.
+
+    Note this does NOT protect against the app's own pooler role, which
+    has BYPASSRLS (the same caveat `0002` documents for `wardrobe_items`)
+    — it closes the PostgREST path, which was the actual exposure.
+    """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "select tablename from pg_tables where schemaname = 'public' and tablename like 'checkpoint%'",
+        )
+        tables = [str(row["tablename"]) for row in cur.fetchall()]
+        for table in tables:
+            # Identifiers can't be parameterized; `table` comes from
+            # pg_tables filtered to a literal prefix, never from input.
+            cur.execute(f'revoke all on public."{table}" from authenticated, anon')
+            cur.execute(f'alter table public."{table}" enable row level security')
+    logger.info("Hardened %d checkpointer table(s): RLS enabled, authenticated/anon revoked", len(tables))
 
 
 def get_checkpointer() -> InMemorySaver | PostgresSaver:
@@ -112,6 +157,7 @@ def get_checkpointer() -> InMemorySaver | PostgresSaver:
         _checkpointer_stack.callback(pool.close)
         saver = PostgresSaver(pool)
         saver.setup()
+        _harden_checkpointer_tables(pool)
         _checkpointer = saver
     else:
         _checkpointer = InMemorySaver()

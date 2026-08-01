@@ -9,10 +9,22 @@ from __future__ import annotations
 
 import json
 import logging
+import warnings
 from datetime import UTC, datetime
 from typing import Any
 
 from whattowear.core.config import get_settings
+
+# Third-party chatter that drowns this app's own logs at INFO. Every LLM
+# call (vision extraction, every styling turn, every eval case) otherwise
+# emits a "LiteLLM completion() model=..." line plus a "Wrapper: Completed
+# Call" line, each duplicated by the root JSON handler — roughly 40 lines
+# per styling request. A real error in the middle of that is invisible,
+# which is part of why feature 006's silent bulk-upload failure went
+# unnoticed in a log the developer was actively watching. Raised to
+# WARNING, not disabled: a genuine LiteLLM warning or error still gets
+# through.
+_NOISY_LOGGERS = ("LiteLLM", "litellm", "httpx", "httpcore")
 
 _RESERVED_LOG_RECORD_ATTRS = frozenset(logging.LogRecord("", 0, "", 0, "", (), None).__dict__)
 
@@ -44,3 +56,21 @@ def configure_logging() -> None:
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(settings.log_level)
+
+    for name in _NOISY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+    # LangSmith's tracer serializes LangChain's own `ChatGeneration`/
+    # `AIMessage` objects through a Pydantic model that declares the base
+    # `Generation`/`BaseMessage` types, so every traced LLM call emits a
+    # four-line `PydanticSerializationUnexpectedValue` UserWarning. It is
+    # emitted from inside the tracing library about the tracing library's
+    # own models — nothing in this codebase can satisfy it, and the traced
+    # payload is unaffected. Filtered narrowly by message and module so a
+    # Pydantic serializer warning about OUR models still surfaces.
+    warnings.filterwarnings(
+        "ignore",
+        message="Pydantic serializer warnings",
+        category=UserWarning,
+        module="pydantic.main",
+    )

@@ -69,13 +69,22 @@ class LLMClient(Protocol):
 
 @runtime_checkable
 class ClosetRepository(Protocol):
-    """Read-only access to persisted closet/catalog/feedback data. No
-    concrete Postgres-backed implementation ships in this feature — the
-    rebuild's schema has no wardrobe/catalog tables yet
-    (specs/007-ai-port/research.md §5). `adapters.closet_fixture` is the one
-    implementation that exists today, used by the eval harness and tests;
-    a Postgres-backed one is a pure swap-in for whichever feature lands
-    closet persistence."""
+    """Read-only access to persisted closet/catalog/feedback data.
+
+    Two implementations satisfy this today: `adapters.closet_fixture`
+    (used by the eval harness and tests, so evals run with no database at
+    all) and `repositories.supabase_closet.SupabaseClosetRepository`, the
+    Postgres-backed one feature 004 landed and 008 passes straight to
+    `pipeline.graph.get_compiled_graph`. The swap-in this Protocol was
+    written to anticipate (specs/007-ai-port/research.md §5, when the
+    rebuild's schema still had no wardrobe tables) has since happened,
+    unchanged — no adapter class was needed.
+
+    Caveat worth knowing before relying on it: `SupabaseClosetRepository.
+    get_derivation_inputs` is still a stub returning `([], {})`, so
+    preference memory derives from nothing on the Postgres path. Feeding
+    it is its own feature's work, not something a caller can compensate
+    for."""
 
     def list_wardrobe_items(self, user_id: str) -> list[WardrobeItem]: ...
 
