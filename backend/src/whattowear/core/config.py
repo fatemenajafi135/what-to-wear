@@ -94,6 +94,17 @@ class Settings(BaseSettings):
     # --- Closet (feature 004) --------------------------------------------------
     wtw_closet_page_size: int = 20
 
+    # --- Photo upload + vision (feature 006) ------------------------------------
+    # Enforced in the extract route before a file is read or forwarded to
+    # Storage/the VLM (specs/006-photo-upload-vision/research.md §3). The
+    # wardrobe-photos bucket's own file_size_limit in config.toml is a second,
+    # independent backstop at the Storage layer.
+    wtw_max_upload_bytes: int = 10_485_760
+    # TTL for signed URLs minted at closet-read time (research.md §2) — never
+    # stored, just how long a photo_url stays valid before the next fetch
+    # (e.g. re-navigating to /closet) mints a fresh one.
+    wtw_photo_signed_url_ttl_seconds: int = 3600
+
     @property
     def judge_model(self) -> str:
         return self.wtw_judge_model or self.wtw_chat_model

@@ -1,0 +1,121 @@
+/* Same dialog shape as BottomSheet.module.css/CalendarPrimer.module.css —
+   this IS the "Add to Closet" bespoke variant design-system.md §3 names
+   explicitly (icon+title+description rows, richer than BottomSheet's
+   plain label rows). */
+
+.dialog {
+  border: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  max-height: 85dvh;
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  inset-block-end: 0;
+  inset-inline: 0;
+  position: fixed;
+}
+
+.dialog::backdrop {
+  background-color: var(--color-overlay);
+  opacity: 0;
+  transition: opacity var(--motion-duration-base) var(--motion-easing-decelerate);
+}
+.dialog[open]::backdrop {
+  opacity: 1;
+}
+
+.dialog {
+  transform: translateY(100%);
+  transition: transform var(--motion-duration-base) var(--motion-easing-decelerate);
+}
+.dialog[open] {
+  transform: translateY(0);
+}
+
+@media (min-width: 768px) {
+  .dialog {
+    inset-block-end: auto;
+    top: 50%;
+    inset-inline-start: 50%;
+    inset-inline-end: auto;
+    max-width: 420px;
+    border-radius: var(--radius-lg);
+    transform: translate(-50%, -50%) scale(0.96);
+    opacity: 0;
+    transition:
+      transform var(--motion-duration-base) var(--motion-easing-decelerate),
+      opacity var(--motion-duration-base) var(--motion-easing-decelerate);
+  }
+  .dialog[open] {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .dialog::backdrop {
+    transition: none;
+  }
+}
+
+.content {
+  padding: var(--space-lg);
+  padding-bottom: calc(30px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+.title {
+  margin: 0 0 var(--space-xs);
+}
+
+.subtitle {
+  margin: 0 0 var(--space-md);
+  color: var(--color-text-secondary);
+}
+
+.row {
+  composes: hitArea from global;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  padding: var(--space-md) 0;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  text-align: start;
+  cursor: pointer;
+}
+.row:first-of-type {
+  border-top: none;
+}
+
+.rowIcon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.rowTitle {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.rowSubtitle {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background-color: var(--color-surface-sunken);
+  }
+}

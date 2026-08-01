@@ -32,19 +32,15 @@
 }
 
 /* design/design-system.md § Image treatment — the diagonal-stripe photo
-   placeholder, unchanged until feature 006 replaces it with a real photo. */
+   placeholder is gone (feature 006): a real photo renders here now, or
+   components/ui/NoPhoto's flat treatment (research.md §11) when the item
+   has none. */
 .tile {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   height: 120px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background-image: repeating-linear-gradient(
-    135deg,
-    var(--color-surface-sunken) 0 8px,
-    var(--color-background) 8px 16px
-  );
+  overflow: hidden;
   text-decoration: none;
 }
 
@@ -53,12 +49,11 @@
   outline-offset: 2px;
 }
 
-.placeholderLabel {
-  font-family: monospace;
-  font-size: var(--font-size-2xs);
-  color: var(--color-text-secondary);
-  text-align: center;
-  padding: var(--space-xs);
+.tilePhoto {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .stateBlock {

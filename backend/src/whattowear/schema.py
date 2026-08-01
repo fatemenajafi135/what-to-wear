@@ -23,7 +23,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from .colors import normalize_hex
+from .colors import is_hex, name_to_hex, normalize_hex
 
 # --- controlled vocabularies -------------------------------------------------
 
@@ -176,25 +176,57 @@ class PhotoExtractionResponse(BaseModel):
 
 class CreateWardrobeItemFromUploadRequest(BaseModel):
     """Body of a wardrobe-item-from-upload request — the user-confirmed
-    (possibly corrected) attributes. fabric/pattern/fit are required HERE
-    ONLY: every item saved through the photo flow must have every attribute
-    populated, none blank. WardrobeItem/WardrobeItemPatch (the correction
-    path) keep all three optional, unchanged."""
+    (possibly corrected) attributes. `photo_path`, `category` and `colors`
+    are the review-card fields with no safe default and stay required.
+    `formality`/`warmth`/`season`/`fabric`/`pattern`/`fit` are optional,
+    matching `WardrobeItemPatch`'s existing shape — the six-field review
+    card the design specifies covers Name/Category/Group/Fabric/Color/Notes
+    only, so nothing outside it may block a save (design-decisions.md
+    §23.3, specs/006-photo-upload-vision/research.md §4). The route (not
+    this model) applies a documented conservative default for
+    formality/warmth/season when omitted, since those three columns are
+    NOT NULL in the database; fabric/pattern/fit are simply stored NULL,
+    since the database already allows it.
+
+    `name`/`notes` are on the review card too but are never scan-filled —
+    `vision.py`'s `_EXTRACTION_SCHEMA` has no such fields (the VLM prompt
+    only asks for garment attributes, not a user-facing label), so these
+    two start blank on every review card and are purely user-typed,
+    matching `WardrobeItem`'s own existing optionality for both."""
 
     photo_path: str
     category: str
     colors: list[str] = Field(min_length=1)
-    formality: Formality
-    warmth: int = Field(ge=0, le=5)
-    season: list[Season] = Field(min_length=1)
-    fabric: str
-    pattern: str
-    fit: str
+    formality: Formality | None = None
+    warmth: int | None = Field(default=None, ge=0, le=5)
+    season: list[Season] | None = None
+    fabric: str | None = None
+    pattern: str | None = None
+    fit: str | None = None
+    name: str | None = None
+    notes: str | None = None
 
     @field_validator("colors")
     @classmethod
-    def _colors_must_be_hex(cls, v: list[str]) -> list[str]:
-        return [normalize_hex(c) for c in v]
+    def _colors_resolve_name_or_hex(cls, v: list[str]) -> list[str]:
+        """Unlike `WardrobeItem`/`WardrobeItemPatch` (hex-only — the review
+        card never reaches those directly), the review card's Color field
+        is free text pre-filled with a *name* (`colors.nearest_names`), so
+        this is the one write path that must resolve a name back to hex
+        itself (design-decisions.md §23.4, research.md §5) — the frontend
+        only gates *whether* to submit (`isRecognizedColorName`); this is
+        the authoritative resolution. Raises naming the unresolved value,
+        never silently drops or guesses one."""
+        resolved: list[str] = []
+        for value in v:
+            if is_hex(value):
+                resolved.append(normalize_hex(value))
+                continue
+            try:
+                resolved.append(name_to_hex(value))
+            except KeyError:
+                raise ValueError(f"{value!r} isn't a recognized color name or hex code") from None
+        return resolved
 
 
 # --- outputs -----------------------------------------------------------------

@@ -1,15 +1,21 @@
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: var(--space-md);
-  padding: var(--space-3xl) var(--space-lg);
-  min-height: 60vh;
+/* design/design-system.md §5: Add item is stacked, one card at a time,
+   centred at max-width: 480px from tablet up. */
+.content {
+  padding: var(--space-lg);
 }
 
-.body {
-  max-width: 32ch;
-  color: var(--color-text-secondary);
+@media (min-width: 768px) {
+  .content {
+    max-width: 480px;
+    margin-inline: auto;
+  }
+}
+
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

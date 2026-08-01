@@ -15,7 +15,7 @@ import pytest
 
 from whattowear.repositories import supabase_closet
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
-from whattowear.schema import WardrobeItemPatch
+from whattowear.schema import CreateWardrobeItemFromUploadRequest, WardrobeItemPatch
 
 
 class _FakeRow:
@@ -260,3 +260,72 @@ class TestDeleteWardrobeItem:
 
         repo = SupabaseClosetRepository()
         assert repo.delete_wardrobe_item("user-a", "someone-elses-id") is False
+
+
+class TestCreateWardrobeItemFromUpload:
+    def test_omitted_optional_attributes_get_documented_defaults(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = _FakeRow(
+            {
+                **_ROW,
+                "formality": "casual",
+                "warmth": 3,
+                "season": ["spring", "summer", "autumn", "winter"],
+                "fabric": None,
+                "pattern": None,
+                "fit": None,
+                "photo_path": "user-a/abc-shirt.jpg",
+            }
+        )
+        session = _fake_session([set_config_result, insert_result])
+        patch_session_scope(session)
+
+        request = CreateWardrobeItemFromUploadRequest(
+            photo_path="user-a/abc-shirt.jpg", category="top", colors=["#1b2a4a"]
+        )
+        repo = SupabaseClosetRepository()
+        item = repo.create_wardrobe_item_from_upload("user-a", request)
+
+        assert session.commit.called
+        insert_call = session.execute.call_args_list[1]
+        params = insert_call.args[1]
+        assert params["formality"] == "casual"
+        assert params["warmth"] == 3
+        assert params["season"] == ["spring", "summer", "autumn", "winter"]
+        assert params["fabric"] is None
+        assert params["pattern"] is None
+        assert params["fit"] is None
+        assert item.photo_path == "user-a/abc-shirt.jpg"
+
+    def test_supplied_attributes_pass_through_unchanged(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = _FakeRow(_ROW)
+        session = _fake_session([set_config_result, insert_result])
+        patch_session_scope(session)
+
+        request = CreateWardrobeItemFromUploadRequest(
+            photo_path="user-a/abc-shirt.jpg",
+            category="top",
+            colors=["#1b2a4a"],
+            formality="formal",
+            warmth=5,
+            season=["winter"],
+            fabric="wool",
+            pattern="solid",
+            fit="slim",
+            name="My blazer",
+            notes="Dry clean only",
+        )
+        repo = SupabaseClosetRepository()
+        repo.create_wardrobe_item_from_upload("user-a", request)
+
+        insert_call = session.execute.call_args_list[1]
+        params = insert_call.args[1]
+        assert params["formality"] == "formal"
+        assert params["warmth"] == 5
+        assert params["season"] == ["winter"]
+        assert params["fabric"] == "wool"
+        assert params["name"] == "My blazer"
+        assert params["notes"] == "Dry clean only"
