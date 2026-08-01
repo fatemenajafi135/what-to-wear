@@ -129,19 +129,24 @@ frontend/
 │   └── page.test.tsx                  # new — screen-level integration test
 ├── components/
 │   ├── recommend/                     # new directory
-│   │   ├── RecommendChat.tsx           # top-level client component: state machine, composer, message list
+│   │   ├── RecommendChat.tsx           # top-level client component: pending/sent messages, thread_id, Start-styling trigger (research.md §7 / design-decisions §28)
 │   │   ├── RecommendChat.module.css
 │   │   ├── RecommendChat.test.tsx
 │   │   ├── HeroState.tsx               # brand mark, wordmark, greeting, welcome bubble, suggestion chips
 │   │   ├── HeroState.module.css
-│   │   ├── ChatMessageList.tsx         # scrollable list, user/assistant bubbles
+│   │   ├── ChatMessageList.tsx         # scrollable list; user bubbles (local, instant) + assistant reply bubbles (only after a Start-styling call resolves), inline citation Badges, "Thinking…" row while in flight
 │   │   ├── ChatMessageList.module.css
-│   │   ├── OutfitCard.tsx              # single-outfit reply body: thumbnails + rule list (no citations on the card itself, §3.3)
-│   │   ├── OutfitCard.module.css
-│   │   ├── Composer.tsx                # pinned input bar + send button, offline/in-flight disabling
+│   │   ├── ItemThumbnailRow.tsx        # 56×56 thumbnails below an assistant reply, each → /closet/:itemId
+│   │   ├── ItemThumbnailRow.module.css
+│   │   ├── CitedRuleList.tsx           # dashed-top-border numbered rule list below the thumbnail row
+│   │   ├── CitedRuleList.module.css
+│   │   ├── StartStylingButton.tsx      # full-width primary button + caption; visible once ≥1 message sent, disabled when nothing pending since the last tap
+│   │   ├── StartStylingButton.module.css
+│   │   ├── Composer.tsx                # pinned input bar + send button — local-only (appends to transcript, no network call, research.md §7); offline/in-flight disabling
 │   │   ├── Composer.module.css
 │   │   ├── InsufficientClosetGate.tsx  # blocks the composer, names what's missing
 │   │   ├── InsufficientClosetGate.module.css
+│   │   ├── SparseClosetBanner.tsx      # dismissible info Banner, sessionStorage-scoped dismissal (design-decisions §11)
 │   │   └── useGreeting.ts              # time-of-day greeting (known-gaps.md §0.7)
 │   └── calendar/RecommendCalendarContext.tsx   # unchanged, reused as-is (already built by 012)
 └── lib/

@@ -1129,6 +1129,46 @@ but pays the one-time DDL cost inside whatever the first real user's request hap
 risks a multi-worker race under concurrent test setups — both avoidable for one line at startup).
 Full reasoning: `specs/008-styling-chat/research.md` §4.
 
+## 28. Feature 008 (Styling chat) — what the composer's send actually does, vs. "Start styling"
+
+Not one of the handoff's four named decisions, but a real gap the anatomy spec surfaces without
+resolving: design-system.md's Recommend anatomy lists **both** a pinned composer with its own
+28px send button (item 6) **and** a full-width "Start styling" button that "appears once the
+user has sent a message," captioned "Uses everything you have told me so far" (item 5) — two
+distinct controls, and the spec never states what each one actually triggers against a real
+backend. The reference prototype's own (unshipped) simulation code resolves the ambiguity
+unambiguously: `sendMessage()` only ever appends to local chat state and returns a canned,
+non-AI acknowledgement; `startStyling()` is the one path that joins the accumulated user text and
+runs the (simulated) generation (`design/prototype/What to Wear.dc.html:1834-1861`).
+
+**Decision**: the composer's send is **local-only** — it appends the user's message to the
+on-screen transcript and does not call the backend. "Start styling" is the **sole** trigger for
+`POST /recommend/messages`; it sends everything typed since the *last* Start-styling call (on the
+first tap, that is every message so far, which is exactly what "uses everything you have told me
+so far" describes) as `message`, with the held `thread_id` (§25) carrying continuity so the
+pipeline's own refinement parsing (unmodified, `_parse_refinement_intent`) treats a later tap's
+batch as a refinement utterance rather than a fresh, unrelated request. The button is visible once
+the conversation has at least one user message, and disabled specifically when there is nothing
+new pending since the last tap (avoids a no-op duplicate call, not specified either way by the
+design system but a reasonable implementation-level safeguard). No intermediate assistant
+"acknowledgement" bubble is built — the prototype's keyword-sniffed canned acknowledgements
+("Got it, a rainy day commute...") are demo flavor, not text in design-system.md's own copy
+tables (§6), so inventing and shipping them would violate Principle VIII's "nothing visual is
+invented in code" the other direction (inventing unspecified copy, not omitting specified copy).
+The composer's own "Thinking…" row and input/send disabling (design-system.md "Chat input
+behavior") apply while a Start-styling call is in flight, not on ordinary composer sends, which
+are instant and local.
+
+**Rejected**: (a) every composer send calling the real pipeline immediately, dropping "Start
+styling" as prototype-only flourish — directly contradicts design-system.md's explicit,
+verbatim-required anatomy item 5 and its copy, and produces a full retrieval+LLM call on every
+single message with no user control over when the expensive call fires, worsening exactly the
+latency/cost concern the handoff raises. (b) routing the composer's send through a real, trivial
+backend endpoint that returns a canned acknowledgement — adds a network round trip and a new
+endpoint for text that is discarded, ephemeral, and has no reason to be server-authoritative;
+Quality Bar's simplicity rule counsels against server surface with no measured need. Full
+reasoning: `specs/008-styling-chat/research.md` §7.
+
 ---
 
 *Every item above is decided except those explicitly marked **deferred** (§21), which are recorded gaps awaiting a decision rather than open questions blocking work.*

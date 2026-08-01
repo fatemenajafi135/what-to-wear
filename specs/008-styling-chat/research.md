@@ -137,3 +137,30 @@ copy — satisfying FR-003's honesty requirement with existing, tested pipeline 
 that fails outright (raises, or exceeds the 120s backstop) gets `recommend.error.body`/
 `recommend.error.cta` (design-system.md § Recommend) with a retry that resends the same last
 message.
+
+## 7. Composer send vs. "Start styling" — what actually calls the backend
+
+Not one of the four named decisions, but discovered while implementing the chat surface:
+design-system.md's Recommend anatomy lists two distinct controls — the pinned composer's own
+28px send button (item 6) and a separate full-width "Start styling" button that appears once the
+user has sent a message, captioned "Uses everything you have told me so far" (item 5) — without
+stating what each one does against a real backend.
+
+**Options considered**:
+
+| Option | Description | Rejected because |
+|---|---|---|
+| A. Composer send is local-only; "Start styling" is the sole trigger (chosen) | The composer appends to the on-screen transcript with no network call. "Start styling" sends everything typed since the last tap as `message`, with the held `thread_id` carrying continuity so a later tap reads as a refinement to the pipeline's own (unmodified) refinement parsing. | — |
+| B. Every composer send calls the pipeline immediately, "Start styling" dropped | Simplest possible mapping — one send, one real reply, matching my initial (incorrect) assumption before reading the reference prototype's actual interaction code. | Directly contradicts design-system.md's explicit anatomy item 5 and its verbatim-required copy ("Copy is the real prototype microcopy — ship it verbatim," §9) — the button and caption are specified, not optional. Also reruns a full retrieval+LLM call on every single message with the user given no control over when the expensive, multi-second call fires — worse on exactly the latency/cost axis the handoff itself flags as a concern. |
+| C. Composer send calls a real, trivial backend endpoint for a canned acknowledgement | Keeps a "real round trip" discipline for every user action. | The acknowledged text is ephemeral, discarded, and has no reason to be server-authoritative — adds a network round trip and a new endpoint for zero product value. Quality Bar's simplicity rule: no interface without a measured problem it solves. |
+
+**Decision**: A. Confirmed against `design/prototype/What to Wear.dc.html:1834-1861` (reference
+only, not ported): `sendMessage()` only ever appends to local state and returns a canned,
+non-AI acknowledgement; `startStyling()` is the one path that joins the accumulated user text and
+runs generation. The real implementation keeps that shape but drops the prototype's
+keyword-sniffed canned acknowledgement text (not present in design-system.md's own copy tables,
+§6 — inventing it would violate Principle VIII in the other direction, adding unspecified visual
+copy rather than omitting specified copy) and its fake `setTimeout` latency. "Start styling" is
+visible once the conversation has ≥1 user message and disabled specifically when nothing is
+pending since the last tap, to prevent a no-op duplicate call. Full record: design-decisions.md
+§28.
