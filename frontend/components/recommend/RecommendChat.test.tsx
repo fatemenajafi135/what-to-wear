@@ -120,4 +120,35 @@ describe("RecommendChat", () => {
     render(<RecommendChat />);
     expect(screen.queryByText("Start styling")).not.toBeInTheDocument();
   });
+
+  it("US2: a second Start-styling call echoes the first response's thread_id", async () => {
+    vi.mocked(apiClient.POST).mockResolvedValueOnce({
+      data: { thread_id: "thread-1", reply_text: null, outfit: mockOutfit, citations: mockCitations },
+      error: undefined,
+      response: new Response(),
+    } as never);
+
+    render(<RecommendChat />);
+    await userEvent.type(screen.getByLabelText("Message"), "business casual{Enter}");
+    await userEvent.click(screen.getByText("Start styling"));
+    await waitFor(() => {
+      expect(screen.getByText(/A relaxed pairing that works well here\./)).toBeInTheDocument();
+    });
+
+    vi.mocked(apiClient.POST).mockResolvedValueOnce({
+      data: { thread_id: "thread-1", reply_text: null, outfit: mockOutfit, citations: mockCitations },
+      error: undefined,
+      response: new Response(),
+    } as never);
+
+    await userEvent.type(screen.getByLabelText("Message"), "something warmer{Enter}");
+    await userEvent.click(screen.getByText("Start styling"));
+
+    await waitFor(() => {
+      expect(apiClient.POST).toHaveBeenCalledTimes(2);
+    });
+    expect(vi.mocked(apiClient.POST).mock.calls[1]?.[1]).toMatchObject({
+      body: { message: "something warmer", thread_id: "thread-1" },
+    });
+  });
 });
