@@ -24,8 +24,11 @@ already fixed by the constitution; no new language/runtime introduced.
 
 **Primary Dependencies**: FastAPI, SQLAlchemy + psycopg3, `requests` (Storage HTTP calls,
 already a dependency via the ingest layer), `langsmith`/LangChain (existing, `vision.py` already
-uses them) — backend, all existing. React 19, `openapi-fetch` — frontend, both existing. No new
-dependency added by this feature.
+uses them) — backend, all existing. React 19, `openapi-fetch` — frontend, both existing. **One
+new backend dependency, found during implementation**: `python-multipart`, which FastAPI's
+`File(...)`/`UploadFile` parameters require at import time and which nothing before this feature
+ever used (every prior route was pure-JSON) — `test_import_safety.py` caught its absence
+immediately (`RuntimeError: Form data requires "python-multipart" to be installed`).
 
 **Storage**: Postgres via Supabase (existing, unchanged tables) plus Supabase Storage (new
 usage — first feature to use it). One migration (`0006`): `wardrobe-photos` bucket declaration

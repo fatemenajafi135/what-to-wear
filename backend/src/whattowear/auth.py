@@ -32,15 +32,13 @@ def _get_jwk_client() -> PyJWKClient:
     return _jwk_client
 
 
-def get_current_user_id(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),  # noqa: B008
-) -> str:
-    """Verify the bearer token's signature and return the `sub` claim.
-
-    Raises 401 on a missing, malformed, expired, or invalid-signature token —
-    all as the same outcome, so a caller can't distinguish "no token" from
-    "bad token" from the response alone (spec.md FR-015).
-    """
+def _verify(credentials: HTTPAuthorizationCredentials | None) -> tuple[str, dict]:
+    """Shared verification: raises 401 on a missing, malformed, expired, or
+    invalid-signature token — all as the same outcome, so a caller can't
+    distinguish "no token" from "bad token" from the response alone (spec.md
+    FR-015). Returns the raw token alongside the decoded payload so callers
+    needing either (or both — feature 006's Storage calls need the raw
+    token, everything else needs just `sub`) don't re-verify twice."""
     if credentials is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")
     token = credentials.credentials
@@ -54,4 +52,25 @@ def get_current_user_id(
         )
     except PyJWTError as e:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Invalid token: {e}") from e
+    return token, payload
+
+
+def get_current_user_id(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),  # noqa: B008
+) -> str:
+    """Verify the bearer token's signature and return the `sub` claim."""
+    _token, payload = _verify(credentials)
     return str(payload["sub"])
+
+
+def get_current_access_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),  # noqa: B008
+) -> str:
+    """Verify the bearer token's signature and return the raw token itself.
+
+    Feature 006: Storage uploads and signed-URL generation must use the
+    caller's own bearer token, never a service-role key — the per-user
+    Storage RLS policy is what enforces isolation there, not application
+    code (specs/006-photo-upload-vision/research.md §1)."""
+    token, _payload = _verify(credentials)
+    return token

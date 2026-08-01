@@ -21,17 +21,27 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 
-from whattowear.auth import get_current_user_id
+from whattowear.adapters import storage
+from whattowear.auth import get_current_access_token, get_current_user_id
 from whattowear.categories import CategoryGroup, group_of
 from whattowear.colors import is_hex, name_to_hex, nearest_names, normalize_hex
 from whattowear.core.config import get_settings
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
-from whattowear.schema import WardrobeItem, WardrobeItemPatch
+from whattowear.schema import (
+    CreateWardrobeItemFromUploadRequest,
+    ExtractedAttributes,
+    PhotoExtractionResponse,
+    WardrobeItem,
+    WardrobeItemPatch,
+)
+from whattowear.vision import extract_attributes_from_image
 
 router = APIRouter()
+
+_SUPPORTED_UPLOAD_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 # The Closet screen's five filter chips — a strict subset of CategoryGroup's
 # six taxonomy values. `full_body` has no chip of its own, so it filters
@@ -56,17 +66,25 @@ class ClosetItemView(WardrobeItem):
     (`categories.group_of`) and `color_names` (`colors.nearest_names`) are
     both backend-only Python logic. Route-local, not part of the AI-pipeline
     contract — matches `whoami.py`'s existing pattern of defining its own
-    response model beside the route."""
+    response model beside the route.
+
+    `photo_url` (feature 006) is a short-lived signed URL minted at read
+    time, never stored (data-model.md §5) — `None` when the item has no
+    photo. Populated by the route, not this classmethod, since signing
+    needs the caller's own access token, which this model has no access to
+    and shouldn't (`ports.ClosetRepository` stays untouched)."""
 
     category_group: CategoryGroup
     color_names: list[str]
+    photo_url: str | None = None
 
     @classmethod
-    def from_wardrobe_item(cls, item: WardrobeItem) -> ClosetItemView:
+    def from_wardrobe_item(cls, item: WardrobeItem, photo_url: str | None = None) -> ClosetItemView:
         return cls(
             **item.model_dump(),
             category_group=group_of(item.category),
             color_names=nearest_names(item.colors),
+            photo_url=photo_url,
         )
 
 
@@ -137,6 +155,7 @@ def list_closet_items(
     category: ClosetChipFilter | None = Query(default=None),  # noqa: B008
     offset: int = Query(default=0, ge=0),  # noqa: B008
     user_id: str = Depends(get_current_user_id),  # noqa: B008
+    access_token: str = Depends(get_current_access_token),  # noqa: B008
     repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
 ) -> ClosetItemsResponse:
     items = repository.list_wardrobe_items(user_id)
@@ -149,8 +168,15 @@ def list_closet_items(
     page = items[offset : offset + page_size]
     has_more = offset + page_size < total
 
+    # One batched sign call for the whole page rather than N sequential ones
+    # (research.md §2 addendum).
+    photo_paths = [item.photo_path for item in page if item.photo_path is not None]
+    signed_urls = storage.create_signed_urls(access_token, photo_paths)
+
     return ClosetItemsResponse(
-        items=[ClosetItemView.from_wardrobe_item(item) for item in page],
+        items=[
+            ClosetItemView.from_wardrobe_item(item, photo_url=signed_urls.get(item.photo_path or "")) for item in page
+        ],
         total=total,
         has_more=has_more,
     )
@@ -160,6 +186,7 @@ def list_closet_items(
 def get_closet_item(
     item_id: str,
     user_id: str = Depends(get_current_user_id),  # noqa: B008
+    access_token: str = Depends(get_current_access_token),  # noqa: B008
     repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
 ) -> ClosetItemView:
     # A syntactically invalid id can never match a row — treated identically
@@ -175,7 +202,8 @@ def get_closet_item(
         # Identical shape whether item_id doesn't exist or belongs to
         # another user — never reveals which (contracts/closet.md).
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
-    return ClosetItemView.from_wardrobe_item(item)
+    photo_url = storage.create_signed_url(access_token, item.photo_path) if item.photo_path else None
+    return ClosetItemView.from_wardrobe_item(item, photo_url=photo_url)
 
 
 @router.patch("/closet/items/{item_id}")
@@ -241,3 +269,67 @@ def delete_closet_item(
 
     if not repository.delete_wardrobe_item(user_id, item_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+
+
+# --- feature 006: photo upload + vision -------------------------------------
+
+
+@router.post("/closet/items/extract")
+def extract_closet_item(
+    photo: UploadFile = File(...),  # noqa: B008
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    access_token: str = Depends(get_current_access_token),  # noqa: B008
+) -> PhotoExtractionResponse:
+    """Draft extraction only — persists nothing to `wardrobe_items`
+    (contracts/wardrobe-items-extract.md). Extraction failure is always a
+    200 with `extraction_ok: false`; only a genuine Storage failure 5xxs
+    (handoff §5.2)."""
+    if photo.content_type not in _SUPPORTED_UPLOAD_TYPES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unsupported image type")
+
+    max_bytes = get_settings().wtw_max_upload_bytes
+    file_bytes = photo.file.read(max_bytes + 1)
+    if len(file_bytes) > max_bytes:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "File exceeds the maximum upload size")
+    if not file_bytes:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Empty file")
+
+    # A genuine Storage failure propagates as an unhandled requests.HTTPError
+    # -> FastAPI's default 500 — the one case that legitimately 5xxs here.
+    photo_path = storage.upload_photo(access_token, user_id, file_bytes, photo.filename or "photo", photo.content_type)
+
+    try:
+        extracted = extract_attributes_from_image(file_bytes, photo.content_type)
+        extraction_ok = True
+    except Exception:
+        # Extraction failure (blurry photo, no garment, VLM/gateway error) is
+        # never a 5xx — the photo is already uploaded, so the user can
+        # proceed to manual entry without re-uploading.
+        extracted = ExtractedAttributes()
+        extraction_ok = False
+
+    return PhotoExtractionResponse(photo_path=photo_path, extracted=extracted, extraction_ok=extraction_ok)
+
+
+@router.post("/closet/items/from-upload", status_code=status.HTTP_201_CREATED)
+def create_closet_item_from_upload(
+    body: CreateWardrobeItemFromUploadRequest,
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    access_token: str = Depends(get_current_access_token),  # noqa: B008
+    repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
+) -> ClosetItemView:
+    """Creates a `wardrobe_items` row from a previously-extracted (and
+    possibly corrected) draft (contracts/wardrobe-items-create-from-upload.md).
+    `ports.ClosetRepository` is unchanged — this calls a repository method
+    beyond the Protocol, same pattern 005's four write methods already
+    established (handoff trap 5)."""
+    if not body.photo_path.startswith(f"{user_id}/"):
+        # The caller's own extract call always produces a path under their
+        # own prefix (adapters.storage.upload_photo) — the same prefix
+        # Storage RLS matches on. A path outside it can never be this
+        # user's own photo.
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "photo_path does not belong to this user")
+
+    item = repository.create_wardrobe_item_from_upload(user_id, body)
+    photo_url = storage.create_signed_url(access_token, item.photo_path) if item.photo_path else None
+    return ClosetItemView.from_wardrobe_item(item, photo_url=photo_url)

@@ -348,7 +348,7 @@ missing-file error. **This closes the "file doesn't exist" gap, not the "is this
 representative garment photo" gap** — a synthetic silhouette is not a real photograph, and a
 VLM's extraction quality against it is not evidence of extraction quality against a real photo.
 The harness itself also cannot be run to completion in this environment regardless of the fixture
-images existing, since no live VLM gateway key is configured here (§12 below) — reported
+images existing, since no live VLM gateway key is configured here (§13 below) — reported
 explicitly rather than left silently unverified.
 
 **Alternatives considered**:
@@ -413,7 +413,35 @@ otherwise need to be distinguished from), and needs no new token — it's the sa
 
 ---
 
-## 12. Environment limitations encountered while building this slice
+## 12. `name`/`notes` were missing from the request contract entirely
+
+**Found during implementation, not planning.** `CreateWardrobeItemFromUploadRequest` (as it
+existed before this feature) had no `name` or `notes` fields at all — yet both are two of the
+design's six review-card fields. Tracing why: `vision.py`'s `_EXTRACTION_SCHEMA` never asks the
+VLM for either (it's a garment-attribute prompt, not a naming one), so neither was ever
+scan-filled, and the contract was apparently drafted only against what the VLM produces rather
+than against the full review-card field list.
+
+**Decision**: add `name: str | None = None` and `notes: str | None = None` to the request,
+matching `WardrobeItem`'s own existing optionality for both. They are purely user-typed on
+every save through this flow — "scan-auto-filled" in the design's review-card description is
+therefore not literally true for these two fields specifically, and isn't fixable by changing
+the request contract (it would require extending the VLM prompt/schema, which
+`vision.py`/`_EXTRACTION_SCHEMA` are explicitly out of scope to modify — Principle I). Recorded
+here rather than silently patched, since the design's own text overpromises what the scan does
+for these two fields.
+
+**Alternatives considered**:
+- *Extend `_EXTRACTION_SCHEMA` to have the VLM guess a name.* Rejected — out of scope (Principle
+  I forbids regenerating/modifying the ported extraction logic without an eval run against
+  baselines, and a wardrobe item name is a personal label ("my weekend blazer"), not an
+  attribute a photo can objectively determine).
+- *Leave `name`/`notes` unsupported on this route, force a follow-up edit via 005's form to set
+  them.* Rejected — the review card explicitly presents both as editable fields on the same
+  card the user is already filling out; deferring them to a second screen contradicts "review
+  card(s) → saved" being one continuous step (spec.md SC-001).
+
+## 13. Environment limitations encountered while building this slice
 
 Recorded here rather than silently worked around, per the handoff's "if you cannot complete
 something" instruction:

@@ -76,6 +76,8 @@ REGRESSION_SURFACE_MODULES = [
     "whattowear.ingest.build_kb",
     "whattowear.ingest.cli",
     "whattowear.kb",
+    # --- feature 006 (photo upload + vision) -------------------------------
+    "whattowear.adapters.storage",
 ]
 
 

@@ -28,10 +28,17 @@ from sqlalchemy.engine import CursorResult, Row
 from sqlalchemy.orm import Session
 
 from ..core.db import get_session
-from ..schema import WardrobeItem, WardrobeItemPatch
+from ..schema import CreateWardrobeItemFromUploadRequest, WardrobeItem, WardrobeItemPatch
 
 if TYPE_CHECKING:
     from ..memory.preferences import FeedbackRecord
+
+# Documented, conservative defaults applied when the scan (or the user)
+# left one of these three NOT-NULL columns unset (research.md §4). Never
+# blocks a save; always correctable afterward via 005's edit form.
+_DEFAULT_FORMALITY = "casual"
+_DEFAULT_WARMTH = 3
+_DEFAULT_SEASON: list[str] = ["spring", "summer", "autumn", "winter"]
 
 # `get_session` is written as a single-yield generator with a try/finally —
 # exactly the shape `@contextmanager` expects — so it's reused as a plain
@@ -182,6 +189,46 @@ class SupabaseClosetRepository:
             )
             session.commit()
             return True
+
+    def create_wardrobe_item_from_upload(
+        self, user_id: str, request: CreateWardrobeItemFromUploadRequest
+    ) -> WardrobeItem:
+        """Feature 006. Not part of `ports.ClosetRepository` — same reason
+        the four write methods above aren't (handoff trap 5): the AI
+        pipeline's Protocol stays exactly as feature 007 defined it.
+        `formality`/`warmth`/`season` fall back to the documented defaults
+        above when the request omitted them (they're NOT NULL columns);
+        `fabric`/`pattern`/`fit` insert as `NULL` when omitted, matching
+        the database's own nullability."""
+        with _session_scope() as session:
+            _set_jwt_claim(session, user_id)
+            row = session.execute(
+                text(
+                    "INSERT INTO wardrobe_items "
+                    "(user_id, category, colors, formality, warmth, season, fabric, pattern, fit, "
+                    "name, notes, photo_path, source) "
+                    "VALUES (:user_id, :category, :colors, :formality, :warmth, :season, :fabric, "
+                    ":pattern, :fit, :name, :notes, :photo_path, 'upload') "
+                    f"RETURNING {_ITEM_COLUMNS}"
+                ),
+                {
+                    "user_id": user_id,
+                    "category": request.category,
+                    "colors": request.colors,
+                    "formality": request.formality or _DEFAULT_FORMALITY,
+                    "warmth": request.warmth if request.warmth is not None else _DEFAULT_WARMTH,
+                    "season": request.season or _DEFAULT_SEASON,
+                    "fabric": request.fabric,
+                    "pattern": request.pattern,
+                    "fit": request.fit,
+                    "name": request.name,
+                    "notes": request.notes,
+                    "photo_path": request.photo_path,
+                },
+            ).fetchone()
+            session.commit()
+            assert row is not None
+            return _row_to_wardrobe_item(row)
 
     def delete_wardrobe_item(self, user_id: str, item_id: str) -> bool:
         """Hard delete — cascades to the item's `item_wears` rows via the

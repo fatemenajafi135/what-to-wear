@@ -127,6 +127,18 @@ file_size_limit = "50MiB"
 # allowed_mime_types = ["image/png", "image/jpeg"]
 # objects_path = "./images"
 
+# Feature 006 (photo upload + vision): wardrobe item photos. Private —
+# these are photos of a person's clothes in their home, the same privacy
+# class wardrobe_items itself already gets RLS protection for (see
+# specs/006-photo-upload-vision/research.md §2). The backend mints
+# short-lived signed URLs at read time rather than serving from a public
+# bucket. file_size_limit here is a second backstop behind the app-level
+# WTW_MAX_UPLOAD_BYTES check in the extract route (research.md §3).
+[storage.buckets.wardrobe-photos]
+public = false
+file_size_limit = "10MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true

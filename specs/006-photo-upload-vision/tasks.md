@@ -11,10 +11,10 @@ is mocked at the `requests` boundary.
 
 ## Phase 1: Setup
 
-- [ ] T001 Declare the bucket in `infra/supabase/config.toml`:
+- [X] T001 Declare the bucket in `infra/supabase/config.toml`:
   `[storage.buckets.wardrobe-photos]` with `public = false`, `file_size_limit = "10MiB"`,
   `allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]` (`data-model.md` §1).
-- [ ] T002 Write migration `infra/supabase/migrations/0006_wardrobe_photos.sql`:
+- [X] T002 Write migration `infra/supabase/migrations/0006_wardrobe_photos.sql`:
   `storage.objects` RLS policy `wardrobe_photos_owner_rw` (`for all`,
   `bucket_id = 'wardrobe-photos' and (storage.foldername(name))[1] = auth.uid()::text` on both
   `using` and `with check`) plus `grant select, insert, update, delete on storage.objects to
@@ -22,19 +22,19 @@ is mocked at the `requests` boundary.
 - [ ] T003 Apply it: `cd infra && npx supabase db reset` and confirm `0001`-`0006` apply clean
   from empty, and the `wardrobe-photos` bucket exists afterward with no manual step (§9 DoD
   item 1). **Environment note**: this sandbox cannot pull the Docker images `supabase start`
-  needs (egress-policy 403s, `research.md` §12) — run this on a machine/CI with Docker access.
+  needs (egress-policy 403s, `research.md` §13) — run this on a machine/CI with Docker access.
 
 ## Phase 2: Foundational (blocking prerequisites for all user stories)
 
-- [ ] T004 [P] Add `wtw_max_upload_bytes: int = 10_485_760` and
+- [X] T004 [P] Add `wtw_max_upload_bytes: int = 10_485_760` and
   `wtw_photo_signed_url_ttl_seconds: int = 3600` to `Settings` in
   `backend/src/whattowear/core/config.py` (`data-model.md` §4).
-- [ ] T005 [P] Add `get_current_access_token` to `backend/src/whattowear/auth.py`: same
+- [X] T005 [P] Add `get_current_access_token` to `backend/src/whattowear/auth.py`: same
   JWKS/ES256 verification as `get_current_user_id`, returns the raw token string instead of the
   `sub` claim (`research.md` §1). Unit tests in `backend/tests/unit/test_auth.py`: valid token
   returns the raw string; missing/invalid token raises 401, mirroring the existing
   `get_current_user_id` test cases.
-- [ ] T006 [P] Port `backend/src/whattowear/adapters/storage.py` from
+- [X] T006 [P] Port `backend/src/whattowear/adapters/storage.py` from
   `../app-legacy/backend/src/whattowear/storage.py` (read it, adapt — don't copy verbatim):
   `upload_photo(access_token: str, user_id: str, file_bytes: bytes, filename: str, content_type:
   str) -> str` (uploads to `{user_id}/{uuid4}-{filename}` in the `wardrobe-photos` bucket via
@@ -46,23 +46,23 @@ is mocked at the `requests` boundary.
   `load_dotenv()` at module scope** (handoff trap 2; `test_import_safety.py` catches this).
   Add `"whattowear.adapters.storage"` to `REGRESSION_SURFACE_MODULES` in
   `backend/tests/unit/test_import_safety.py`.
-- [ ] T007 [P] Unit tests in `backend/tests/unit/test_storage_adapter.py`: `upload_photo` posts
+- [X] T007 [P] Unit tests in `backend/tests/unit/test_storage_adapter.py`: `upload_photo` posts
   to the right URL with the right path shape and headers (mocked `requests.post`, no network);
   `create_signed_url` posts to the sign endpoint and returns the signed URL from the mocked
   response; both raise on a mocked non-2xx response.
-- [ ] T008 Relax `CreateWardrobeItemFromUploadRequest` in `backend/src/whattowear/schema.py` per
+- [X] T008 Relax `CreateWardrobeItemFromUploadRequest` in `backend/src/whattowear/schema.py` per
   `data-model.md` §3: `formality`, `warmth`, `season`, `fabric`, `pattern`, `fit` become
   `| None = None` (keep the existing `ge=0, le=5` constraint on `warmth`); `photo_path`,
   `category`, `colors` (`min_length=1`) stay required. Keep the existing `_colors_must_be_hex`
   validator unchanged.
-- [ ] T009 [P] Add `photo_url: str | None = None` to `ClosetItemView` in
+- [X] T009 [P] Add `photo_url: str | None = None` to `ClosetItemView` in
   `backend/src/whattowear/api/v1/routes/closet.py` (`data-model.md` §5). Update
   `list_closet_items` and `get_closet_item` to accept the new `get_current_access_token`
   dependency and pass each item's `photo_path` (when not `None`) through
   `storage.create_signed_url` to populate it — `None` stays `None` when there's no photo.
   **`list_closet_items` uses `adapters.storage.create_signed_urls` (plural, batch — see below),
   not one call per item**, per `research.md` §2's batching addendum.
-- [ ] T009a [P] Add `create_signed_urls(access_token: str, photo_paths: list[str], expires_in:
+- [X] T009a [P] Add `create_signed_urls(access_token: str, photo_paths: list[str], expires_in:
   int | None = None) -> dict[str, str]` to `adapters/storage.py` alongside T006's
   `create_signed_url`: one `POST {SUPABASE_URL}/storage/v1/object/sign/wardrobe-photos`
   (Supabase Storage's bulk-sign endpoint, `{"paths": [...]}`) instead of N sequential calls,
@@ -75,7 +75,7 @@ is mocked at the `requests` boundary.
   own access token attempts to read that exact object path (`GET
   {SUPABASE_URL}/storage/v1/object/wardrobe-photos/{userA}/...`) and to overwrite it (`POST` to
   the same path) — both must fail. §9 DoD "Storage isolation proven" item. **Cannot run in this
-  sandbox** (no local Supabase, `research.md` §12) — written to the same standard
+  sandbox** (no local Supabase, `research.md` §13) — written to the same standard
   `test_wardrobe_rls.py` already meets, ready to run wherever Docker egress is available.
 
 **Checkpoint**: bucket + RLS exist; the read routes can mint signed URLs; the upload-request
@@ -90,18 +90,18 @@ gates the first capture.
 **Independent test**: `quickstart.md` steps 2–6, 8–9 (primer, scan, save, no-garment-found,
 offline, color validation).
 
-- [ ] T011 [P] [US1] Unit tests for the extract route's request-validation edges in
+- [X] T011 [P] [US1] Unit tests for the extract route's request-validation edges in
   `backend/tests/unit/test_closet_routes_extract.py`: no `photo` field → 422; wrong content
   type → 422; file larger than `wtw_max_upload_bytes` → 422 — all before any Storage/VLM call
   (mock both, assert neither was invoked on a 422).
-- [ ] T012 [US1] `POST /closet/items/extract` in `backend/src/whattowear/api/v1/routes/closet.py`
+- [X] T012 [US1] `POST /closet/items/extract` in `backend/src/whattowear/api/v1/routes/closet.py`
   (`contracts/wardrobe-items-extract.md`): validates the upload (422s per T011), calls
   `adapters.storage.upload_photo` with the caller's access token (`get_current_access_token`),
   calls `vision.extract_attributes_from_image`, catches a genuine extraction-call failure as
   `extraction_ok=False` with all-`null` `extracted` fields (never a 5xx for that — a real
   Storage failure is the only path that legitimately 5xxs), returns `PhotoExtractionResponse`.
   Depends on T005, T006.
-- [ ] T013 [P] [US1] Add `create_wardrobe_item_from_upload(self, user_id: str, request:
+- [X] T013 [P] [US1] Add `create_wardrobe_item_from_upload(self, user_id: str, request:
   CreateWardrobeItemFromUploadRequest) -> WardrobeItem` to
   `backend/src/whattowear/repositories/supabase_closet.py`: applies the three documented
   defaults (`formality="casual"`, `warmth=3`, `season=["spring","summer","autumn","winter"]`)
@@ -110,7 +110,7 @@ offline, color validation).
   `ports.ClosetRepository` (handoff trap 5). Unit test in
   `backend/tests/unit/test_supabase_closet_repository.py`: a request with all five optional
   attributes omitted inserts with the three documented defaults and `NULL` fabric/pattern/fit.
-- [ ] T014 [US1] `POST /closet/items/from-upload` in `closet.py`
+- [X] T014 [US1] `POST /closet/items/from-upload` in `closet.py`
   (`contracts/wardrobe-items-create-from-upload.md`): body is
   `CreateWardrobeItemFromUploadRequest`, **validates `photo_path` starts with `{user_id}/`
   (the caller's own prefix — the same convention `upload_photo` writes and Storage RLS
@@ -171,7 +171,7 @@ offline, color validation).
 
 **Checkpoint**: User Story 1 fully functional and independently testable/shippable — the
 feature's core mission works end to end (mocked VLM in tests; real VLM needs a live gateway key,
-`research.md` §12).
+`research.md` §13).
 
 ## Phase 4: User Story 2 — Add several garments in one pass (P2)
 
@@ -247,7 +247,7 @@ half already covered by T010).
   documented limitation, not a real photograph). Confirm
   `uv run python -m whattowear.eval.vision_harness` no longer fails on a missing file.
   **Running it to a pass/fail verdict needs a live `AI_GATEWAY_API_KEY`**, explicitly not
-  configured in this sandbox (`research.md` §12) — report as skipped, not faked.
+  configured in this sandbox (`research.md` §13) — report as skipped, not faked.
 - [ ] T032 Regenerate `frontend/lib/api/schema.d.ts`: `cd backend && uv run uvicorn
   whattowear.main:app &` then `cd frontend && npm run generate:api-types`.
 - [ ] T033 [P] Backend quality gate: `uv run ruff check .`, `uv run ruff format --check .`,

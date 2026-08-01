@@ -73,3 +73,42 @@ def test_expired_token_rejected(mocker):
     with pytest.raises(HTTPException) as exc_info:
         auth.get_current_user_id(credentials=_creds("expired.jwt.token"))
     assert exc_info.value.status_code == 401
+
+
+# --- get_current_access_token (feature 006) ---------------------------------
+
+
+def test_missing_credentials_rejected_for_access_token():
+    with pytest.raises(HTTPException) as exc_info:
+        auth.get_current_access_token(credentials=None)
+    assert exc_info.value.status_code == 401
+
+
+def test_valid_token_returns_raw_token(mocker):
+    _mock_settings(mocker)
+    fake_signing_key = mocker.Mock(key="fake-public-key")
+    mocker.patch.object(
+        auth,
+        "_get_jwk_client",
+        return_value=mocker.Mock(get_signing_key_from_jwt=mocker.Mock(return_value=fake_signing_key)),
+    )
+    mocker.patch.object(auth, "jwt_decode", return_value={"sub": "user-123", "aud": "authenticated"})
+
+    token = auth.get_current_access_token(credentials=_creds("valid.jwt.token"))
+
+    assert token == "valid.jwt.token"
+
+
+def test_invalid_signature_rejected_for_access_token(mocker):
+    _mock_settings(mocker)
+    fake_signing_key = mocker.Mock(key="fake-public-key")
+    mocker.patch.object(
+        auth,
+        "_get_jwk_client",
+        return_value=mocker.Mock(get_signing_key_from_jwt=mocker.Mock(return_value=fake_signing_key)),
+    )
+    mocker.patch.object(auth, "jwt_decode", side_effect=jwt.InvalidSignatureError("bad signature"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        auth.get_current_access_token(credentials=_creds("tampered.jwt.token"))
+    assert exc_info.value.status_code == 401
