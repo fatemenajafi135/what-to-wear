@@ -3,8 +3,8 @@ import { render, screen } from "@testing-library/react";
 import { ItemThumbnailRow } from "./ItemThumbnailRow";
 
 const items = [
-  { id: "item-1", name: "Navy tee", category: "t-shirt", category_group: "top" as const, colors: [], color_names: [], photo_url: "https://example.com/photo.jpg" },
-  { id: "item-2", name: null, category: "boots", category_group: "footwear" as const, colors: [], color_names: [], photo_url: null },
+  { id: "item-1", name: "Navy tee", category: "t-shirt", category_group: "top" as const, colors: [], color_names: [], photo_url: "https://example.com/photo.jpg", photo_background_color: null },
+  { id: "item-2", name: null, category: "boots", category_group: "footwear" as const, colors: [], color_names: [], photo_url: null, photo_background_color: null },
 ];
 
 describe("ItemThumbnailRow", () => {

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
 import { Chip } from "@/components/ui/Chip/Chip";
 import { Button } from "@/components/ui/Button/Button";
-import { NoPhoto } from "@/components/ui/NoPhoto/NoPhoto";
+import { ItemPhoto } from "@/components/ui/ItemPhoto/ItemPhoto";
 import { apiClient } from "@/lib/api/client";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import type { components } from "@/lib/api/schema";
@@ -165,12 +165,11 @@ export function ClosetGrid({ selectedItemId }: ClosetGridProps) {
                 className={[styles.tile, item.id === selectedItemId && styles.tileSelected].filter(Boolean).join(" ")}
                 aria-label={item.name ?? item.category}
               >
-                {item.photo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- a signed Storage URL, not a static/optimizable asset
-                  <img src={item.photo_url} alt="" className={styles.tilePhoto} />
-                ) : (
-                  <NoPhoto />
-                )}
+                <ItemPhoto
+                  src={item.photo_url}
+                  backgroundColor={item.photo_background_color}
+                  className={styles.tilePhoto}
+                />
               </Link>
             ))}
           </div>

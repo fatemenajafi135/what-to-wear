@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NoPhoto } from "@/components/ui/NoPhoto/NoPhoto";
+import { ItemPhoto } from "@/components/ui/ItemPhoto/ItemPhoto";
 import type { components } from "@/lib/api/schema";
 import styles from "./ItemThumbnailRow.module.css";
 
@@ -26,12 +26,12 @@ export function ItemThumbnailRow({ items }: ItemThumbnailRowProps) {
           className={styles.thumb}
           aria-label={item.name ?? item.category}
         >
-          {item.photo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element -- a signed Storage URL, not a static/optimizable asset
-            <img src={item.photo_url} alt="" className={styles.photo} />
-          ) : (
-            <NoPhoto className={styles.photo} />
-          )}
+          <ItemPhoto
+            src={item.photo_url}
+            backgroundColor={item.photo_background_color}
+            className={styles.photo}
+            radius={8}
+          />
         </Link>
       ))}
     </div>

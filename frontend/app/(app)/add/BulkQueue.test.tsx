@@ -5,10 +5,11 @@ import { apiClient } from "@/lib/api/client";
 import { BulkQueue } from "./BulkQueue";
 
 vi.mock("@/lib/api/client", () => ({
-  apiClient: { POST: vi.fn() },
+  apiClient: { POST: vi.fn(), GET: vi.fn() },
 }));
 
 const mockedPost = vi.mocked(apiClient.POST);
+const mockedGet = vi.mocked(apiClient.GET);
 
 function extractResponse(photoPath: string, category: string) {
   return {
@@ -33,6 +34,7 @@ function extractResponse(photoPath: string, category: string) {
 }
 
 beforeEach(() => {
+  mockedGet.mockResolvedValue({ data: TAXONOMY, error: undefined, response: new Response() } as never);
   mockedPost.mockReset();
   URL.createObjectURL = vi.fn(() => "blob:fake-url");
 });
@@ -40,6 +42,15 @@ beforeEach(() => {
 function makeFiles(n: number): File[] {
   return Array.from({ length: n }, (_, i) => new File(["fake"], `photo-${i}.jpg`, { type: "image/jpeg" }));
 }
+
+const TAXONOMY = {
+  top: ["blouse", "shirt", "t-shirt"],
+  bottom: ["jeans", "trousers"],
+  full_body: ["dress"],
+  outerwear: ["blazer", "coat"],
+  footwear: ["boots", "sneakers"],
+  accessory: ["belt", "bow_tie", "necklace", "tie"],
+};
 
 describe("BulkQueue", () => {
   it("scans every photo upfront and shows the first card with an announced position", async () => {
@@ -51,7 +62,7 @@ describe("BulkQueue", () => {
     render(<BulkQueue files={makeFiles(3)} onClose={vi.fn()} />);
 
     expect(await screen.findByText("Reviewing item 1 of 3")).toBeInTheDocument();
-    expect(screen.getByLabelText("Group")).toHaveValue("top");
+    expect(await screen.findByRole("button", { name: "Top" })).toHaveAttribute("aria-pressed", "true");
     await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(3));
   });
 
@@ -66,7 +77,7 @@ describe("BulkQueue", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save & next" }));
 
     expect(await screen.findByText("Reviewing item 2 of 2")).toBeInTheDocument();
-    expect(screen.getByLabelText("Group")).toHaveValue("bottom");
+    expect(await screen.findByRole("button", { name: "Bottom" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("isolates a failed card: it shows Try again, already-saved cards stay saved, queue does not advance", async () => {
@@ -131,7 +142,7 @@ describe("BulkQueue", () => {
       await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
 
       expect(await screen.findByRole("button", { name: "Save to Closet" })).toBeInTheDocument();
-      expect(screen.getByLabelText("Group")).toHaveValue("top");
+      expect(await screen.findByRole("button", { name: "Top" })).toHaveAttribute("aria-pressed", "true");
     });
 
     it("can be skipped so one bad photo doesn't strand the rest of the batch", async () => {
@@ -143,7 +154,7 @@ describe("BulkQueue", () => {
       await userEvent.click(await screen.findByRole("button", { name: "Skip this photo" }));
 
       expect(await screen.findByText("Reviewing item 2 of 2")).toBeInTheDocument();
-      expect(screen.getByLabelText("Group")).toHaveValue("bottom");
+      expect(await screen.findByRole("button", { name: "Bottom" })).toHaveAttribute("aria-pressed", "true");
     });
 
     it("closes the overlay when the only failing photo is also the last one", async () => {

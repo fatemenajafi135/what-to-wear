@@ -5,7 +5,7 @@ import { apiClient } from "@/lib/api/client";
 import { AddItemFlow } from "./AddItemFlow";
 
 vi.mock("@/lib/api/client", () => ({
-  apiClient: { POST: vi.fn() },
+  apiClient: { POST: vi.fn(), GET: vi.fn() },
 }));
 vi.mock("@/lib/useOnlineStatus", () => ({ useOnlineStatus: vi.fn(() => true) }));
 vi.mock("@/lib/camera/primed", () => ({
@@ -14,8 +14,10 @@ vi.mock("@/lib/camera/primed", () => ({
 }));
 
 const mockedPost = vi.mocked(apiClient.POST);
+const mockedGet = vi.mocked(apiClient.GET);
 
 beforeEach(() => {
+  mockedGet.mockResolvedValue({ data: TAXONOMY, error: undefined, response: new Response() } as never);
   mockedPost.mockReset();
   URL.createObjectURL = vi.fn(() => "blob:fake-url");
 });
@@ -25,6 +27,15 @@ async function selectFile() {
   const input = document.querySelector('input[type="file"]') as HTMLInputElement;
   await userEvent.upload(input, file);
 }
+
+const TAXONOMY = {
+  top: ["blouse", "shirt", "t-shirt"],
+  bottom: ["jeans", "trousers"],
+  full_body: ["dress"],
+  outerwear: ["blazer", "coat"],
+  footwear: ["boots", "sneakers"],
+  accessory: ["belt", "bow_tie", "necklace", "tie"],
+};
 
 describe("AddItemFlow", () => {
   it("shows the review card pre-filled after a successful scan", async () => {
@@ -51,11 +62,10 @@ describe("AddItemFlow", () => {
     render(<AddItemFlow onClose={vi.fn()} />);
     await selectFile();
 
-    expect(await screen.findByLabelText("Group")).toHaveValue("top");
+    expect(await screen.findByRole("button", { name: "Top" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByLabelText("Fabric")).toHaveValue("cotton");
     // Hex, shown as colour — the swatch and the literal code, not a name.
-    expect(screen.getByLabelText("Color 1 hex")).toHaveValue("#1b2a4a");
-    expect(screen.getByLabelText("Color 1 swatch")).toHaveValue("#1b2a4a");
+    expect(screen.getByLabelText("Color 1")).toHaveValue("#1b2a4a");
     expect(screen.getByRole("button", { name: "Casual" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Warmth 2 — Mild" })).toHaveAttribute("aria-pressed", "true");
   });
@@ -92,7 +102,7 @@ describe("AddItemFlow", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Enter manually" }));
 
     expect(screen.getByLabelText("Name")).toHaveValue("");
-    expect(screen.queryByLabelText("Color 1 hex")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Color 1")).not.toBeInTheDocument();
   });
 
   it("shows the distinct error state on a genuine extract failure", async () => {
@@ -128,7 +138,7 @@ describe("AddItemFlow", () => {
     const onClose = vi.fn();
     render(<AddItemFlow onClose={onClose} />);
     await selectFile();
-    await screen.findByLabelText("Group");
+    await screen.findByRole("button", { name: "Top" });
     await userEvent.click(screen.getByRole("button", { name: "Save to Closet" }));
 
     expect(onClose).toHaveBeenCalled();

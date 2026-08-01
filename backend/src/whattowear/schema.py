@@ -82,6 +82,10 @@ class WardrobeItem(BaseModel):
     pattern: str | None = None  # free-text, matches fabric's shape
     fit: str | None = None  # free-text, matches fabric's shape
     photo_path: str | None = None  # Storage object path, set once at creation
+    # Presentation-only: pads a non-square photo to 1:1. NOT a garment colour
+    # — keeping it out of `colors` keeps the backdrop out of the colour-harmony
+    # scorer (docs/design-decisions.md §31).
+    photo_background_color: str | None = None
     # Added for feature 004 (closet read) — resolved in /speckit-clarify
     # 2026-07-31: the design system requires both fields on Item detail and
     # the Add-item review card, but neither existed on this contract or in
@@ -159,11 +163,29 @@ class ExtractedAttributes(BaseModel):
     season: list[Season] | None = None
     pattern: str | None = None
     fit: str | None = None
+    # The photo BACKGROUND's dominant colour, not the garment's. Never shown
+    # as an attribute of the item — it exists so a non-square photo can be
+    # padded to 1:1 with a colour that continues its own backdrop instead of
+    # a grey letterbox (docs/design-decisions.md §31).
+    background_color: str | None = None
 
     @field_validator("colors")
     @classmethod
     def _colors_must_be_hex(cls, v: list[str] | None) -> list[str] | None:
         return v if v is None else [normalize_hex(c) for c in v]
+
+    @field_validator("background_color")
+    @classmethod
+    def _background_color_must_be_hex(cls, v: str | None) -> str | None:
+        """Tolerant, unlike `colors`: a malformed background colour costs a
+        cosmetic fallback, never a failed extraction, so it is dropped
+        rather than raised on."""
+        if v is None:
+            return None
+        try:
+            return normalize_hex(v)
+        except ValueError:
+            return None
 
 
 class PhotoExtractionResponse(BaseModel):
@@ -213,6 +235,7 @@ class CreateWardrobeItemFromUploadRequest(BaseModel):
     fit: str | None = None
     name: str | None = None
     notes: str | None = None
+    photo_background_color: str | None = None
 
     @field_validator("colors")
     @classmethod

@@ -1,21 +1,20 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Chip } from "@/components/ui/Chip/Chip";
 import { Input } from "@/components/ui/Input/Input";
 import { Textarea } from "@/components/ui/Textarea/Textarea";
 import { Button } from "@/components/ui/Button/Button";
 import { ColorField, isHex } from "./ColorField";
+import {
+  CATEGORY_CHIPS,
+  type CategoryChip,
+  groupsForChip,
+  humanizeCategory,
+  useCategoryTaxonomy,
+} from "@/lib/taxonomy";
 import { addItemCopy } from "@/lib/add-item-copy";
 import styles from "./ReviewCard.module.css";
-
-const CATEGORY_CHIPS: { value: string; label: string }[] = [
-  { value: "top", label: "Top" },
-  { value: "bottom", label: "Bottom" },
-  { value: "outerwear", label: "Outerwear" },
-  { value: "footwear", label: "Footwear" },
-  { value: "accessory", label: "Accessory" },
-];
 
 /** Chip groups, not `Select`s. A native dropdown is a poor control on a
  * phone — it hides every option behind a tap and an OS sheet, for two
@@ -100,6 +99,19 @@ export interface ReviewCardProps {
  * nearest palette name → that name's canonical hex) and told the user
  * nothing: "navy" does not say which navy the scan read.
  */
+/** Which of the five chips a specific type belongs to. Uses the fetched
+ * taxonomy when it has arrived; before that, a value that IS a bare group
+ * name still resolves, which covers the scan's fallback answers. */
+function inferChip(category: string, taxonomy: Record<string, string[]>): CategoryChip | "" {
+  if (!category) return "";
+  for (const { group } of CATEGORY_CHIPS) {
+    const groups = groupsForChip(group);
+    if (groups.includes(category)) return group;
+    if (groups.some((g) => (taxonomy[g] ?? []).includes(category))) return group;
+  }
+  return "";
+}
+
 export function ReviewCard({
   photoUrl,
   initial,
@@ -108,8 +120,16 @@ export function ReviewCard({
   saveError = false,
 }: ReviewCardProps) {
   const [name, setName] = useState(initial.name ?? "");
+  const taxonomy = useCategoryTaxonomy();
+  // `category` is the SPECIFIC type and the only one of the two that is
+  // stored — the backend derives the group from it via `categories.group_of`.
   const [category, setCategory] = useState(initial.category ?? "");
-  const [categoryChip, setCategoryChip] = useState(initial.category ?? "");
+  // The chip is the fixed five, and is a lens on `category` rather than a
+  // second value: inferred from whatever specific type is set, and choosing
+  // one narrows which types are offered. These used to be the SAME state
+  // variable, so picking "Top" overwrote a detected "blouse" with the bare
+  // group name (docs/design-decisions.md §31).
+  const [chip, setChip] = useState<CategoryChip | "">(() => inferChip(initial.category ?? "", {}));
   const [fabric, setFabric] = useState(initial.fabric ?? "");
   const [formality, setFormality] = useState(initial.formality ?? "");
   const [warmth, setWarmth] = useState(initial.warmth ?? "");
@@ -124,6 +144,13 @@ export function ReviewCard({
   const [saving, setSaving] = useState(false);
   const colorFieldRef = useRef<HTMLDivElement>(null);
 
+  // The taxonomy is fetched, so it lands after first paint — re-infer once.
+  useEffect(() => {
+    if (!chip && category) setChip(inferChip(category, taxonomy));
+  }, [taxonomy, category, chip]);
+
+  const specifics = chip ? groupsForChip(chip).flatMap((g) => taxonomy[g] ?? []) : [];
+
   const toggleSeason = (value: Season) =>
     setSeason((prev) => (prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]));
 
@@ -135,17 +162,18 @@ export function ReviewCard({
    * assuming an input exists: with no colours added yet there are no rows,
    * and the only thing to move to is the "Add color" button — which is
    * precisely the state that triggers the "required" error. */
-  const failColor = (message: string) => {
+  const failColor = (message: string, index?: number) => {
     setError(message);
     const field = colorFieldRef.current;
     if (!field) return;
-    const hexInputs = [...field.querySelectorAll<HTMLInputElement>('input[type="text"]')];
-    // The offending row, not merely the first one — with several colours the
-    // error is meaningless if focus lands on a valid entry. Falls back to
-    // "Add color" when there are no rows at all, which is the state that
-    // raises the "required" error.
-    const target = hexInputs.find((input) => !isHex(input.value)) ?? hexInputs[0] ?? field.querySelector("button");
-    (target as HTMLElement | null)?.focus();
+    const swatches = field.querySelectorAll<HTMLInputElement>('input[type="color"]');
+    // The offending swatch, not merely the first — with several colours an
+    // error focused on a valid entry says nothing. With no swatches at all
+    // (the state that raises "required") the only thing to move to is the
+    // control that adds one, which is the last button in the field.
+    const buttons = field.querySelectorAll<HTMLElement>("button");
+    const target = index === undefined ? buttons[buttons.length - 1] : swatches[index];
+    target?.focus();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,8 +183,9 @@ export function ReviewCard({
       failColor(addItemCopy.color.required);
       return;
     }
-    if (colors.some((c) => !isHex(c))) {
-      failColor(addItemCopy.color.notHex);
+    const badIndex = colors.findIndex((c) => !isHex(c));
+    if (badIndex !== -1) {
+      failColor(addItemCopy.color.notHex, badIndex);
       return;
     }
     // The legacy form's SC-003 guarantee: an item saved through the scan
@@ -198,22 +227,38 @@ export function ReviewCard({
       <div className={styles.field}>
         <span className={`textLabel ${styles.chipGroupLabel}`}>Category</span>
         <div className={styles.chipGroup} role="group" aria-label="Category">
-          {CATEGORY_CHIPS.map((chip) => (
+          {CATEGORY_CHIPS.map((option) => (
             <Chip
-              key={chip.value}
-              active={categoryChip === chip.value}
+              key={option.group}
+              active={chip === option.group}
               onClick={() => {
-                setCategoryChip(chip.value);
-                setCategory(chip.value);
+                setChip(option.group);
+                // Drop a specific type belonging to a different category, but
+                // keep one that still fits — re-tapping Top must not discard
+                // an already-detected "blouse".
+                if (inferChip(category, taxonomy) !== option.group) setCategory("");
               }}
             >
-              {chip.label}
+              {option.label}
             </Chip>
           ))}
         </div>
       </div>
 
-      <Input label="Group" value={category} onChange={setCategory} />
+      <div className={styles.field}>
+        <span className={`textLabel ${styles.chipGroupLabel}`}>Type</span>
+        {chip ? (
+          <div className={styles.chipGroup} role="group" aria-label="Type">
+            {specifics.map((value) => (
+              <Chip key={value} active={category === value} onClick={() => setCategory(value)}>
+                {humanizeCategory(value)}
+              </Chip>
+            ))}
+          </div>
+        ) : (
+          <p className={`textBody ${styles.hint}`}>Pick a category first.</p>
+        )}
+      </div>
       <Input label="Fabric" value={fabric} onChange={setFabric} />
 
       <div ref={colorFieldRef}>

@@ -1264,3 +1264,81 @@ saved items populated, none blank" (its SC-003) — this restores that guarantee
   the closet item), just never as the editable representation.
 - `fabric`/`pattern`/`fit` stay optional: the column is nullable, so an honest
   "not detected" is representable without inventing anything.
+
+## 31. Feature 006 — colour swatches, Category vs Type, and 1:1 photos
+
+**Status: decided.** Amends §30.
+
+### 31.1 Colour is hex, and hex is never shown
+
+The review card renders a row of **swatches** (`<input type="color">`), each with
+a remove control, plus an add button. The value is `#rrggbb` throughout; the code
+itself is not displayed.
+
+Three versions, two wrong:
+
+| Version | Problem |
+|---|---|
+| Name in a text field | Sent the NAME, so the detected value round-tripped through the palette: `#22345d` stored as navy's `#1b2a4a`, and multi-colour garments collapsed to one entry (§30). |
+| Swatch + `#rrggbb` text | Data correct, but printed a machine code where a colour belongs. The swatch already answers "which colour" exactly and instantly. |
+| **Swatch only (chosen)** | — |
+
+The native colour input is deliberate: a real OS picker on both mobile platforms
+for free, and it cannot emit a non-hex value — so with the text field gone, a
+malformed colour is unreachable through the UI. The hex validation behind it
+remains as a guard on values arriving from the scan.
+
+### 31.2 Category and Type are different fields
+
+They were one state variable, so choosing "Top" overwrote a detected `blouse`
+with the bare group name — which is why every scanned item stored a group name
+rather than a garment type.
+
+- **Category** — the fixed five chips (Top, Bottom, Outerwear, Footwear,
+  Accessory; `full_body` files under Bottom, as feature 004 already resolved for
+  the Closet filter). Not stored: `categories.group_of` derives it.
+- **Type** — the specific garment *within* that category (an accessory is a tie,
+  a bow tie, a necklace, a ring). This is what `wardrobe_items.category` holds.
+  Choosing a Category narrows which Types are offered; re-choosing the Category a
+  Type already belongs to keeps it.
+
+`CATEGORY_GROUPS` gained the specifics this made necessary (shirt, hoodie,
+bow_tie, necklace, ring, earrings, bracelet, ankle_boots, …) — exactly what
+`categories.py`'s docstring invites, and Principle VI freezes the six *group*
+names, not the category list.
+
+The vocabulary is served by `GET /api/v1/taxonomy/categories` rather than
+mirrored in TypeScript. The colour palette is already hand-mirrored with a "keep
+in sync" comment; this table changes far more often, and a second hand-copy would
+drift (Principle VII). A failed fetch leaves Type unselectable but never blocks a
+save — `category` is a free string on the backend.
+
+The vision prompt (v2) now asks for the specific type from the known vocabulary,
+so `group_of` always resolves rather than falling through to its
+`accessory` default.
+
+### 31.3 Photos are 1:1, letterboxed in their own background colour
+
+Every item photo renders square — closet tile, item-detail hero, styling-reply
+thumbnail — via one `ItemPhoto` component. Garment photos arrive in wildly
+different ratios and a grid of mixed shapes reads as broken.
+
+`object-fit: contain`, never `cover`: a crop silently amputates sleeves and
+shoes, which is worse than a band of colour. That band is why the VLM now also
+returns **`background_color`** — the dominant colour of the photo's *backdrop* —
+stored as `wardrobe_items.photo_background_color` (migration `0008`). The padding
+then continues the photo instead of interrupting it.
+
+Kept out of `colors` deliberately: that column is the garment's colours and feeds
+the colour-harmony scorer, which would otherwise score the wall the user
+photographed against. It is a presentation attribute of the photo, never surfaced
+as an attribute of the item.
+
+Nullable, with `--color-surface-sunken` as the fallback — the VLM leaves it null
+on a busy backdrop, and every item added before `0008` has none. There is no
+correct value to invent.
+
+**Deviation from design-system.md § Image treatment**, which specifies fixed
+heights (120px tile, 220px hero). Those were written against a prototype whose
+"photos" were all the same placeholder rectangle, so the question of real,
+varying aspect ratios never arose.

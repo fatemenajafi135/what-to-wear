@@ -36,3 +36,8 @@
   color: var(--color-error);
   margin: 0;
 }
+
+.hint {
+  color: var(--color-text-secondary);
+  margin: 0;
+}

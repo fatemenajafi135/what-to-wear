@@ -46,8 +46,19 @@ _EXTRACTION_SCHEMA = {
         "season": {"type": ["array", "null"], "items": {"type": "string"}},
         "pattern": {"type": ["string", "null"]},
         "fit": {"type": ["string", "null"]},
+        "background_color": {"type": ["string", "null"]},
     },
-    "required": ["category", "colors", "fabric", "warmth", "formality", "season", "pattern", "fit"],
+    "required": [
+        "category",
+        "colors",
+        "fabric",
+        "warmth",
+        "formality",
+        "season",
+        "pattern",
+        "fit",
+        "background_color",
+    ],
     "additionalProperties": False,
 }
 

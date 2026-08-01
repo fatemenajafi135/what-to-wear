@@ -4,7 +4,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
 import { Button } from "@/components/ui/Button/Button";
-import { NoPhoto } from "@/components/ui/NoPhoto/NoPhoto";
+import { ItemPhoto } from "@/components/ui/ItemPhoto/ItemPhoto";
 import { apiClient } from "@/lib/api/client";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { ClosetGrid } from "../ClosetGrid";
@@ -191,12 +191,12 @@ function ItemDetailCard({ item }: { item: ClosetItemView }) {
 
   return (
     <div className={styles.wrapper}>
-      {item.photo_url ? (
-        // eslint-disable-next-line @next/next/no-img-element -- a signed Storage URL, not a static/optimizable asset
-        <img src={item.photo_url} alt="" className={styles.photo} />
-      ) : (
-        <NoPhoto className={styles.noPhoto} />
-      )}
+      <ItemPhoto
+        src={item.photo_url}
+        backgroundColor={item.photo_background_color}
+        className={styles.photo}
+        radius={16}
+      />
       <div className={styles.card}>
         {fields.map((field) => (
           <div key={field.label} className={styles.fieldRow}>

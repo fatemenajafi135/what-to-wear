@@ -44,7 +44,8 @@ _session_scope = contextmanager(get_session)
 # projects literal `'catalog'`/`false` in their place so both queries can
 # share one row->model mapping.
 _ITEM_COLUMNS = (
-    "id, category, colors, formality, warmth, season, fabric, pattern, fit, name, notes, source, photo_path, favorite"
+    "id, category, colors, formality, warmth, season, fabric, pattern, fit, name, notes, source, photo_path, "
+    "photo_background_color, favorite"
 )
 
 
@@ -62,6 +63,7 @@ def _row_to_wardrobe_item(row: Row[Any]) -> WardrobeItem:
         pattern=m["pattern"],
         fit=m["fit"],
         photo_path=m["photo_path"],
+        photo_background_color=m["photo_background_color"],
         name=m["name"],
         notes=m["notes"],
         favorite=m["favorite"],
@@ -203,9 +205,9 @@ class SupabaseClosetRepository:
                 text(
                     "INSERT INTO wardrobe_items "
                     "(user_id, category, colors, formality, warmth, season, fabric, pattern, fit, "
-                    "name, notes, photo_path, source) "
+                    "name, notes, photo_path, photo_background_color, source) "
                     "VALUES (:user_id, :category, :colors, :formality, :warmth, :season, :fabric, "
-                    ":pattern, :fit, :name, :notes, :photo_path, 'upload') "
+                    ":pattern, :fit, :name, :notes, :photo_path, :photo_background_color, 'upload') "
                     f"RETURNING {_ITEM_COLUMNS}"
                 ),
                 {
@@ -221,6 +223,7 @@ class SupabaseClosetRepository:
                     "name": request.name,
                     "notes": request.notes,
                     "photo_path": request.photo_path,
+                    "photo_background_color": request.photo_background_color,
                 },
             ).fetchone()
             session.commit()

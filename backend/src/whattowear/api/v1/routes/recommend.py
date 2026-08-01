@@ -73,6 +73,7 @@ class RecommendItemView(BaseModel):
     colors: list[str]
     color_names: list[str]
     photo_url: str | None
+    photo_background_color: str | None
 
     @classmethod
     def from_wardrobe_item(cls, item: WardrobeItem, photo_url: str | None) -> RecommendItemView:
@@ -84,6 +85,7 @@ class RecommendItemView(BaseModel):
             colors=item.colors,
             color_names=nearest_names(item.colors),
             photo_url=photo_url,
+            photo_background_color=item.photo_background_color,
         )
 
 

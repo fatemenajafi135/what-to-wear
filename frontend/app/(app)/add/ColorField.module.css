@@ -9,19 +9,27 @@
   color: var(--color-text-secondary);
 }
 
-.row {
+/* Swatches wrap as a set rather than stacking one per line — with no hex
+   text beside them a row is only as wide as its swatch, and a vertical list
+   of 44px squares would waste the whole card. */
+.swatches {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm);
 }
 
-/* 44px square, matching Input's height and the minimum touch target
-   (docs/design-decisions.md §1). The inner padding resets are what stop
-   browsers drawing their own inset border around the colour well. */
+.row {
+  position: relative;
+  display: inline-flex;
+}
+
+/* 44px square — Input's height and the minimum touch target
+   (docs/design-decisions.md §1). The vendor pseudo-elements are what stop
+   browsers drawing their own inset border inside the colour well. */
 .swatch {
   width: 44px;
   height: 44px;
-  flex: 0 0 44px;
   padding: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -43,51 +51,43 @@
   border-radius: calc(var(--radius-sm) - 2px);
 }
 
-/* Matches Input.module.css's .input exactly — 16px at every breakpoint is
-   the iOS auto-zoom guard and is not negotiable. Monospace because this is
-   a literal code value, not prose. */
-.hex {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 44px;
-  padding: 11px var(--space-md);
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: var(--font-size-md);
-  line-height: 22px;
-  border-radius: var(--radius-sm);
-  background-color: var(--color-surface-sunken);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-primary);
-}
-
+/* Sits on the swatch's top-inline-end corner. The visual dot stays small,
+   while a transparent inset ::before carries a full 44px hit area so the
+   touch-target minimum still holds. */
 .remove {
+  position: absolute;
+  top: -6px;
+  inset-inline-end: -6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: none;
+  border-radius: var(--radius-circle);
+  background-color: var(--color-surface);
   color: var(--color-text-secondary);
   cursor: pointer;
+}
+
+.remove::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
 }
 
 .add {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-xs);
-  align-self: flex-start;
-  min-height: 44px;
-  padding: var(--space-sm) var(--space-md);
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-sm);
   background: none;
   color: var(--color-primary);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
   cursor: pointer;
 }
 

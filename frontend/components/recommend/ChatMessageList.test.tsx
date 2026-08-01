@@ -5,7 +5,7 @@ import { ChatMessageList, type ChatMessage } from "./ChatMessageList";
 const outfit = {
   rationale_text: "",
   items: [
-    { id: "item-1", name: "Navy tee", category: "t-shirt", category_group: "top" as const, colors: [], color_names: [], photo_url: null },
+    { id: "item-1", name: "Navy tee", category: "t-shirt", category_group: "top" as const, colors: [], color_names: [], photo_url: null, photo_background_color: null },
   ],
   match_label: "great" as const,
 };
