@@ -259,10 +259,14 @@ half already covered by T010).
   build` — all clean; test count not below 143 (§9 DoD).
 - [ ] T035 Manual browser verification per `quickstart.md`'s full walkthrough, at both
   `localhost:3000` and `127.0.0.1:3000`, both themes, all three breakpoints (§9 DoD, trap 8 —
-  don't narrow CORS while doing this). **Needs a running frontend+backend+Supabase stack this
-  sandbox cannot provide** — reported as skipped per the handoff's explicit allowance for this
-  exact check.
-- [ ] T036 Confirm no secret and no personal/`data/`-sourced photo in the diff (`git diff`
+  don't narrow CORS while doing this). **Confirmed blocked, not just assumed**: `next dev` starts
+  fine, but `middleware.ts` calls `supabase.auth.getUser()` (a live Supabase Auth round-trip) on
+  *every* request before any page renders — even `/signin` 500s with "Your project's URL and Key
+  are required to create a Supabase client" (no `frontend/.env.local`, and the anon key can only
+  come from `npx supabase status` against a running local stack, research.md §13). This sandbox
+  cannot reach any route, authenticated or not — reported as skipped per the handoff's explicit
+  allowance for this exact check, with the concrete failure mode recorded rather than assumed.
+- [X] T036 Confirm no secret and no personal/`data/`-sourced photo in the diff (`git diff`
   review) before reporting done.
 
 ## Dependencies & execution order
