@@ -181,7 +181,7 @@ the overlay with everything saved.
 
 **Independent test**: `quickstart.md` step 7.
 
-- [ ] T023 [P] [US2] `frontend/app/(app)/add/BulkChoiceSheet.tsx` + `.module.css` +
+- [X] T023 [P] [US2] `frontend/app/(app)/add/BulkChoiceSheet.tsx` + `.module.css` +
   `.test.tsx`: the bespoke "Add to Closet" sheet (icon+title+description rows, design-system §3's
   named bespoke-variant exception — not `BottomSheet` itself) with copy keys
   `add_item.bulk.title`/`.subtitle`/`.option_title`/`.option_subtitle`, offering "Add bulk
@@ -189,24 +189,24 @@ the overlay with everything saved.
   uses `multiple`, capped client-side at **20 photos per bulk session** (`research.md` §6
   addendum — chosen as generous-but-bounded for a single review sitting; a picker selection
   beyond it is truncated to the first 20 with a brief inline notice, not a hard rejection).
-- [ ] T024 [US2] Wire `BulkChoiceSheet` as `/add`'s entry point in `page.tsx`/`AddItemFlow.tsx`:
+- [X] T024 [US2] Wire `BulkChoiceSheet` as `/add`'s entry point in `page.tsx`/`AddItemFlow.tsx`:
   choosing bulk supplies multiple files and transitions into `BulkQueue` (T025) instead of a
   single `AddItemFlow` run; choosing single-photo (or the default, unchanged path) keeps T022's
   existing behavior. Depends on T022, T023.
-- [ ] T025 [US2] `frontend/app/(app)/add/BulkQueue.tsx` + `.test.tsx`: holds one queue entry per
+- [X] T025 [US2] `frontend/app/(app)/add/BulkQueue.tsx` + `.test.tsx`: holds one queue entry per
   supplied photo (`{ file, photoPath, extracted, fields, status }`, `data-model.md` §8), renders
   T020's `ReviewCard` for the current entry with a live-announcing `<h2 aria-live="polite">`
   reading `add_item.review.position` (design-system §7/FR-006) and animates its progress
   indicator per `research.md` §8's motion-token pairing (reduced-motion gated). "Save & next"
   saves the current card and advances; on the last card, the same action's label/behavior
   finishes the queue and closes the overlay (spec.md Acceptance Scenario 3).
-- [ ] T026 [US2] Per-card failure isolation in `BulkQueue.tsx`: a failed save
+- [X] T026 [US2] Per-card failure isolation in `BulkQueue.tsx`: a failed save
   (`POST /closet/items/from-upload` fails) sets that entry's `status` to `'error'`, rendering its
   Save action in `Button`'s Error treatment ("Try again") in place — does not advance, does not
   drop the entry, does not affect already-`'saved'` entries (`research.md` §6, FR-008). Test:
   a mocked failure on the 2nd of 3 cards leaves card 1 saved, card 2 retryable, card 3
   unreached; retrying card 2 successfully then allows normal advance.
-- [ ] T027 [P] [US2] Integration test in `backend/tests/integration/test_closet_routes.py`:
+- [X] T027 [P] [US2] Integration test in `backend/tests/integration/test_closet_routes.py`:
   three sequential `from-upload` calls with distinct `photo_path`s each create their own item
   (no accidental id/photo collision across "one item per photo").
 

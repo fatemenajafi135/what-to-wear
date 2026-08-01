@@ -39,6 +39,7 @@ export interface AddItemFlowProps {
  */
 export function AddItemFlow({ onClose }: AddItemFlowProps) {
   const [state, setState] = useState<FlowState>({ step: "dropzone" });
+  const [saveError, setSaveError] = useState(false);
 
   const handleFileSelected = async (file: File) => {
     setState({ step: "scanning" });
@@ -86,6 +87,7 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
   };
 
   const handleSave = async (fields: ReviewCardFields, photoPath: string) => {
+    setSaveError(false);
     const { error } = await apiClient.POST("/api/v1/closet/items/from-upload", {
       body: {
         photo_path: photoPath,
@@ -99,7 +101,14 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
         notes: fields.notes || null,
       },
     });
-    if (error) throw new Error("save failed");
+    if (error) {
+      // Not thrown — ReviewCard's own submit handler awaits onSave inside
+      // try/finally with no catch, so throwing here would surface as an
+      // unhandled promise rejection. `saveError` is a prop, matching
+      // BulkQueue's identical fix.
+      setSaveError(true);
+      return;
+    }
     setState({ step: "saved" });
     onClose();
   };
@@ -152,6 +161,7 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
           color: state.colorNames[0] ?? "",
         }}
         saveLabel="Save to Closet"
+        saveError={saveError}
         onSave={(fields) => handleSave(fields, state.photoPath)}
       />
     );
