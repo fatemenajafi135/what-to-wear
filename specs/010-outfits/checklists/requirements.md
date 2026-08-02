@@ -31,16 +31,19 @@
 
 ## Notes
 
-No [NEEDS CLARIFICATION] markers were needed: the handoff (docs/handoffs/010-outfits.md) and
-prior design decisions (docs/design-decisions.md §32-37) already settle the three named gaps
-(citation/score persistence, outfit-level wear logging, delete confirmation) at the reasoning
-level needed for a business-facing spec — the *how* (schema, source of truth, technical
-alternatives rejected) is deferred to `/speckit-plan`'s research.md and recorded durably in
-design-decisions.md §38 onward, matching how feature 009 layered the same two documents.
+No `[NEEDS CLARIFICATION]` markers were left in the spec at draft time, but two genuine
+architecture-impacting ambiguities were resolved interactively via `/speckit-clarify` (see the
+spec's own Clarifications section, session 2026-08-02) before proceeding to planning:
 
-A fourth gap surfaced during spec drafting that the handoff didn't name explicitly: the Outfits
-gallery's filter facets (occasion/weather/formality) and "most worn" sort have no existing
-structured data to filter/sort by — `outfits` only stores free-text `occasion`/`meta_line`. This
-is called out in Assumptions (fixed categories, not free text) and will get its own
-design-decisions.md entry during planning, following the same "record it, don't guess silently"
-discipline the handoff asks for on the three named gaps.
+1. The Outfits gallery's filter facets (occasion/weather/formality) have no reliable structured
+   data to filter by (`outfits` only stores free-text `occasion`/`meta_line`) — resolved by
+   dropping filtering from this feature's scope entirely (sort-only) and recording the gap
+   explicitly rather than building a fragile approximation or silently omitting it.
+2. Whether "Log as worn today" on an outfit should also log each item — resolved: yes, it does
+   both, consistent with feature 005's per-item wear tracking.
+
+The three gaps the handoff named explicitly (citation/score persistence, outfit-level wear
+logging's *mechanism*, delete confirmation) are settled at the reasoning level needed for a
+business-facing spec; the technical *how* (schema, source of truth, alternatives rejected) is
+deferred to `/speckit-plan`'s research.md and recorded durably in design-decisions.md §38 onward,
+matching how feature 009 layered the same two documents.

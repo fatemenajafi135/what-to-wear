@@ -8,6 +8,22 @@
 
 **Input**: User description: "Outfits gallery + detail (feature 010) — browse saved outfits, filter/sort them, open one to see the full reasoning behind it (item photos, styling description with citations, styling rules, and a match breakdown), and manage a saved outfit (log as worn, rename, delete)."
 
+## Clarifications
+
+### Session 2026-08-02
+
+- Q: The Outfits gallery needs to filter by occasion/weather/formality and sort by "most worn" —
+  but the outfits table only stores free-text occasion and a single combined meta line, not
+  discrete categories. How should filtering/sorting actually work given that gap? → A: Drop
+  occasion/weather/formality filtering from this feature entirely for now — ship sort only (date
+  added, most worn; favorited-first is unaffected since it's already a plain boolean). Track the
+  dropped filter facets as a deliberate, recorded gap for a later feature, not a silent omission.
+- Q: When a user taps "Log as worn today" on a saved outfit, should that also count as wearing
+  each individual item in it (affecting per-item wear stats), or is outfit-level wear tracking
+  completely separate? → A: Both — logging an outfit as worn today also logs every item in it as
+  worn today (feature 005's existing per-item, per-day mechanism), because physically wearing the
+  outfit means wearing every item in it.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Browse saved outfits (Priority: P1)
@@ -110,32 +126,30 @@ across gallery and detail, and removal from the gallery after delete).
 
 ---
 
-### User Story 4 - Filter and sort saved outfits (Priority: P3)
+### User Story 4 - Sort saved outfits (Priority: P3)
 
-A user with many saved outfits narrows the gallery down by occasion, weather, or formality, and
-orders it by save date, favorited-first, or how often each outfit has been worn.
+A user with many saved outfits orders the gallery by save date, favorited-first, or how often
+each outfit has been worn.
 
 **Why this priority**: Pure quality-of-life once a user has accumulated enough saved outfits that
 scrolling the full list is inconvenient — not needed for the gallery or detail page to deliver
 value on day one.
 
-**Independent Test**: With several outfits saved with different occasions, apply a single filter
-facet, confirm the list narrows correctly, clear it, confirm the full list returns, then apply
-each sort order and confirm the resulting order changes accordingly.
+**Independent Test**: With several outfits saved with different save dates, favorite states, and
+worn counts, apply each sort order in turn and confirm the resulting order changes accordingly.
 
 **Acceptance Scenarios**:
 
-1. **Given** outfits saved under different occasions, **When** the user filters to one occasion,
-   **Then** only outfits matching that occasion remain visible, and a visible indicator shows a
-   filter is active.
-2. **Given** an active filter that matches nothing, **When** the gallery re-renders, **Then** the
-   user sees an explanation that no outfits match the current filters and a way to clear them —
-   distinct from the "no outfits saved at all" empty state.
-3. **Given** an active filter, **When** the user taps "Clear", **Then** every facet resets and the
-   full saved-outfit list reappears.
-4. **Given** outfits with different save dates, favorite states, and worn counts, **When** the
+1. **Given** outfits with different save dates, favorite states, and worn counts, **When** the
    user changes the sort order, **Then** the list re-orders accordingly without changing which
    outfits are shown.
+2. **Given** no sort has been explicitly chosen, **When** the user opens the gallery, **Then** it
+   is ordered newest-saved-first by default.
+
+> **Deferred, not dropped**: filtering by occasion, weather, or formality is out of scope for this
+> feature (see Clarifications) because the data needed to classify a saved outfit into those
+> categories doesn't exist yet in a reliable form. This is recorded as a known gap for a future
+> feature, not silently omitted.
 
 ### Edge Cases
 
@@ -147,7 +161,12 @@ each sort order and confirm the resulting order changes accordingly.
 - A saved outfit references an item the user has since removed from their closet — the detail
   page and gallery card show the outfit's remaining items rather than erroring on the missing one.
 - Two rapid double-taps on "log as worn today" must not be visible to the user as two distinct
-  events, and must not let a worn-count-based sort (User Story 4) count the same day twice.
+  events, and must not let a worn-count-based sort (User Story 4) count the same day twice — this
+  applies both to the outfit's own worn-count and to each item's, since logging an outfit as worn
+  also logs every item in it as worn (see Clarifications).
+- An outfit contains an item the user has since removed from their closet, and the user logs the
+  outfit as worn — the outfit-level wear still records normally; the removed item obviously can't
+  receive its own item-level wear record, and this is not an error.
 - A user attempts to view, rename, or delete an outfit that belongs to another account — this
   must fail exactly as if the outfit didn't exist, never revealing that it belongs to someone
   else.
@@ -175,9 +194,11 @@ each sort order and confirm the resulting order changes accordingly.
   visual indicator per scoring aspect (color, formality, weather-fit, silhouette) that reflects
   the outfit's relative strength on that aspect. The system MUST NOT display a raw numeric score
   or a percentage for any score, on any screen, at any time.
-- **FR-005**: A user MUST be able to mark a saved outfit as worn today. Repeating this action
-  later the same calendar day for the same outfit MUST have no additional, user-visible, or
-  count-inflating effect beyond the first time that day.
+- **FR-005**: A user MUST be able to mark a saved outfit as worn today. This MUST also mark every
+  item currently in that outfit as worn today (consistent with feature 005's existing per-item
+  wear tracking), skipping only items the user no longer owns. Repeating this action later the
+  same calendar day for the same outfit MUST have no additional, user-visible, or count-inflating
+  effect — for the outfit or for any of its items — beyond the first time that day.
 - **FR-006**: A user MUST be able to rename a saved outfit's title directly from the gallery
   card. The new title MUST appear consistently everywhere that outfit's title is shown (gallery
   card and detail page). The system MUST reject a rename to an empty or whitespace-only title.
@@ -187,14 +208,13 @@ each sort order and confirm the resulting order changes accordingly.
 - **FR-008**: A user MUST be able to permanently delete a saved outfit, and the system MUST
   require an explicit confirmation step before deletion happens — a single tap MUST NOT be
   sufficient to delete an outfit.
-- **FR-009**: The system MUST let a user filter their saved outfits by occasion, by weather, and
-  by formality (each independently, defaulting to no filter applied), and MUST let them clear all
-  active filters back to the unfiltered full list in one action.
+- **FR-009**: *Deferred (see Clarifications) — not built in this feature.* Filtering saved
+  outfits by occasion, weather, or formality is out of scope until a future feature gives saved
+  outfits a reliable, structured category to filter by.
 - **FR-010**: The system MUST let a user sort their saved outfits by save date (default), by
   favorited-first, or by how often worn.
-- **FR-011**: The system MUST show a distinct message when the user's current filter selection
-  matches zero saved outfits, separate from the message shown when the user has saved no outfits
-  at all.
+- **FR-011**: The system MUST show a distinct message when the user has saved no outfits at all,
+  guiding them to go start a styling conversation.
 - **FR-012**: The system MUST prevent one user from viewing, renaming, logging a wear on, or
   deleting another user's saved outfit — any such attempt MUST behave identically to the outfit
   not existing at all.
@@ -214,6 +234,8 @@ each sort order and confirm the resulting order changes accordingly.
   score breakdown, when that detail was captured at save time.
 - **Outfit wear log**: A record that a specific saved outfit was worn on a specific calendar day,
   used to support "how often worn" sorting. At most one such record exists per outfit per day.
+  Logging one of these also produces an item-level wear record (feature 005's existing mechanism)
+  for every item in the outfit the user still owns, on the same day.
 
 ## Success Criteria *(mandatory)*
 
@@ -229,9 +251,8 @@ each sort order and confirm the resulting order changes accordingly.
   focused interaction (one menu or one direct tap) without leaving the screen they started on.
 - **SC-005**: Accidental deletion of a saved outfit without explicit confirmation occurs 0% of the
   time.
-- **SC-006**: A user with an empty or fully-filtered-out gallery always sees an explanation of why
-  and, where applicable, a way to recover (clear filters, or go start styling) rather than a
-  blank screen.
+- **SC-006**: A user with an empty gallery always sees an explanation of why and a way to recover
+  (go start styling) rather than a blank screen.
 - **SC-007**: No user can ever retrieve, modify, or delete another user's saved outfit through any
   path this feature exposes.
 
@@ -244,13 +265,12 @@ each sort order and confirm the resulting order changes accordingly.
   re-running the styling assistant later would produce different reasoning than what the user
   actually saved and acted on.
 - "Worn today" for a saved outfit is tracked at the outfit level (needed to support "most worn"
-  sorting for outfits specifically) and does not change any wear tracking already recorded for
-  the individual items in that outfit.
+  sorting for outfits specifically) and additionally logs a wear for every item still owned by the
+  user (see Clarifications) — physically wearing the outfit means wearing its items.
 - Deleting a saved outfit is permanent (no recovery/undo path) but requires an explicit
   confirmation step first, given the action cannot be undone.
-- Occasion, weather, and formality filter categories are a fixed, small set of common values
-  (matching existing categories already used elsewhere in the app for the same concepts), not
-  free-text or user-defined categories.
+- Filtering by occasion, weather, or formality is explicitly out of scope for this feature (see
+  Clarifications) — only sorting ships now.
 - Chat history, conversational-turn behavior, and any change to how outfits are generated,
   scored, or retrieved are out of scope for this feature.
 - Sharing or exporting a saved outfit outside the app is out of scope for this feature.
