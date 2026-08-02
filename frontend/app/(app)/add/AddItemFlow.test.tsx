@@ -5,7 +5,7 @@ import { apiClient } from "@/lib/api/client";
 import { AddItemFlow } from "./AddItemFlow";
 
 vi.mock("@/lib/api/client", () => ({
-  apiClient: { POST: vi.fn() },
+  apiClient: { POST: vi.fn(), GET: vi.fn() },
 }));
 vi.mock("@/lib/useOnlineStatus", () => ({ useOnlineStatus: vi.fn(() => true) }));
 vi.mock("@/lib/camera/primed", () => ({
@@ -14,8 +14,10 @@ vi.mock("@/lib/camera/primed", () => ({
 }));
 
 const mockedPost = vi.mocked(apiClient.POST);
+const mockedGet = vi.mocked(apiClient.GET);
 
 beforeEach(() => {
+  mockedGet.mockResolvedValue({ data: TAXONOMY, error: undefined, response: new Response() } as never);
   mockedPost.mockReset();
   URL.createObjectURL = vi.fn(() => "blob:fake-url");
 });
@@ -26,13 +28,31 @@ async function selectFile() {
   await userEvent.upload(input, file);
 }
 
+const TAXONOMY = {
+  top: ["blouse", "shirt", "t-shirt"],
+  bottom: ["jeans", "trousers"],
+  full_body: ["dress"],
+  outerwear: ["blazer", "coat"],
+  footwear: ["boots", "sneakers"],
+  accessory: ["belt", "bow_tie", "necklace", "tie"],
+};
+
 describe("AddItemFlow", () => {
   it("shows the review card pre-filled after a successful scan", async () => {
     mockedPost.mockResolvedValueOnce({
       data: {
         photo_path: "user-a/x.jpg",
         extraction_ok: true,
-        extracted: { category: "top", colors: ["#1b2a4a"], fabric: "cotton" },
+        extracted: {
+          category: "top",
+          colors: ["#1b2a4a"],
+          fabric: "cotton",
+          formality: "casual",
+          warmth: 2,
+          season: ["spring"],
+          pattern: "solid",
+          fit: "regular",
+        },
         color_names: ["navy"],
       },
       error: undefined,
@@ -42,9 +62,12 @@ describe("AddItemFlow", () => {
     render(<AddItemFlow onClose={vi.fn()} />);
     await selectFile();
 
-    expect(await screen.findByLabelText("Group")).toHaveValue("top");
+    expect(await screen.findByRole("button", { name: "Top" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByLabelText("Fabric")).toHaveValue("cotton");
-    expect(screen.getByLabelText("Color")).toHaveValue("navy");
+    // Hex, shown as colour — the swatch and the literal code, not a name.
+    expect(screen.getByLabelText("Color 1")).toHaveValue("#1b2a4a");
+    expect(screen.getByRole("button", { name: "Casual" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Warmth 2 — Mild" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("shows the empty state (not an error) when no garment is found", async () => {
@@ -79,7 +102,7 @@ describe("AddItemFlow", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Enter manually" }));
 
     expect(screen.getByLabelText("Name")).toHaveValue("");
-    expect(screen.getByLabelText("Color")).toHaveValue("");
+    expect(screen.queryByLabelText("Color 1")).not.toBeInTheDocument();
   });
 
   it("shows the distinct error state on a genuine extract failure", async () => {
@@ -98,7 +121,14 @@ describe("AddItemFlow", () => {
         data: {
           photo_path: "user-a/x.jpg",
           extraction_ok: true,
-          extracted: { category: "top", colors: ["#1b2a4a"] },
+          extracted: {
+            category: "top",
+            colors: ["#1b2a4a"],
+            formality: "casual",
+            warmth: 2,
+            season: ["spring"],
+            background_color: "#e8e2d5",
+          },
           color_names: ["navy"],
         },
         error: undefined,
@@ -109,13 +139,27 @@ describe("AddItemFlow", () => {
     const onClose = vi.fn();
     render(<AddItemFlow onClose={onClose} />);
     await selectFile();
-    await screen.findByLabelText("Group");
+    await screen.findByRole("button", { name: "Top" });
     await userEvent.click(screen.getByRole("button", { name: "Save to Closet" }));
 
     expect(onClose).toHaveBeenCalled();
     expect(mockedPost).toHaveBeenCalledWith(
       "/api/v1/closet/items/from-upload",
-      expect.objectContaining({ body: expect.objectContaining({ colors: ["navy"] }) })
+      // Hex, and every detected attribute — not the six-field subset that
+      // used to drop formality/warmth/season/pattern/fit (design-decisions §30).
+      expect.objectContaining({
+        body: expect.objectContaining({
+          colors: ["#1b2a4a"],
+          formality: "casual",
+          warmth: 2,
+          season: ["spring"],
+          // The photo's backdrop, detected but never shown — it letterboxes
+          // a non-square photo to 1:1. Was extracted and stored in the
+          // database, then not threaded to the request for one commit, so
+          // every item saved through the UI got null (design-decisions §31).
+          photo_background_color: "#e8e2d5",
+        }),
+      })
     );
   });
 });

@@ -30,7 +30,7 @@ function item(overrides: Partial<ClosetItemView>): ClosetItemView {
     notes: null,
     source: "upload",
     photo_path: null,
-    photo_url: null,
+    photo_url: null, photo_background_color: null,
     favorite: false,
     ...overrides,
   };
@@ -43,7 +43,7 @@ beforeEach(() => {
 describe("ClosetGrid", () => {
   it("renders a real photo for an item with photo_url — no diagonal-stripe placeholder", async () => {
     mockedGet.mockResolvedValueOnce({
-      data: { items: [item({ id: "with-photo", photo_url: "https://example.com/signed.jpg" })], total: 1, has_more: false },
+      data: { items: [item({ id: "with-photo", photo_url: "https://example.com/signed.jpg", photo_background_color: null })], total: 1, has_more: false },
       error: undefined,
       response: new Response(),
     });
@@ -58,7 +58,7 @@ describe("ClosetGrid", () => {
 
   it("renders the NoPhoto treatment for an item with no photo", async () => {
     mockedGet.mockResolvedValueOnce({
-      data: { items: [item({ id: "no-photo", photo_url: null })], total: 1, has_more: false },
+      data: { items: [item({ id: "no-photo", photo_url: null, photo_background_color: null })], total: 1, has_more: false },
       error: undefined,
       response: new Response(),
     });

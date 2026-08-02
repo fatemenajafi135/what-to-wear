@@ -1,0 +1,97 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.label {
+  color: var(--color-text-secondary);
+}
+
+/* Swatches wrap as a set rather than stacking one per line — with no hex
+   text beside them a row is only as wide as its swatch, and a vertical list
+   of 44px squares would waste the whole card. */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.row {
+  position: relative;
+  display: inline-flex;
+}
+
+/* 44px square — Input's height and the minimum touch target
+   (docs/design-decisions.md §1). The vendor pseudo-elements are what stop
+   browsers drawing their own inset border inside the colour well. */
+.swatch {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-sunken);
+  cursor: pointer;
+}
+
+.swatch::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+
+.swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.swatch::-moz-color-swatch {
+  border: none;
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+/* Sits on the swatch's top-inline-end corner. The visual dot stays small,
+   while a transparent inset ::before carries a full 44px hit area so the
+   touch-target minimum still holds. */
+.remove {
+  position: absolute;
+  top: -6px;
+  inset-inline-end: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-circle);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.remove::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+
+.add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.error {
+  color: var(--color-error);
+  margin: 0;
+}

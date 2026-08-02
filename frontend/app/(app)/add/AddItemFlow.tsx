@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { Dropzone } from "./Dropzone";
 import { ReviewCard, type ReviewCardFields } from "./ReviewCard";
+import { buildFromUploadBody } from "./fromUploadBody";
 import { apiClient } from "@/lib/api/client";
 import { addItemCopy } from "@/lib/add-item-copy";
 import type { components } from "@/lib/api/schema";
@@ -18,10 +19,10 @@ type FlowState =
       step: "review";
       photoUrl: string;
       photoPath: string;
+      backgroundColor: string | null;
       extracted: ExtractedAttributes | null;
-      colorNames: string[];
     }
-  | { step: "empty"; photoUrl: string; photoPath: string }
+  | { step: "empty"; photoUrl: string; photoPath: string; backgroundColor: string | null }
   | { step: "error" }
   | { step: "saved" };
 
@@ -64,11 +65,16 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
           step: "review",
           photoUrl,
           photoPath: data.photo_path,
+          backgroundColor: data.extracted.background_color ?? null,
           extracted: data.extracted,
-          colorNames: data.color_names,
         });
       } else {
-        setState({ step: "empty", photoUrl, photoPath: data.photo_path });
+        setState({
+          step: "empty",
+          photoUrl,
+          photoPath: data.photo_path,
+          backgroundColor: data.extracted.background_color ?? null,
+        });
       }
     } catch {
       setState({ step: "error" });
@@ -81,25 +87,15 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
       step: "review",
       photoUrl: state.photoUrl,
       photoPath: state.photoPath,
+      backgroundColor: state.backgroundColor,
       extracted: null,
-      colorNames: [],
     });
   };
 
-  const handleSave = async (fields: ReviewCardFields, photoPath: string) => {
+  const handleSave = async (fields: ReviewCardFields, photoPath: string, backgroundColor: string | null) => {
     setSaveError(false);
     const { error } = await apiClient.POST("/api/v1/closet/items/from-upload", {
-      body: {
-        photo_path: photoPath,
-        category: fields.category,
-        // ReviewCard validates color is non-empty and recognized before
-        // ever calling onSave — the backend resolves the name to hex
-        // (schema.py's _colors_resolve_name_or_hex, research.md §5).
-        colors: [fields.color],
-        name: fields.name || null,
-        fabric: fields.fabric || null,
-        notes: fields.notes || null,
-      },
+      body: buildFromUploadBody(photoPath, backgroundColor, fields),
     });
     if (error) {
       // Not thrown — ReviewCard's own submit handler awaits onSave inside
@@ -156,13 +152,18 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
         initial={{
           category: e?.category ?? "",
           fabric: e?.fabric ?? "",
-          // Pre-filled with the derived NAME (research.md §5), not the raw
-          // hex extracted.colors carries.
-          color: state.colorNames[0] ?? "",
+          // Hex, exactly as detected — the card displays the derived names
+          // via initialColorNames but sends the hex back untouched.
+          colors: e?.colors ?? [],
+          formality: e?.formality ?? "",
+          warmth: e?.warmth == null ? "" : String(e.warmth),
+          season: e?.season ?? [],
+          pattern: e?.pattern ?? "",
+          fit: e?.fit ?? "",
         }}
         saveLabel="Save to Closet"
         saveError={saveError}
-        onSave={(fields) => handleSave(fields, state.photoPath)}
+        onSave={(fields) => handleSave(fields, state.photoPath, state.backgroundColor)}
       />
     );
   }

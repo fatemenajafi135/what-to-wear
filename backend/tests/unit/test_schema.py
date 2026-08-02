@@ -93,31 +93,80 @@ class TestCreateWardrobeItemFromUploadRequest:
     one write path that must resolve a name to hex itself
     (design-decisions.md §23.4, research.md §5)."""
 
-    def test_five_extra_attributes_are_optional(self) -> None:
-        req = CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["navy"])
-        assert req.formality is None
-        assert req.warmth is None
-        assert req.season is None
+    def test_formality_warmth_and_season_are_required(self) -> None:
+        """Reversal of design-decisions §23.3, per §30: these were optional,
+        the frontend stopped sending them, and the write path substituted
+        constants — so every scanned item stored the same fabricated
+        formality/warmth/season. A missing one must now fail loudly."""
+        with pytest.raises(ValidationError):
+            CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["navy"])
+
+    def test_fabric_pattern_and_fit_stay_optional(self) -> None:
+        req = CreateWardrobeItemFromUploadRequest(
+            photo_path="user-a/x.jpg",
+            category="top",
+            colors=["navy"],
+            formality="casual",
+            warmth=2,
+            season=["spring"],
+        )
         assert req.fabric is None
+        assert req.pattern is None
+        assert req.fit is None
 
     def test_color_name_resolves_to_hex(self) -> None:
-        req = CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["navy"])
+        req = CreateWardrobeItemFromUploadRequest(
+            photo_path="user-a/x.jpg",
+            category="top",
+            colors=["navy"],
+            formality="casual",
+            warmth=2,
+            season=["spring"],
+        )
         assert req.colors == ["#1b2a4a"]
 
     def test_color_hex_passes_through_normalized(self) -> None:
-        req = CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["1B2A4A"])
+        req = CreateWardrobeItemFromUploadRequest(
+            photo_path="user-a/x.jpg",
+            category="top",
+            colors=["1B2A4A"],
+            formality="casual",
+            warmth=2,
+            season=["spring"],
+        )
         assert req.colors == ["#1b2a4a"]
 
     def test_unrecognized_color_name_raises(self) -> None:
         with pytest.raises(ValidationError):
-            CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["mauve"])
+            CreateWardrobeItemFromUploadRequest(
+                photo_path="user-a/x.jpg",
+                category="top",
+                colors=["mauve"],
+                formality="casual",
+                warmth=2,
+                season=["spring"],
+            )
 
     def test_empty_colors_raises(self) -> None:
         with pytest.raises(ValidationError):
-            CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=[])
+            CreateWardrobeItemFromUploadRequest(
+                photo_path="user-a/x.jpg",
+                category="top",
+                colors=[],
+                formality="casual",
+                warmth=2,
+                season=["spring"],
+            )
 
     def test_name_and_notes_optional(self) -> None:
-        req = CreateWardrobeItemFromUploadRequest(photo_path="user-a/x.jpg", category="top", colors=["navy"])
+        req = CreateWardrobeItemFromUploadRequest(
+            photo_path="user-a/x.jpg",
+            category="top",
+            colors=["navy"],
+            formality="casual",
+            warmth=2,
+            season=["spring"],
+        )
         assert req.name is None
         assert req.notes is None
 

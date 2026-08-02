@@ -1189,3 +1189,177 @@ and is unrequested scope for this slice. Rejected: dropping `{name}` from the gr
 ---
 
 *Every item above is decided except those explicitly marked **deferred** (§21), which are recorded gaps awaiting a decision rather than open questions blocking work.*
+
+## 30. Feature 006 — the review card carries every extracted attribute
+
+**Status: decided.** Reverses §23.3 and amends §23.4.
+
+### The defect this fixes
+
+`vision.py` extracts eight attributes: `category, colors, fabric, warmth,
+formality, season, pattern, fit`. §23.3 decided that the design system's
+six-field Add-item review card (Name, Category, Group, Fabric, Color, Notes)
+should not be blocked by anything outside it, and relaxed
+`CreateWardrobeItemFromUploadRequest` accordingly. The frontend then never sent
+the other five, and the write path substituted constants for the three that are
+`NOT NULL`.
+
+Measured on real uploads: four photos of visibly different garments all stored
+`formality='casual'`, `warmth=3`, `season=[spring,summer,autumn,winter]`,
+`pattern=NULL`, `fit=NULL`. That is not a conservative default, it is fabricated
+data — indistinguishable from a real reading, and fed straight into a styling
+pipeline whose scorers reason over exactly these fields (`formality_coherence`,
+`weather_fitness`). The scan appeared to work while contributing nothing.
+
+§23.4 compounded it for colour: the card displayed a derived NAME and sent that
+name back, so `hex → nearest name → palette hex` replaced the detected value
+(`#22345d` stored as navy's `#1b2a4a`), and a multi-colour garment collapsed to
+one entry.
+
+### The decision
+
+The review card carries **all eight** extracted attributes, plus Name, Group and
+Notes. `formality`/`warmth`/`season` are required by the request model; the write
+path never defaults. Colour is a `TagInput` of hex values displayed by name — an
+untouched chip is sent as its original detected hex, and anything typed is sent
+as typed for the backend to resolve.
+
+This is a **deliberate deviation from design-system.md's Add-item field table**,
+which lists six fields. The table describes what a person edits, and was written
+against a prototype with no real extraction behind it; it cannot reasonably be
+read as an instruction to discard three quarters of what the scan produces. The
+legacy app's own `ExtractedItemForm` carried all eight and enforced "100% of
+saved items populated, none blank" (its SC-003) — this restores that guarantee.
+
+### Options considered
+
+| Option | Rejected because |
+|---|---|
+| Keep six fields, pass the other five through invisibly | Preserves the data, but a user cannot see or correct a wrong `formality` before it reaches the styling pipeline — and a wrong one is worse than a missing one, because nothing downstream can tell. Also leaves the scan's actual findings unauditable, which is how the original defect stayed invisible for two features. |
+| Keep six fields, show the other five read-only | Same visibility gain, but a wrong value then has no in-flow correction — the user must save a known-wrong item and edit it afterwards. |
+| Keep §23.3, make the three columns nullable instead | Removes the fabrication but not the loss: the pipeline would then reason over NULLs for every scanned item. The extractor already produces these values; the fix is to stop dropping them, not to make dropping them representable. |
+| **All eight, editable (chosen)** | — |
+
+### Consequences
+
+- Save is blocked when Category, Formality, Warmth or Season is empty
+  (`add_item.incomplete`). The scan fills these in nearly every case, so this
+  surfaces only on a genuine extraction failure — where the legacy behaved the
+  same way.
+- **Every taxonomy field on this card is a chip group** — Category, Formality,
+  Warmth and Season alike. `Select` was tried for Formality and Warmth and
+  rejected: a native dropdown hides every option behind a tap and an OS sheet
+  on a phone, for two fields the scan usually pre-answers and the user is only
+  verifying. It also carried a hazard of its own — a `<select>` whose value
+  matches no option silently selects its FIRST, so an undetected formality
+  displayed, and would have saved, as "casual". A chip group shows nothing
+  selected, which is the truth.
+- **Colour is hex, and is shown as colour.** A swatch (`<input type="color">`,
+  which gives a real OS picker on both mobile platforms and cannot produce a
+  non-hex value) beside the literal `#rrggbb`, with add/remove per entry —
+  the same control the legacy app used. An intermediate version displayed the
+  derived NAME instead: that both destroyed the detected value on the round
+  trip and told the user nothing, since "navy" does not say which navy the
+  scan read. Names are still derived for display elsewhere (`color_names` on
+  the closet item), just never as the editable representation.
+- `fabric`/`pattern`/`fit` stay optional: the column is nullable, so an honest
+  "not detected" is representable without inventing anything.
+
+## 31. Feature 006 — colour swatches, Category vs Type, and 1:1 photos
+
+**Status: decided.** Amends §30.
+
+### 31.1 Colour is hex, and hex is never shown
+
+The review card renders a row of **swatches** (`<input type="color">`), each with
+a remove control, plus an add button. The value is `#rrggbb` throughout; the code
+itself is not displayed.
+
+Three versions, two wrong:
+
+| Version | Problem |
+|---|---|
+| Name in a text field | Sent the NAME, so the detected value round-tripped through the palette: `#22345d` stored as navy's `#1b2a4a`, and multi-colour garments collapsed to one entry (§30). |
+| Swatch + `#rrggbb` text | Data correct, but printed a machine code where a colour belongs. The swatch already answers "which colour" exactly and instantly. |
+| **Swatch only (chosen)** | — |
+
+The native colour input is deliberate: a real OS picker on both mobile platforms
+for free, and it cannot emit a non-hex value — so with the text field gone, a
+malformed colour is unreachable through the UI. The hex validation behind it
+remains as a guard on values arriving from the scan.
+
+### 31.2 Category and Type are different fields
+
+They were one state variable, so choosing "Top" overwrote a detected `blouse`
+with the bare group name — which is why every scanned item stored a group name
+rather than a garment type.
+
+- **Category** — the fixed five chips (Top, Bottom, Outerwear, Footwear,
+  Accessory; `full_body` files under Bottom, as feature 004 already resolved for
+  the Closet filter). Not stored: `categories.group_of` derives it.
+- **Type** — the specific garment *within* that category (an accessory is a tie,
+  a bow tie, a necklace, a ring). This is what `wardrobe_items.category` holds.
+  Choosing a Category narrows which Types are offered; re-choosing the Category a
+  Type already belongs to keeps it.
+
+`CATEGORY_GROUPS` gained the specifics this made necessary (shirt, hoodie,
+bow_tie, necklace, ring, earrings, bracelet, ankle_boots, …) — exactly what
+`categories.py`'s docstring invites, and Principle VI freezes the six *group*
+names, not the category list.
+
+The vocabulary is served by `GET /api/v1/taxonomy/categories` rather than
+mirrored in TypeScript. The colour palette is already hand-mirrored with a "keep
+in sync" comment; this table changes far more often, and a second hand-copy would
+drift (Principle VII). A failed fetch leaves Type unselectable but never blocks a
+save — `category` is a free string on the backend.
+
+The vision prompt (v2) now asks for the specific type from the known vocabulary,
+so `group_of` always resolves rather than falling through to its
+`accessory` default.
+
+### 31.3 Photos are 1:1, letterboxed in their own background colour
+
+Every item photo renders square — closet tile, item-detail hero, styling-reply
+thumbnail — via one `ItemPhoto` component. Garment photos arrive in wildly
+different ratios and a grid of mixed shapes reads as broken.
+
+`object-fit: contain`, never `cover`: a crop silently amputates sleeves and
+shoes, which is worse than a band of colour. That band is why the VLM now also
+returns **`background_color`** — the dominant colour of the photo's *backdrop* —
+stored as `wardrobe_items.photo_background_color` (migration `0008`). The padding
+then continues the photo instead of interrupting it.
+
+Kept out of `colors` deliberately: that column is the garment's colours and feeds
+the colour-harmony scorer, which would otherwise score the wall the user
+photographed against. It is a presentation attribute of the photo, never surfaced
+as an attribute of the item.
+
+The vision golden set compares `category` at **group** level rather than by
+exact string, since the prompt now asks for a specific type: a correct
+`t-shirt` would otherwise fail a case expecting `top`. `categories.group_of` is
+the same mapping the app uses to slot an item, which is what those cases are
+really asserting.
+
+Nullable, with `--color-surface-sunken` as the fallback — the VLM leaves it null
+on a busy backdrop, and every item added before `0008` has none. There is no
+correct value to invent, and the app's own surface is the right answer when
+there is nothing better.
+
+**Threading it is the part that broke.** The field was added to the extractor,
+the request model and the database, and then for one commit not passed from the
+extract response into the save body at all — so every item added through the UI
+stored `null`, and every non-square photo letterboxed in the app's surface colour
+rather than its own backdrop. The same defect §30 records for the other five
+attributes, repeated within two commits of fixing it. `buildFromUploadBody` now
+takes it as a parameter, so the single and bulk flows cannot drop it
+independently, and both suites assert it reaches the request.
+
+Verified against the live VLM with a 600×900 photo of a dark red block on a sand
+backdrop: it returned `background_color: #d9c9a1` against a true `#d9c9a8`, and
+`colors: ["#7f1d2d"]` against a true `#7a1f2b` — genuinely separated, neither
+leaking into the other.
+
+**Deviation from design-system.md § Image treatment**, which specifies fixed
+heights (120px tile, 220px hero). Those were written against a prototype whose
+"photos" were all the same placeholder rectangle, so the question of real,
+varying aspect ratios never arose.

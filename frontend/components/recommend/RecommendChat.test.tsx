@@ -24,7 +24,7 @@ function mockGetByUrl(url: string) {
 const mockOutfit = {
   rationale_text: "A relaxed pairing that works well here.[1]",
   items: [
-    { id: "item-1", name: "Navy tee", category: "t-shirt", category_group: "top", colors: [], color_names: [], photo_url: null },
+    { id: "item-1", name: "Navy tee", category: "t-shirt", category_group: "top", colors: [], color_names: [], photo_url: null, photo_background_color: null },
   ],
   match_label: "great",
 };

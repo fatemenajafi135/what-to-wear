@@ -363,33 +363,64 @@ class TestExtractAndCreateFromUpload:
         assert body["extraction_ok"] is False
         assert body["extracted"]["category"] is None
 
-    def test_from_upload_with_only_review_card_fields_applies_documented_defaults(self) -> None:
+    def test_detected_attributes_are_stored_exactly_as_sent(self) -> None:
+        """The scan's findings are what gets stored. This route used to
+        substitute casual/3/all-four-seasons for anything the body omitted,
+        and the frontend was omitting all three — so every photo-added item
+        carried the same fabricated values regardless of the garment
+        (design-decisions.md §30)."""
         with _client_as(USER_A) as client:
             response = client.post(
                 "/api/v1/closet/items/from-upload",
                 json={
                     "photo_path": f"{USER_A}/abc-shirt.jpg",
                     "category": "top",
-                    "colors": ["#1b2a4a"],
+                    "colors": ["#1b2a4a", "#c19a6b"],
+                    "formality": "black_tie",
+                    "warmth": 0,
+                    "season": ["summer"],
+                    "fabric": "silk",
+                    "pattern": "striped",
+                    "fit": "slim",
                     "name": "Navy tee",
                 },
             )
         assert response.status_code == 201
         body = response.json()
-        assert body["formality"] == "casual"
-        assert body["warmth"] == 3
-        assert sorted(body["season"]) == ["autumn", "spring", "summer", "winter"]
-        assert body["fabric"] is None
-        item_id = body["id"]
+        assert body["formality"] == "black_tie"
+        assert body["warmth"] == 0
+        assert body["season"] == ["summer"]
+        assert body["pattern"] == "striped"
+        assert body["fit"] == "slim"
+        # Both colours survive, as hex — not collapsed to one, not snapped
+        # to a palette entry by a name round-trip.
+        assert body["colors"] == ["#1b2a4a", "#c19a6b"]
 
         with get_engine().begin() as conn:
-            conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": item_id})
+            conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": body["id"]})
+
+    def test_from_upload_rejects_a_body_missing_detected_attributes(self) -> None:
+        """A 422 is the correct outcome for an incomplete body — silently
+        inventing formality/warmth/season is what this replaces."""
+        with _client_as(USER_A) as client:
+            response = client.post(
+                "/api/v1/closet/items/from-upload",
+                json={"photo_path": f"{USER_A}/abc-shirt.jpg", "category": "top", "colors": ["#1b2a4a"]},
+            )
+        assert response.status_code == 422
 
     def test_from_upload_created_item_is_retrievable_with_photo_url_key(self) -> None:
         with _client_as(USER_A) as client:
             create_response = client.post(
                 "/api/v1/closet/items/from-upload",
-                json={"photo_path": f"{USER_A}/xyz-pants.jpg", "category": "bottom", "colors": ["#5c4033"]},
+                json={
+                    "photo_path": f"{USER_A}/xyz-pants.jpg",
+                    "category": "bottom",
+                    "colors": ["#5c4033"],
+                    "formality": "casual",
+                    "warmth": 2,
+                    "season": ["spring"],
+                },
             )
             item_id = create_response.json()["id"]
             get_response = client.get(f"/api/v1/closet/items/{item_id}")
@@ -412,7 +443,14 @@ class TestExtractAndCreateFromUpload:
         with _client_as(USER_A) as client:
             create_response = client.post(
                 "/api/v1/closet/items/from-upload",
-                json={"photo_path": f"{USER_A}/does-not-exist.jpg", "category": "top", "colors": ["#000000"]},
+                json={
+                    "photo_path": f"{USER_A}/does-not-exist.jpg",
+                    "category": "top",
+                    "colors": ["#000000"],
+                    "formality": "casual",
+                    "warmth": 2,
+                    "season": ["spring"],
+                },
             )
             assert create_response.status_code == 201
             body = create_response.json()
@@ -433,7 +471,14 @@ class TestExtractAndCreateFromUpload:
         with _client_as(USER_A) as client:
             response = client.post(
                 "/api/v1/closet/items/from-upload",
-                json={"photo_path": f"{USER_B}/stolen.jpg", "category": "top", "colors": ["#000000"]},
+                json={
+                    "photo_path": f"{USER_B}/stolen.jpg",
+                    "category": "top",
+                    "colors": ["#000000"],
+                    "formality": "casual",
+                    "warmth": 2,
+                    "season": ["spring"],
+                },
             )
         assert response.status_code == 422
 
@@ -443,7 +488,14 @@ class TestExtractAndCreateFromUpload:
             for i in range(3):
                 response = client.post(
                     "/api/v1/closet/items/from-upload",
-                    json={"photo_path": f"{USER_A}/photo-{i}.jpg", "category": "top", "colors": ["#000000"]},
+                    json={
+                        "photo_path": f"{USER_A}/photo-{i}.jpg",
+                        "category": "top",
+                        "colors": ["#000000"],
+                        "formality": "casual",
+                        "warmth": 2,
+                        "season": ["spring"],
+                    },
                 )
                 assert response.status_code == 201
                 created_ids.append(response.json()["id"])
@@ -465,7 +517,14 @@ class TestExtractAndCreateFromUpload:
         with _client_as(USER_A) as client:
             create_response = client.post(
                 "/api/v1/closet/items/from-upload",
-                json={"photo_path": f"{USER_A}/also-does-not-exist.jpg", "category": "top", "colors": ["#000000"]},
+                json={
+                    "photo_path": f"{USER_A}/also-does-not-exist.jpg",
+                    "category": "top",
+                    "colors": ["#000000"],
+                    "formality": "casual",
+                    "warmth": 2,
+                    "season": ["spring"],
+                },
             )
             item_id = create_response.json()["id"]
 
