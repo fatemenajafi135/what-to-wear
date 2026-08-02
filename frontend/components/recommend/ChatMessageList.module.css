@@ -10,11 +10,12 @@
   background-color: var(--color-primary);
   color: var(--color-on-primary);
   border-radius: 14px 14px 4px 14px;
-  padding: var(--space-md) var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
   max-width: 90%;
 }
 
 .userBubble p {
+  margin: 0;
   color: inherit;
 }
 

@@ -13,6 +13,32 @@
   padding: var(--space-sm) var(--space-lg);
 }
 
+/* design-system.md § Screen anatomy → Recommend, item 6: "Pinned bottom:
+   pill-shaped input bar" — sticky (not fixed) so it keeps the same
+   horizontal position as the rest of the (centered, max-width-capped at
+   tablet/desktop) column, and only actually sticks once there's enough
+   content to scroll — a short conversation doesn't get an artificial gap
+   above it. Cleared above the mobile bottom tab bar + safe area; the
+   tablet/desktop rail/sidebar doesn't eat vertical space, so no clearance
+   is needed there. */
+.composerSticky {
+  position: sticky;
+  /* The offset itself (not internal padding) has to clear the fixed bottom
+     tab bar — both this and TabBar stick to the viewport's bottom edge, so
+     leaving bottom:0 here made the two overlap instead of stacking. */
+  bottom: calc(56px + env(safe-area-inset-bottom, 22px));
+  z-index: var(--z-sticky);
+  background-color: var(--color-background);
+  padding: var(--space-sm) var(--space-lg);
+}
+
+@media (min-width: 768px) {
+  .composerSticky {
+    bottom: 0;
+    padding-bottom: var(--space-md);
+  }
+}
+
 .loadingSkeleton {
   display: flex;
   flex-direction: column;

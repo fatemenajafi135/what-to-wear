@@ -146,7 +146,9 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
         inFlight={status === "sending"}
         onClick={handleStartStyling}
       />
-      <Composer onSend={handleSend} inFlight={status === "sending"} />
+      <div className={styles.composerSticky}>
+        <Composer onSend={handleSend} inFlight={status === "sending"} />
+      </div>
     </div>
   );
 });
