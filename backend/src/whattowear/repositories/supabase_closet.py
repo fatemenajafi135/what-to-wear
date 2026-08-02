@@ -39,10 +39,13 @@ if TYPE_CHECKING:
 # context manager here rather than duplicating session lifecycle handling.
 _session_scope = contextmanager(get_session)
 
-# Both tables share every one of these columns except `source` and
-# `favorite`, which only exist on `wardrobe_items` — the catalog query below
-# projects literal `'catalog'`/`false` in their place so both queries can
-# share one row->model mapping.
+# Both tables share every one of these columns except `source`, `favorite`,
+# and `photo_background_color`, which only exist on `wardrobe_items` (the
+# last one added later by migration 0008, never backfilled onto
+# `catalog_items` — shared/read-only stock photos were never in scope for a
+# per-item backdrop colour) — the catalog query below projects literal
+# `'catalog'`/`false`/`NULL` in their place so both queries can share one
+# row->model mapping.
 _ITEM_COLUMNS = (
     "id, category, colors, formality, warmth, season, fabric, pattern, fit, name, notes, source, photo_path, "
     "photo_background_color, favorite"
@@ -95,7 +98,11 @@ class SupabaseClosetRepository:
 
     def list_catalog_items(self) -> list[WardrobeItem]:
         with _session_scope() as session:
-            columns = _ITEM_COLUMNS.replace("source", "'catalog' AS source").replace("favorite", "false AS favorite")
+            columns = (
+                _ITEM_COLUMNS.replace("source", "'catalog' AS source")
+                .replace("favorite", "false AS favorite")
+                .replace("photo_background_color", "NULL AS photo_background_color")
+            )
             rows = session.execute(text(f"SELECT {columns} FROM catalog_items")).fetchall()
             return [_row_to_wardrobe_item(row) for row in rows]
 
