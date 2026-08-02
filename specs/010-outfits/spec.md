@@ -114,9 +114,10 @@ across gallery and detail, and removal from the gallery after delete).
 2. **Given** a saved outfit titled "Business casual dinner", **When** the user renames it to
    "Friday client dinner" from the gallery card, **Then** the new title appears immediately on
    the card and also on that outfit's detail page.
-3. **Given** a saved outfit, **When** the user taps the favorite heart on the gallery card, the
-   detail page, or the management menu, **Then** all three stay in sync with the same
-   favorited/unfavorited state regardless of which one was tapped.
+3. **Given** a saved outfit, **When** the user taps the favorite heart on the gallery card or the
+   detail page header, **Then** both stay in sync with the same favorited/unfavorited state
+   regardless of which one was tapped (the management menu does not have its own separate
+   favorite control — the heart is a direct action on both surfaces, not routed through a menu).
 4. **Given** a saved outfit, **When** the user chooses to delete it, **Then** they are asked to
    confirm the irreversible action before it happens, and only after confirming is the outfit
    permanently removed from the gallery.
@@ -202,9 +203,10 @@ worn counts, apply each sort order in turn and confirm the resulting order chang
 - **FR-006**: A user MUST be able to rename a saved outfit's title directly from the gallery
   card. The new title MUST appear consistently everywhere that outfit's title is shown (gallery
   card and detail page). The system MUST reject a rename to an empty or whitespace-only title.
-- **FR-007**: A user MUST be able to favorite or unfavorite a saved outfit from at least the
-  gallery card, the detail page, and the outfit's own management menu, with the favorited state
-  kept in sync regardless of which surface was used.
+- **FR-007**: A user MUST be able to favorite or unfavorite a saved outfit directly from the
+  gallery card and from the detail page, with the favorited state kept in sync regardless of
+  which surface was used. The management menu does not offer a separate favorite action — the
+  heart is a direct control on both surfaces, not a menu entry.
 - **FR-008**: A user MUST be able to permanently delete a saved outfit, and the system MUST
   require an explicit confirmation step before deletion happens — a single tap MUST NOT be
   sufficient to delete an outfit.
