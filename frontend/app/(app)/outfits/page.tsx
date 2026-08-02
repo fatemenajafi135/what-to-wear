@@ -1,24 +1,21 @@
-import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
-import { Button } from "@/components/ui/Button/Button";
+import { OutfitsGrid } from "./OutfitsGrid";
 import styles from "./page.module.css";
 
 /**
- * Stub route — chrome + the outfits.empty.first_run state from
- * design/design-system.md §6 (no real outfits exist in this slice).
+ * `/outfits` — the list pane. At ≥1024px (design-system.md §5's two-pane
+ * master-detail), it renders beside a placeholder detail pane; below that,
+ * it's the whole screen and `/outfits/:outfitId` is reached by push
+ * navigation (mirrors `/closet/page.tsx` exactly).
  */
 export default function OutfitsPage() {
   return (
-    <>
-      <TopHeader title="Outfits" subtitle="0 outfits" />
-      <div className={styles.empty}>
-        <p className={`textBody ${styles.body}`}>
-          No outfits yet. Ask me to style something and I&apos;ll save the looks
-          here.
-        </p>
-        <Button href="/recommend" width="intrinsic" className={styles.cta}>
-          Go to Styling
-        </Button>
+    <div className={styles.twoPane}>
+      <div>
+        <OutfitsGrid />
       </div>
-    </>
+      <div className={styles.detailPane}>
+        <p className="textBody">Select an outfit to see its details.</p>
+      </div>
+    </div>
   );
 }

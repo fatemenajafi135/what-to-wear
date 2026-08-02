@@ -46,24 +46,24 @@ beforeEach(() => {
 
 describe("SuggestionPager", () => {
   it("renders one card per outfit with a working '1 of N' indicator", () => {
-    render(<SuggestionPager outfits={[outfit(), outfit({ occasion: "Second" }), outfit({ occasion: "Third" })]} />);
+    render(<SuggestionPager threadId="thread-1" outfits={[outfit(), outfit({ occasion: "Second" }), outfit({ occasion: "Third" })]} />);
     expect(screen.getByText("1 of 3")).toBeInTheDocument();
   });
 
   it("renders a single card with no indicator/arrows when there is exactly one outfit", () => {
-    render(<SuggestionPager outfits={[outfit()]} />);
+    render(<SuggestionPager threadId="thread-1" outfits={[outfit()]} />);
     expect(screen.queryByText(/of 1/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Next suggestion")).not.toBeInTheDocument();
   });
 
   it("renders nothing for an empty outfits array", () => {
-    const { container } = render(<SuggestionPager outfits={[]} />);
+    const { container } = render(<SuggestionPager threadId="thread-1" outfits={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("advancing the pager updates the indicator", async () => {
     const user = userEvent.setup();
-    render(<SuggestionPager outfits={[outfit(), outfit({ occasion: "Second" }), outfit({ occasion: "Third" })]} />);
+    render(<SuggestionPager threadId="thread-1" outfits={[outfit(), outfit({ occasion: "Second" }), outfit({ occasion: "Third" })]} />);
 
     await user.click(screen.getByLabelText("Next suggestion"));
     expect(screen.getByText("2 of 3")).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe("SuggestionPager", () => {
       response: new Response(),
     } as never);
     const user = userEvent.setup();
-    render(<SuggestionPager outfits={[outfit()]} />);
+    render(<SuggestionPager threadId="thread-1" outfits={[outfit()]} />);
 
     await user.click(screen.getByLabelText("Save outfit"));
 
@@ -94,7 +94,7 @@ describe("SuggestionPager", () => {
       .mockResolvedValueOnce({ data: { id: "outfit-1", favorite: true }, error: undefined, response: new Response() } as never)
       .mockResolvedValueOnce({ data: { id: "outfit-1", favorite: false }, error: undefined, response: new Response() } as never);
     const user = userEvent.setup();
-    render(<SuggestionPager outfits={[outfit()]} />);
+    render(<SuggestionPager threadId="thread-1" outfits={[outfit()]} />);
 
     await user.click(screen.getByLabelText("Save outfit"));
     await screen.findByLabelText("Unsave outfit");
@@ -115,7 +115,7 @@ describe("SuggestionPager", () => {
       response: new Response(),
     } as never);
     const user = userEvent.setup();
-    render(<SuggestionPager outfits={[outfit()]} />);
+    render(<SuggestionPager threadId="thread-1" outfits={[outfit()]} />);
 
     await user.click(screen.getByLabelText("Save outfit"));
     await screen.findByLabelText("Unsave outfit");
@@ -126,7 +126,7 @@ describe("SuggestionPager", () => {
 
   it("never calls the API for feedback thumbs", async () => {
     const user = userEvent.setup();
-    render(<SuggestionPager outfits={[outfit()]} />);
+    render(<SuggestionPager threadId="thread-1" outfits={[outfit()]} />);
 
     await user.click(screen.getByLabelText("Helpful"));
     await user.click(screen.getByLabelText("Not helpful"));

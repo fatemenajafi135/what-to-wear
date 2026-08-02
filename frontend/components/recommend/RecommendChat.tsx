@@ -114,6 +114,7 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
         role: "assistant",
         outfits: data.outfits,
         replyText: data.reply_text,
+        threadId: data.thread_id,
       },
     ]);
     setPendingTexts([]);

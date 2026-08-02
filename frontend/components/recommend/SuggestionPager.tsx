@@ -14,6 +14,13 @@ const DESKTOP_QUERY = "(min-width: 768px)";
 
 export interface SuggestionPagerProps {
   outfits: StylingOutfit[];
+  /** design-decisions.md §38 — sent on every save so the backend can
+   * capture citations/dimension scores from this thread's own checkpointed
+   * pipeline result. Every outfits-bearing reply carries a real thread_id
+   * (`RecommendChat.tsx` always sets it from `SendMessageResponse.thread_id`
+   * before this component ever mounts), so it's required here, not
+   * defensively optional. */
+  threadId: string;
 }
 
 interface SavedState {
@@ -30,7 +37,7 @@ interface SavedState {
  * scroll at all; tablet/desktop is a native scroll-snap track kept in sync
  * with the arrows via a `scroll` listener.
  */
-export function SuggestionPager({ outfits }: SuggestionPagerProps) {
+export function SuggestionPager({ outfits, threadId }: SuggestionPagerProps) {
   const router = useRouter();
   const trackRef = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
@@ -111,6 +118,7 @@ export function SuggestionPager({ outfits }: SuggestionPagerProps) {
         rationale_text: outfit.rationale_text,
         match_label: outfit.match_label,
         item_ids: outfit.items.map((item) => item.id),
+        thread_id: threadId,
       },
     });
     if (data) setSaved((prev) => ({ ...prev, [cardIndex]: { id: data.id, favorite: data.favorite } }));
