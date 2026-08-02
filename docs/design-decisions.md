@@ -1363,3 +1363,96 @@ leaking into the other.
 heights (120px tile, 220px hero). Those were written against a prototype whose
 "photos" were all the same placeholder rectangle, so the question of real,
 varying aspect ratios never arose.
+
+## 32. Conversational styling turns — amends §28
+
+**Status: decided.** Reverses §28's core decision. §28's own text stays as the record of what
+was believed at the time; this is what replaces it and why.
+
+### What §28 decided, and what was wrong with it
+
+§28 ruled that the composer's send is **local-only** — it appends to the transcript and never
+calls the backend — with "Start styling" the sole trigger for `POST /recommend/messages`. The
+consequence shipped in 008 and survived 009: the chat looks conversational, but only the user
+is talking. There is no assistant reply between messages.
+
+The reasoning was not careless, and two of its three legs still hold. What failed is the same
+failure this project keeps rediscovering: **the option list was incomplete.**
+
+§28 weighed exactly two alternatives and rejected both correctly:
+
+- *(a) every send runs the real pipeline.* Rejected for cost and latency — "a full
+  retrieval+LLM call on every single message with no user control over when the expensive call
+  fires."
+- *(b) a backend endpoint returning a canned acknowledgement.* Rejected because the text would
+  be "discarded, ephemeral, and has no reason to be server-authoritative."
+
+The option it never considered is the one that was wanted: **a lightweight conversational turn
+— no retrieval, no wardrobe, no generation — whose output is not discarded but accumulates into
+the intent that "Start styling" later consumes.** Neither rejection reaches it. It has none of
+(a)'s cost, because it never touches retrieval or the pipeline; and it is the opposite of (b),
+because its output is precisely what makes the later expensive call better.
+
+### The evidence §28 weighed wrongly
+
+§28 built its case on the reference prototype's simulation code, where `sendMessage()` returns a
+canned non-AI acknowledgement. But `design-system.md` § **Chat input behavior** describes two
+*distinct* states — `sending` (showing a **"Thinking…"** bubble) and `styling` (showing
+**"Styling your outfit…"**) — and instructs: *"Re-enable both the instant the assistant's reply
+lands."* That is a per-message request/reply cycle, in the design's own words, with its own
+bubble distinct from the styling one.
+
+§28 collapsed both states onto Start styling ("the composer's own 'Thinking…' row … apply while
+a Start-styling call is in flight, not on ordinary composer sends"). Two separately-named states
+with two separately-named bubbles is the stronger reading, and it is the design system rather
+than throwaway prototype code — which Principle VIII ranks above it explicitly.
+
+### The decision
+
+Every composer send calls a **new, separate conversational endpoint**. It is not the pipeline.
+"Start styling" remains the sole trigger for outfit generation, unchanged.
+
+The conversational call returns **structured output carrying both the visible reply and the
+slots it extracted** — `{reply_text, occasion?, formality?, mood?, temp_c?, location?}`. This
+single shape is what makes the rest work:
+
+- the prose is the conversation, evaluated for voice;
+- the slots are data, evaluated for extraction accuracy;
+- neither is judged by looking at the other.
+
+**"Start styling" composes its request from the accumulated slots in Python, not from an
+LLM-written summary.** `occasion` gates retrieval (Principle III), and
+`pipeline/graph.py::_parse_refinement_intent` is deterministic *by explicit design* — its
+docstring records that "refinement intent gates the selection/ranking path the same way an
+occasion does, so it stays deterministic too." Letting a model freely write the string that
+gates retrieval cuts against that reasoning. The model extracts; Python composes. Where no slot
+was extracted, the accumulated raw user text is the fallback, which is exactly 008's behaviour.
+
+**No pipeline change is required, and none is permitted.** `GraphState` already accepts
+`occasion`, `mood`, `formality`, `location` and `temp_c`; 008 populates only `occasion` and
+leaves the rest unset. Extracted slots fill fields the pipeline has always taken. That keeps
+`pipeline/`, `scoring/` and `retrieval/` untouched, so `docs/eval-baselines/` cannot move.
+
+### Consequences
+
+- **A new LLM path**, so the Quality Bar applies in full: a prompt file under `prompts/`
+  (inline prompt strings are prohibited), an entry in the golden set, LangSmith tracing, and no
+  live call in CI.
+- **New copy the design system does not contain.** Its Recommend table has four keys, all error
+  and empty states; nothing for ordinary conversation. Principle VIII forbids inventing it in
+  code, so it is drafted for the design owner to finalise, tracked as an explicit open item —
+  see the handoff. Shipping improvised turn copy is not permitted.
+- **`thread_id` now carries more than one real call per tap.** §25's identity decision holds,
+  but 008's assumption that a thread sees exactly one backend call per Start-styling tap does
+  not.
+- **Cost:** a turn on every send, on the small chat model with no retrieval, capped per thread
+  by config. A conversational turn is a fraction of one styling request.
+- **The wrap-up is visible**, as an assistant message before the outfits — so what the system
+  understood is on screen and correctable before the expensive call, rather than only inferable
+  from bad results.
+
+### Checked before deciding
+
+Principle I requires salvaging existing AI code before writing new. `../app-legacy` has **no
+conversational path** — every occurrence of "conversation" there refers to a LangGraph
+checkpointer thread, not a chat turn. This is genuinely new, and nothing was reinvented.

@@ -57,6 +57,14 @@ one thing.
 | 013 | Profile / settings | I set my style preferences, sizes and account details |
 | 014 | Offline + caching + update prompt | The app works offline and tells me when a new version is ready |
 | 015 | Install prompts + primers + splash | I install it to my home screen on iOS and Android |
+| 016 | Conversational styling turns | The stylist actually replies as I talk, then styles from what we discussed |
+
+**016 was added after 008 and 009 shipped**, not planned up front. 008 implemented
+design-decisions.md §28: the composer's send is local-only and "Start styling" is the only
+backend call — so the chat looked conversational while only the user talked. §32 amends that
+decision (§28's option list was incomplete; it never considered a lightweight non-pipeline
+turn). 016 is that slice. **It sequences after 009**, which rewrites the same response shape and
+components, **and before 011**, which persists a transcript whose shape this changes.
 
 ## Scope boundaries worth stating up front
 
