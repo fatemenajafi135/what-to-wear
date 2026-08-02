@@ -40,6 +40,18 @@ alter table outfits
 update outfits set title = occasion where title is null;
 alter table outfits alter column title set not null;
 
+-- design-decisions.md §43: "favorite" is decoupled from "saved" now that
+-- every generated outfit is saved unconditionally (§42's auto-save) — a
+-- fresh row's favorite must default to false (the user's own,
+-- not-yet-expressed preference), not true (which would silently claim
+-- every recommendation is already liked before the user has looked at
+-- it). Existing rows are untouched — each already reflects a real,
+-- explicit favorite/unfavorite action taken under the pre-§42 model.
+alter table outfits alter column favorite set default false;
+
+comment on column outfits.favorite is
+  'The user''s own preference marker, independent of whether the outfit is saved (existence — every recommendation is saved unconditionally, design-decisions.md §42). Not set automatically; the user marks an outfit favorite by tapping the heart. Toggled via UPDATE ... SET favorite = NOT favorite, never deleted on unfavorite.';
+
 -- Composite-FK target for outfit_wears below, same pattern 0005 used for
 -- wardrobe_items/item_wears.
 alter table outfits add constraint outfits_id_user_id_key unique (id, user_id);

@@ -179,8 +179,11 @@ class TestReadiness:
 class TestSendMessage:
     """specs/009-suggestion-pager/contracts/recommend.md, extended by
     design-decisions.md §42: every outfit this route returns is already
-    persisted (favorited by default) by the time the response is sent —
-    verified below by reading the row back, not just checking the 2xx."""
+    persisted by the time the response is sent, regardless of favorite
+    state (§43: "saved" and "favorite" are independent — a fresh row is
+    saved unconditionally but starts unfavorited, since favorite is the
+    user's own, not-yet-expressed preference) — verified below by reading
+    the row back, not just checking the 2xx."""
 
     def test_blocked_closet_is_rejected_and_pipeline_never_invoked(self, blocked_closet: None) -> None:
         with patch("whattowear.api.v1.routes.recommend.get_compiled_graph") as mock_get_graph:
@@ -219,7 +222,7 @@ class TestSendMessage:
         assert returned_ids == {ready_closet["top"], ready_closet["bottom"], ready_closet["shoes"]}
         assert outfit_body["match_label"] == "great"
         assert outfit_body["id"]  # already saved (design-decisions.md §42) — never null now
-        assert outfit_body["favorite"] is True  # favorited by default
+        assert outfit_body["favorite"] is False  # saved, but not favorited yet (§43)
         assert "[1]" not in outfit_body["rationale_text"]  # no citation markers on the card (§33/§35)
         assert outfit_body["meta_line"] == "business casual for a rainy commute · rain"
         assert "rank_score" not in outfit_body
@@ -230,7 +233,7 @@ class TestSendMessage:
         # actually stored (handoff §10).
         row = _outfit_row(outfit_body["id"])
         assert str(row["user_id"]) == USER_READY
-        assert row["favorite"] is True
+        assert row["favorite"] is False
         assert row["title"] == "business casual for a rainy commute"  # seeded from occasion (§36)
         assert row["rationale_with_citations"] == "A clean, casual pairing. [1]"
         assert row["citations"] == [{"number": 1, "text": "Pair casual denim with a relaxed top."}]
@@ -594,14 +597,15 @@ class TestToggleOutfitFavorite:
         with _client_as(USER_READY) as client:
             outfit_id = _generate_outfit(client, [ready_closet["top"]])["id"]
 
-            # Already favorite=true from generation (design-decisions.md
-            # §42) — the first toggle here flips it off, not on.
+            # Starts unfavorited from generation (design-decisions.md §43:
+            # saved unconditionally, favorite is a separate, not-yet-
+            # expressed preference) — the first toggle here flips it on.
             first_toggle = client.post(f"/api/v1/recommend/outfits/{outfit_id}/favorite")
             assert first_toggle.status_code == 200
-            assert first_toggle.json()["favorite"] is False
+            assert first_toggle.json()["favorite"] is True
 
             second_toggle = client.post(f"/api/v1/recommend/outfits/{outfit_id}/favorite")
-            assert second_toggle.json()["favorite"] is True
+            assert second_toggle.json()["favorite"] is False
 
         with get_engine().begin() as conn:
             row = (
@@ -609,8 +613,8 @@ class TestToggleOutfitFavorite:
                 .mappings()
                 .fetchone()
             )
-        assert row is not None  # still exists — unfavoriting toggles, never deletes
-        assert row["favorite"] is True
+        assert row is not None  # still exists — favoriting/unfavoriting toggles, never deletes
+        assert row["favorite"] is False
 
     def test_404_for_nonexistent_or_foreign_outfit(self, ready_closet: dict[str, str]) -> None:
         with _client_as(USER_READY) as client:

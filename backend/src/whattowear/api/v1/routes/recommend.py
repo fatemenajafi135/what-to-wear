@@ -412,7 +412,13 @@ def send_message(
                 items=resolved.items,
                 match_label=resolved.match_label,
                 meta_line=meta_line,
-                favorite=True,
+                # design-decisions.md §43: "saved" (this row existing at
+                # all) and "favorite" are independent now — every outfit is
+                # saved unconditionally, but favorite reflects the user's
+                # own, not-yet-expressed preference (the row's own default,
+                # matched here rather than re-asserted as a literal so the
+                # two can never drift apart).
+                favorite=False,
             )
         )
 

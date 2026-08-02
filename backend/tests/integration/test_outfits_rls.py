@@ -142,7 +142,7 @@ class TestOutfitsRLS:
             cur.execute("SELECT favorite FROM outfits WHERE id = %s", (seeded_rows["a"],))
             (favorite,) = cur.fetchone()
         admin.close()
-        assert favorite is True  # unchanged — still the `create()` default
+        assert favorite is False  # unchanged — still the column's own default (design-decisions.md §43)
 
     def test_user_cannot_delete_another_users_row(self, seeded_rows: dict[str, str]) -> None:
         conn_b = _connect_as(USER_B)

@@ -2023,3 +2023,45 @@ response — so the stored row and what was shown always agree. Covered by
 Unchanged in substance — `title` is still seeded from `occasion` at the moment of creation, still
 user-editable after. What changes is only *when* that creation happens (now always, at generation
 time, rather than only if/when a user saved it).
+
+## 43. "Favorite" defaults to false now that "saved" is unconditional — amends §42
+
+**Status: decided.** Caught immediately on review of §42: the first version of auto-save also
+defaulted every new row's `favorite` to `true`, inherited unchanged from the pre-§42 model where
+a row's mere existence *was* the save action (§32's own words: "the row's mere existence *is*
+'saved'"). Once §42 makes existence unconditional, that inherited default silently claims every
+single recommendation is already liked, sight unseen — which was never asked for and isn't true.
+
+### The decision
+
+`favorite` and "is this outfit saved" are now fully independent: every outfit is saved
+unconditionally (§42), and `favorite` starts `false` — a genuine, user-set preference the heart
+tap expresses, not a side effect of generation. Concretely:
+
+- `outfits.favorite`'s column default changes from `true` to `false` (`0010`'s own migration,
+  amended in place rather than via a new `0011` — see the file's own note on why: this schema is
+  still local to this unmerged feature branch, not yet a precedent anyone has built on).
+- `send_message`'s `StylingOutfit` construction changes from the literal `favorite=True` to
+  `favorite=False`, matching the row's own new default rather than re-asserting a stale one that
+  could silently drift from it.
+- Existing rows are left untouched by the migration — each already reflects a real, explicit
+  favorite/unfavorite action taken under the pre-§42/§43 model (a heart tap actually happened to
+  produce that `true`), so there is nothing dishonest about leaving history alone.
+
+### Why this isn't a step backward from "I want them all saved"
+
+The request was specifically that saving require no interaction — it was not a request that every
+recommendation also be marked as liked. Conflating the two would make "favorite" (and the
+"Favorited first" sort it drives) meaningless: if every row is `true` from birth, favoriting stops
+being a signal of anything, and the gallery's own sort-by-favorite option degenerates into
+sort-by-nothing until a user starts *un*favoriting things to make room for a real signal — the
+opposite of how a preference marker should work. Starting `false` and letting the user opt specific
+outfits *up* is the only shape where "favorite" still means something once "saved" no longer does.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — `favorite` defaults to `false`; independent of the now-unconditional save | — |
+| Keep `favorite` defaulting to `true` (the version this section replaces) | Directly contradicted by the correction that prompted this section — conflates "the app decided to keep this" with "the user likes this," which are no longer the same event once every recommendation is saved regardless of merit. |
+| Add a third state (e.g. `null`/"undecided") distinct from both `true` and `false` | Would need a schema change (nullable boolean or a new enum) for a distinction the product doesn't currently use anywhere — no screen renders an "undecided" heart state, only filled/outline (§ Outfit suggestion pager, § Outfits gallery). Boolean `false` already *is* "undecided, leaning not-yet-expressed" for every practical purpose this app has today; a third state would be speculative. |

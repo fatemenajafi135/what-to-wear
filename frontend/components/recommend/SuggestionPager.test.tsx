@@ -17,9 +17,11 @@ import { SuggestionPager } from "./SuggestionPager";
 
 type StylingOutfit = components["schemas"]["StylingOutfit"];
 
-// design-decisions.md §42: every outfit is already saved (favorited by
-// default) by the time this component ever sees it — `id`/`favorite` are
-// always present, never a not-yet-saved placeholder.
+// design-decisions.md §42/§43: every outfit is already saved by the time
+// this component ever sees it (`id` is always present, never a not-yet-
+// saved placeholder) — but "saved" and "favorite" are independent, and a
+// fresh outfit's real default is unfavorited, so that's the fixture default
+// here too. Individual tests override it where the favorited state matters.
 function outfit(overrides: Partial<StylingOutfit> = {}): StylingOutfit {
   return {
     id: "outfit-1",
@@ -28,7 +30,7 @@ function outfit(overrides: Partial<StylingOutfit> = {}): StylingOutfit {
     items: [{ id: "item-1", name: "Coat", category: "outerwear", category_group: "outerwear", colors: [], color_names: [], photo_url: null, photo_background_color: null }],
     match_label: "great",
     meta_line: "Rainy day commute · rain",
-    favorite: true,
+    favorite: false,
     ...overrides,
   };
 }
@@ -73,8 +75,14 @@ describe("SuggestionPager", () => {
     expect(screen.getByText("2 of 3")).toBeInTheDocument();
   });
 
-  it("renders the heart already filled, since every outfit is saved from the start", () => {
-    render(<SuggestionPager outfits={[outfit({ favorite: true })]} />);
+  it("renders the heart from outfit.favorite directly — saved and favorited are independent", () => {
+    // design-decisions.md §43: every outfit is already saved, but a fresh
+    // one is typically unfavorited (the real backend default) — the heart
+    // must reflect favorite, not "is this saved" (every card here always is).
+    const { rerender } = render(<SuggestionPager outfits={[outfit({ favorite: false })]} />);
+    expect(screen.getByLabelText("Save outfit")).toBeInTheDocument();
+
+    rerender(<SuggestionPager outfits={[outfit({ favorite: true })]} />);
     expect(screen.getByLabelText("Unsave outfit")).toBeInTheDocument();
   });
 
