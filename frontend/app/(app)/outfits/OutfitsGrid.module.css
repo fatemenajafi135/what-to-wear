@@ -29,7 +29,11 @@
    navigates to detail except its own interactive controls. An absolutely
    positioned link fills the card behind everything else (z-index 0); every
    interactive child stacks above it (z-index 1) so it still receives the
-   click instead. */
+   click instead. `.date` is deliberately NOT elevated — it's plain
+   non-interactive text with no click handler of its own, so it must let
+   clicks fall through to `.cardLink` beneath rather than dead-zoning that
+   part of the card (a real bug caught in manual browser verification: the
+   date line silently ate taps meant for the card-level navigation). */
 .cardLink {
   position: absolute;
   inset: 0;
@@ -37,8 +41,7 @@
 }
 
 .header,
-.itemRow,
-.date {
+.itemRow {
   position: relative;
   z-index: 1;
 }
