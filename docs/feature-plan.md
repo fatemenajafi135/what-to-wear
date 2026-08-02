@@ -61,7 +61,7 @@ one thing.
 
 **016 was added after 008 and 009 shipped**, not planned up front. 008 implemented
 design-decisions.md §28: the composer's send is local-only and "Start styling" is the only
-backend call — so the chat looked conversational while only the user talked. §32 amends that
+backend call — so the chat looked conversational while only the user talked. §37 amends that
 decision (§28's option list was incomplete; it never considered a lightweight non-pipeline
 turn). 016 is that slice. **It sequences after 009**, which rewrites the same response shape and
 components, **and before 011**, which persists a transcript whose shape this changes.

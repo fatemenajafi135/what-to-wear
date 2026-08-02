@@ -2,7 +2,7 @@
 
 **From:** tech lead · **Status:** blocked on one item (§3) · **Branch:**
 `feat/016-conversational-turns`, cut from `rebuild` · **Migration number: none expected** ·
-**`design-decisions.md` sections start at `## 33`**
+**`design-decisions.md` sections start at `## 38`**
 
 **Sequencing: after 009 merges, and before 011.** 009 rewrites `SendMessageResponse` and every
 `components/recommend/*` file this slice touches — building in parallel guarantees a conflict.
@@ -22,9 +22,9 @@ styling" fires.
 
 ---
 
-## 2. Read `design-decisions.md` §32 first
+## 2. Read `design-decisions.md` §37 first
 
-§32 amends §28 and contains the whole decision: what §28 got wrong, the evidence that changes
+§37 amends §28 and contains the whole decision: what §28 got wrong, the evidence that changes
 it, and the shape this must take. **Everything below assumes you have read it.** Do not
 re-litigate it; do challenge it if you find something it missed, and say so in your report.
 
@@ -86,7 +86,7 @@ when nothing was extracted.
 
 **The pipeline does not change.** `pipeline/`, `scoring/`, `retrieval/` and `prompts/` for the
 pipeline stay untouched, so `docs/eval-baselines/` cannot move. If your diff touches them, stop
-and re-read §32.
+and re-read §37.
 
 Where accumulated slots live is yours to decide: the checkpointer already persists thread state,
 which is the obvious candidate and needs no migration. Record the choice — §33.
@@ -135,7 +135,7 @@ anything sent there vanishes while looking like personalisation · outfits galle
 3. **Do not write a second LLM call path** — `adapters/llm_gateway`, like everything else.
 4. **No inline prompt strings.** `prompts/`, versioned.
 5. **Do not let the model write `occasion` freely.** It gates retrieval; Python composes it
-   from slots (§32).
+   from slots (§37).
 6. **Do not change `ports.py`** — import-linter contract.
 7. **Regenerate `schema.d.ts`** — the API surface grows.
 8. **Qdrant must be running and populated**, or "Start styling" returns replies with no
@@ -168,7 +168,7 @@ anything sent there vanishes while looking like personalisation · outfits galle
 
 ## 8. If you hit a gap
 
-Start new `design-decisions.md` sections at **`## 33`**. §32 holds this slice's core decision;
+Start new `design-decisions.md` sections at **`## 38`**. §37 holds this slice's core decision;
 §21 holds two deferred calendar items.
 
 Named decisions still open: where accumulated slots live (§4.2), what the turn cap should be,
@@ -176,7 +176,7 @@ and what happens to accumulated slots after a Start-styling tap — does the nex
 fresh, or keep refining? **Record each with its alternatives.**
 
 The failure mode to guard against in `research.md` is not weak reasoning — it is an
-**incomplete option list**. That is not a hypothetical here: §32 exists because §28 was
+**incomplete option list**. That is not a hypothetical here: §37 exists because §28 was
 well-argued, correctly rejected the two options it considered, and never considered the third.
 Ask what you have not listed.
 

@@ -1364,7 +1364,7 @@ heights (120px tile, 220px hero). Those were written against a prototype whose
 "photos" were all the same placeholder rectangle, so the question of real,
 varying aspect ratios never arose.
 
-## 32. Conversational styling turns — amends §28
+## 37. Conversational styling turns — amends §28
 
 **Status: decided.** Reverses §28's core decision. §28's own text stays as the record of what
 was believed at the time; this is what replaces it and why.
