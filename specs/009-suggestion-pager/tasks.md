@@ -36,11 +36,15 @@ and the handoff's Definition of Done requires backend/frontend test counts to no
       `SendMessageResponse.outfit: StylingOutfit | None` to `outfits: list[StylingOutfit]`.
 - [ ] T005 In `recommend.py`'s `send_message`: resolve **every** entry in `result.outfits` (not
       just `[0]`) via `_resolve_outfit`, dropping any that returns `None` (below-floor); compute
-      `meta_line` once per response from `final_state`'s `Context`
-      (`f"{context.occasion} · {context.condition or FORMALITY_LABELS[context.formality]}"` —
-      research.md §3) and set it on every resolved `StylingOutfit`; `reply_text` is set only when
-      the resolved list is empty (same fallback-note logic as today, now keyed on `not outfits`
-      rather than `outfit is None`).
+      `meta_line` once per response from `final_state`'s `Context`. No formality→label mapping
+      exists anywhere in the codebase today (checked: backend and frontend both only have the
+      raw `Formality` literal, e.g. `"business_casual"`) — add a small local
+      `_FORMALITY_LABELS: dict[str, str]` in `recommend.py` itself (Title Case, underscore→space,
+      e.g. `"business_casual" -> "Business casual"`), not an imported shared constant, since
+      nothing else needs it yet. `meta_line = f"{context.occasion} · {context.condition or
+      _FORMALITY_LABELS[context.formality]}"` (research.md §3), set on every resolved
+      `StylingOutfit`; `reply_text` is set only when the resolved list is empty (same
+      fallback-note logic as today, now keyed on `not outfits` rather than `outfit is None`).
 - [ ] T006 [P] Add `POST /recommend/outfits` and `POST /recommend/outfits/{outfit_id}/favorite` to
       `recommend.py` per contracts/recommend.md: `SaveOutfitRequest`, `SavedOutfitResponse`; the
       save route validates every `item_ids` entry against
@@ -115,9 +119,13 @@ deleting; ownership is enforced; the card body navigates toward `/outfits/:id`.
 populated: tap again, confirm the row survives with `favorite = false`; confirm a second user
 can never reach the first user's row.
 
-- [ ] T018 [US2] In `OutfitCard.tsx`: wire the heart `IconButton` to filled/outline based on
-      `saved` (derived from `outfit.id != null` in the parent, per data-model.md's `savedIds`
-      state) with `aria-label` "Save outfit"/"Unsave outfit".
+- [ ] T018 [US2] In `OutfitCard.tsx`: wire the heart `IconButton` (existing `heart`/`heartFilled`
+      keywords, verified already present in `IconButton.tsx`) to filled/outline based on `saved`
+      (derived from `outfit.id != null` in the parent, per data-model.md's `savedIds` state).
+      Their default `aria-label`s ("Save"/"Unsave") are already used elsewhere for the wardrobe-
+      item favorite heart — pass an explicit `label="Save outfit"`/`"Unsave outfit"` override
+      here so this control reads correctly in context, per design-system.md's Outfit-detail heart
+      wording.
 - [ ] T019 [US2] In `SuggestionPager.tsx` (or a thin parent wiring the API calls — decide at
       implement time whether the API call lives in `SuggestionPager` or is threaded down as a
       prop from `RecommendChat.tsx`, matching how the rest of the screen already centralizes
@@ -150,9 +158,9 @@ network requests fire from any of it; confirm no state survives a reload.
 - [ ] T023 [P] [US3] In `OutfitCard.tsx`: implement the feedback footer —
       `feedback: "up" | "down" | null` local state (lifted to `SuggestionPager` per data-model.md
       so paging away and back doesn't reset a card's own choice, keyed by card index), two
-      `IconButton`s (`thumbsUp`/`thumbsDown` keywords — confirm both already exist on
-      `IconButton`'s keyword set per design-system.md §3; add if missing), mutually exclusive,
-      each toggles off on repeat tap, filled-solid styling per § Outfit suggestion pager item 5.
+      `IconButton`s (existing `thumbsUp`/`thumbsDown` keywords, verified already present in
+      `IconButton.tsx`), mutually exclusive, each toggles off on repeat tap, filled-solid styling
+      per § Outfit suggestion pager item 5.
 - [ ] T024 [P] [US3] `OutfitCard.test.tsx` (extend): thumbs-up then thumbs-down deselects the
       first; tapping the active thumb again clears it; **no `apiClient` call of any kind fires**
       from any feedback interaction (assert the fetch/mock spy was never called).
