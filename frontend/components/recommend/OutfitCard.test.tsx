@@ -7,12 +7,13 @@ import type { components } from "@/lib/api/schema";
 type StylingOutfit = components["schemas"]["StylingOutfit"];
 
 const OUTFIT: StylingOutfit = {
-  id: null,
+  id: "outfit-1",
   occasion: "Rainy day commute",
   rationale_text: "A cohesive, weather-ready look built around a warm coat.",
   items: [],
   match_label: "great",
   meta_line: "Rainy day commute · rain",
+  favorite: true,
 };
 
 describe("OutfitCard", () => {

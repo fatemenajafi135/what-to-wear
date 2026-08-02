@@ -10,7 +10,8 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 const outfit = {
-  id: null,
+  id: "outfit-1",
+  favorite: true,
   occasion: "business casual",
   rationale_text: "A relaxed top pairs well here.",
   items: [

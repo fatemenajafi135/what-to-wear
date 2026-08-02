@@ -16,17 +16,15 @@ export interface SuggestionPagerProps {
   outfits: StylingOutfit[];
 }
 
-interface SavedState {
-  id: string;
-  favorite: boolean;
-}
-
 /**
- * design/design-system.md § Outfit suggestion pager. Owns paging `index`,
- * per-card saved-id and feedback state (data-model.md — none of it
- * persisted beyond this mounted card group, per design-decisions.md §32
- * for saves and FR-012 for feedback). Genuinely different mechanics per
- * tier (research.md §5): mobile is transform-slide, arrow-only, no native
+ * design/design-system.md § Outfit suggestion pager. Owns paging `index`
+ * and per-card feedback state (data-model.md — feedback isn't persisted
+ * beyond this mounted card group, FR-012). Per design-decisions.md §42,
+ * every outfit here is already saved (favorited by default) by the time
+ * this component ever renders — the heart only ever toggles `favorite`
+ * via a local override keyed by card index; there is no "not yet saved"
+ * state to track anymore. Genuinely different mechanics per tier
+ * (research.md §5): mobile is transform-slide, arrow-only, no native
  * scroll at all; tablet/desktop is a native scroll-snap track kept in sync
  * with the arrows via a `scroll` listener.
  */
@@ -35,13 +33,10 @@ export function SuggestionPager({ outfits }: SuggestionPagerProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
   const [isDesktop, setIsDesktop] = useState(false);
-  // Keyed by card index. `id` is permanent once a card is first saved this
-  // session; `favorite` is what the heart's second tap onward flips —
-  // keeping them separate (rather than clearing the id on unfavorite) is
-  // what lets a later re-tap toggle the same row back on instead of
-  // creating a duplicate (design-decisions.md §32: unsaving flips, never
-  // deletes).
-  const [saved, setSaved] = useState<Record<number, SavedState>>({});
+  // Keyed by card index. Only ever set once the heart has been tapped this
+  // session — before that, `outfit.favorite` (from the response) is the
+  // source of truth.
+  const [favorites, setFavorites] = useState<Record<number, boolean>>({});
   const [feedback, setFeedback] = useState<Record<number, "up" | "down" | null>>({});
 
   useLayoutEffect(() => {
@@ -94,26 +89,10 @@ export function SuggestionPager({ outfits }: SuggestionPagerProps) {
   async function handleToggleHeart(cardIndex: number) {
     const outfit = outfits[cardIndex];
     if (!outfit) return;
-    const existing = saved[cardIndex] ?? (outfit.id ? { id: outfit.id, favorite: true } : undefined);
-
-    if (existing) {
-      const { data } = await apiClient.POST("/api/v1/recommend/outfits/{outfit_id}/favorite", {
-        params: { path: { outfit_id: existing.id } },
-      });
-      if (data) setSaved((prev) => ({ ...prev, [cardIndex]: { id: existing.id, favorite: data.favorite } }));
-      return;
-    }
-
-    const { data } = await apiClient.POST("/api/v1/recommend/outfits", {
-      body: {
-        occasion: outfit.occasion,
-        meta_line: outfit.meta_line,
-        rationale_text: outfit.rationale_text,
-        match_label: outfit.match_label,
-        item_ids: outfit.items.map((item) => item.id),
-      },
+    const { data } = await apiClient.POST("/api/v1/recommend/outfits/{outfit_id}/favorite", {
+      params: { path: { outfit_id: outfit.id } },
     });
-    if (data) setSaved((prev) => ({ ...prev, [cardIndex]: { id: data.id, favorite: data.favorite } }));
+    if (data) setFavorites((prev) => ({ ...prev, [cardIndex]: data.favorite }));
   }
 
   function handleFeedback(cardIndex: number, value: "up" | "down") {
@@ -121,7 +100,7 @@ export function SuggestionPager({ outfits }: SuggestionPagerProps) {
   }
 
   function handleCardTap(cardIndex: number) {
-    const id = saved[cardIndex]?.id ?? outfits[cardIndex]?.id;
+    const id = outfits[cardIndex]?.id;
     if (id) router.push(`/outfits/${id}`);
   }
 
@@ -135,7 +114,7 @@ export function SuggestionPager({ outfits }: SuggestionPagerProps) {
             <div key={i} className={styles.slideDesktop}>
               <OutfitCard
                 outfit={outfit}
-                saved={saved[i]?.favorite ?? Boolean(outfit.id)}
+                saved={favorites[i] ?? outfit.favorite}
                 feedback={feedback[i] ?? null}
                 onToggleHeart={() => handleToggleHeart(i)}
                 onFeedback={(value) => handleFeedback(i, value)}
@@ -149,7 +128,7 @@ export function SuggestionPager({ outfits }: SuggestionPagerProps) {
               <div key={i} className={styles.slideMobile}>
                 <OutfitCard
                   outfit={outfit}
-                  saved={saved[i]?.favorite ?? Boolean(outfit.id)}
+                  saved={favorites[i] ?? outfit.favorite}
                   feedback={feedback[i] ?? null}
                   onToggleHeart={() => handleToggleHeart(i)}
                   onFeedback={(value) => handleFeedback(i, value)}

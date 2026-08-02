@@ -17,14 +17,20 @@ import { SuggestionPager } from "./SuggestionPager";
 
 type StylingOutfit = components["schemas"]["StylingOutfit"];
 
+// design-decisions.md §42/§43: every outfit is already saved by the time
+// this component ever sees it (`id` is always present, never a not-yet-
+// saved placeholder) — but "saved" and "favorite" are independent, and a
+// fresh outfit's real default is unfavorited, so that's the fixture default
+// here too. Individual tests override it where the favorited state matters.
 function outfit(overrides: Partial<StylingOutfit> = {}): StylingOutfit {
   return {
-    id: null,
+    id: "outfit-1",
     occasion: "Rainy day commute",
     rationale_text: "A cohesive look.",
     items: [{ id: "item-1", name: "Coat", category: "outerwear", category_group: "outerwear", colors: [], color_names: [], photo_url: null, photo_background_color: null }],
     match_label: "great",
     meta_line: "Rainy day commute · rain",
+    favorite: false,
     ...overrides,
   };
 }
@@ -69,59 +75,44 @@ describe("SuggestionPager", () => {
     expect(screen.getByText("2 of 3")).toBeInTheDocument();
   });
 
-  it("saving an unsaved card POSTs to /recommend/outfits and fills the heart", async () => {
+  it("renders the heart from outfit.favorite directly — saved and favorited are independent", () => {
+    // design-decisions.md §43: every outfit is already saved, but a fresh
+    // one is typically unfavorited (the real backend default) — the heart
+    // must reflect favorite, not "is this saved" (every card here always is).
+    const { rerender } = render(<SuggestionPager outfits={[outfit({ favorite: false })]} />);
+    expect(screen.getByLabelText("Save outfit")).toBeInTheDocument();
+
+    rerender(<SuggestionPager outfits={[outfit({ favorite: true })]} />);
+    expect(screen.getByLabelText("Unsave outfit")).toBeInTheDocument();
+  });
+
+  it("tapping the heart toggles favorite via the outfit's own id — no create call at all", async () => {
     vi.mocked(apiClient.POST).mockResolvedValueOnce({
-      data: { id: "outfit-1", favorite: true },
+      data: { id: "outfit-1", favorite: false },
       error: undefined,
       response: new Response(),
     } as never);
     const user = userEvent.setup();
-    render(<SuggestionPager outfits={[outfit()]} />);
+    render(<SuggestionPager outfits={[outfit({ id: "outfit-1", favorite: true })]} />);
 
-    await user.click(screen.getByLabelText("Save outfit"));
-
-    expect(apiClient.POST).toHaveBeenCalledWith(
-      "/api/v1/recommend/outfits",
-      expect.objectContaining({
-        body: expect.objectContaining({ occasion: "Rainy day commute", item_ids: ["item-1"] }),
-      }),
-    );
-    expect(await screen.findByLabelText("Unsave outfit")).toBeInTheDocument();
-  });
-
-  it("tapping the heart again toggles favorite via the outfit's own id, not a re-create", async () => {
-    vi.mocked(apiClient.POST)
-      .mockResolvedValueOnce({ data: { id: "outfit-1", favorite: true }, error: undefined, response: new Response() } as never)
-      .mockResolvedValueOnce({ data: { id: "outfit-1", favorite: false }, error: undefined, response: new Response() } as never);
-    const user = userEvent.setup();
-    render(<SuggestionPager outfits={[outfit()]} />);
-
-    await user.click(screen.getByLabelText("Save outfit"));
-    await screen.findByLabelText("Unsave outfit");
     await user.click(screen.getByLabelText("Unsave outfit"));
 
-    expect(apiClient.POST).toHaveBeenNthCalledWith(
-      2,
+    expect(apiClient.POST).toHaveBeenCalledTimes(1);
+    expect(apiClient.POST).toHaveBeenCalledWith(
       "/api/v1/recommend/outfits/{outfit_id}/favorite",
       expect.objectContaining({ params: { path: { outfit_id: "outfit-1" } } }),
     );
     expect(await screen.findByLabelText("Save outfit")).toBeInTheDocument();
   });
 
-  it("tapping the card body navigates to /outfits/:id once saved", async () => {
-    vi.mocked(apiClient.POST).mockResolvedValueOnce({
-      data: { id: "outfit-1", favorite: true },
-      error: undefined,
-      response: new Response(),
-    } as never);
+  it("tapping the card body navigates to /outfits/:id immediately, no save step first", async () => {
     const user = userEvent.setup();
-    render(<SuggestionPager outfits={[outfit()]} />);
+    render(<SuggestionPager outfits={[outfit({ id: "outfit-1" })]} />);
 
-    await user.click(screen.getByLabelText("Save outfit"));
-    await screen.findByLabelText("Unsave outfit");
     await user.click(screen.getByText("Rainy day commute"));
 
     expect(push).toHaveBeenCalledWith("/outfits/outfit-1");
+    expect(apiClient.POST).not.toHaveBeenCalled();
   });
 
   it("never calls the API for feedback thumbs", async () => {
