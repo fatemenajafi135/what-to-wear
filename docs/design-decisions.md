@@ -1687,3 +1687,259 @@ leaves the rest unset. Extracted slots fill fields the pipeline has always taken
 Principle I requires salvaging existing AI code before writing new. `../app-legacy` has **no
 conversational path** — every occurrence of "conversation" there refers to a LangGraph
 checkpointer thread, not a chat turn. This is genuinely new, and nothing was reinvented.
+
+## 38. Feature 010 (Outfit detail) — citations and per-dimension scores: server-side capture at save time
+
+**Status: decided.** This is the handoff's own §3 gap: neither citations nor per-dimension
+scores exist on the `outfits` table (0009), and Outfit detail is specified to show both.
+
+### The gap
+
+`outfits.rationale_text` is deliberately plain (0009's own comment: "never citation markers"),
+and `match_label` is deliberately the label only, never the float (Constitution VI: no parallel
+numeric scale, not even at rest). Design-system.md § Outfit detail requires **both**: inline
+numbered citation `Badge`s in the description plus the numbered rule list they refer to, and a
+"Match breakdown" with one bar per dimension (`color_harmony`, `formality_coherence`,
+`weather_fitness`, `silhouette_balance` — `SCORE_DIMENSIONS`, `schema.py`). Both exist on the
+pipeline's own `ScoredOutfit` (`.rationale[].cites`, `.scores`) at generation time, but
+`_resolve_outfit` (`recommend.py`) flattens both away before the client ever sees them, and
+`SaveOutfitRequest` only echoes back what the client has — which no longer includes either.
+
+### Decision: the save route re-resolves them server-side from the thread's own checkpointed result, keyed off `thread_id`
+
+`SaveOutfitRequest` gains a required `thread_id` (the same id already threaded through
+`SendMessageResponse`/`SuggestionPager`'s save call). The route calls
+`get_compiled_graph(repo).get_state({"configurable": {"thread_id": thread_id}})` and reads
+`last_result: SuggestResult | None` off the returned `StateSnapshot.values` — the same field
+`graph.py`'s own `score_and_rank`/`explain` nodes already populate and read back for
+refinement turns (`graph.py` lines ~380, ~457). The specific `ScoredOutfit` being saved is
+identified by exact ordered match against `outfit.items` (`SuggestionPager.tsx` already sends
+`item_ids` in the same order `StylingOutfit.items` — itself sourced unchanged from
+`ScoredOutfit.items` — so this is a reliable, already-true invariant, not a new one).
+
+**Ownership check on the checkpointer read, not just the DB row**: before trusting
+`last_result`, the route confirms the snapshot's own `state["user_id"]` equals the caller's
+`user_id`. The checkpointer is per-thread application state, not a DB table — it has no RLS of
+its own (`memory/store.py`'s own hardening note documents that its tables deny `authenticated`
+entirely at the Postgres/PostgREST layer; the app's own pooler role reaches it directly). Skipping
+this check would let user A save citations/scores by guessing or reusing user B's `thread_id`, a
+narrower version of the exact checkpointer-exposure bug `memory/store.py::_harden_checkpointer_tables`
+already fixed once for a different access path. This is the same "ownership checked in the query,
+not only by RLS" discipline the handoff names for the `outfits` table itself, applied to the one
+other piece of per-user state this route touches.
+
+**Graceful degradation, not failure, when the thread state is unavailable or the outfit isn't
+found in it** (expired `InMemorySaver` state after a restart, a `thread_id` the client didn't
+send, or an outfit saved so long after generation that the checkpointer already evicted it — none
+named by the handoff, all real given `get_checkpointer()`'s own documented fallback to
+`InMemorySaver` when no reachable Postgres is configured): the save still succeeds, with empty
+citations and an empty score list. This mirrors Constitution IV's own fallback clause ("where the
+deterministic fallback produces an outfit with nothing honest to cite, it MUST return an empty
+citation list rather than fabricate one") — extended here from "the pipeline had nothing to cite"
+to "this route can no longer prove what the pipeline cited," which deserves the identical honest-
+empty treatment, not a hard failure on an otherwise-successful save.
+
+### Schema (migration `0010`)
+
+Two new columns hold what's needed to reproduce the exact inline-badge rendering, plus one for
+the score bars — all additive, `outfits.rationale_text`/`match_label` untouched:
+
+```sql
+alter table outfits
+  add column rationale_with_citations text not null default '',
+  add column citations jsonb not null default '[]'::jsonb,
+  add column dimension_scores jsonb not null default '[]'::jsonb;
+```
+
+- `rationale_with_citations` — the same rationale text as `rationale_text`, but with `[n]`
+  markers appended after each rationale segment that cited something, numbered in first-appearance
+  order across the outfit's own rationale — **exactly** the marker convention `bdc9ad4 fix(008):
+  inject [n] citation markers into rationale_text` already built, used, and then removed once 009
+  moved every outfit reply onto the citation-free pager (design-decisions.md §33/§35). Resurrected
+  here verbatim rather than re-invented, since it was working, tested code with a proven frontend
+  parser (`ChatMessageList.tsx`'s old `renderWithCitations`/`CITATION_TOKEN` regex, also
+  resurrected — see the plan's data-model.md).
+- `citations` — `[{number, text}]`, exactly old `CitedRule`'s shape: the numbered rule-list rows
+  the markers point at (`text` = `CitedSource.source`, the human-readable reference — not a rule's
+  styling guidance itself; `rule_id`/`url` aren't persisted since nothing in the design renders
+  either).
+- `dimension_scores` — `[{dimension, value}]`, one entry per `SCORE_DIMENSIONS` value when
+  present. `DimensionScore.reason` is **not** persisted — no surface in design-system.md ever
+  renders a scorer's reason text, and storing it would be schema for a field with no reader
+  (Quality Bar: no abstraction without a measured problem). `value` is stored and transmitted in
+  the API response (needed to compute each bar's fill width) but is never rendered as visible text
+  — storing/transmitting a float is not the violation Constitution/§ Scores forbids; rendering one
+  as a number is.
+
+**Why not reuse `rationale_text` itself for the marked-up version** (considered first, since it's
+the cheaper diff): `rationale_text` is already the **final, space-joined** string
+(`" ".join(text_parts)` in `_resolve_outfit`) by the time it reaches the client and gets echoed
+back — per-segment boundaries are gone by then, so there is no way to recover *where* a marker
+should go from the plain text alone. The marked-up version has to be built fresh from
+`last_result`'s own `Rationale` list (which still has per-segment `cites`) at save time, so it is
+necessarily a second column, not a repurposing of the first. Keeping `rationale_text` itself
+untouched also means 0009's own documented invariant ("never citation markers") stays true for
+every row, old and new — nothing downstream that trusts that comment breaks.
+
+**Rejected alternatives:**
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — server re-resolves from the thread's checkpointed `last_result` | — |
+| (b) `StylingOutfit` returns citations/scores in `SendMessageResponse`; client echoes them on save | This is the handoff's own option (b): a client can then assert which styling rules justified an outfit and what it scored — exactly what Principle IV (grounded output only) and Constitution II (LLM must not compute or override a score) exist to prevent, since nothing server-side would verify a client-supplied citation or score before it reaches storage and, later, the screen. |
+| (c) Outfit detail omits both, showing only items/description/match label | The handoff's own option (c): contradicts design-system.md in two separately-specified places (§ Outfit detail, § Badge) and removes the only content that distinguishes detail from the gallery card — the entire reason a user opens it. |
+| Re-run the pipeline at save time (or at detail-view time) to regenerate citations/scores fresh | Explicitly out of scope per the handoff (§5): re-running generation produces *different* reasoning than the outfit the user actually saved and is judging — the saved outfit's citations/scores must be a record of what was actually shown, not a fresh computation that happens to reuse the same items. Also a `pipeline/` call this feature has no business making (Constitution I: pipeline behaviour is out of scope). |
+| Fail the save (4xx) when thread state is unavailable, instead of degrading to empty | Punishes the user for infrastructure state they have no way to know about or control (an evicted in-memory checkpoint, a stale `thread_id`) by blocking an otherwise-valid save of an outfit they already committed to keeping. The empty-citations/empty-scores degrade path costs nothing extra to implement (both are already nullable-shaped, `[]` being a valid "nothing to show" state design-system.md already expects for the "nothing to cite" case) and matches Constitution IV's own precedent for the identical shape of gap. |
+
+## 39. Feature 010 (Outfit detail) — "Log as worn today" logs the outfit and every item in it
+
+**Status: decided**, via `/speckit-clarify` (spec.md, session 2026-08-02) rather than assumed
+during planning — this is exactly the kind of product call the handoff says belongs to a human,
+not a silent default, and the initial recommendation going into clarification (outfit-level only,
+no item propagation) was overridden on review.
+
+### The gap
+
+`item_wears` (0005) is per-item. Outfit detail's overflow sheet offers "Log as worn today" for
+the *outfit* as a whole, and design-system.md's own Outfits filter/sort spec (§5, Filter & sort
+dimensions) lists "Most worn" as a sort facet for **outfits**, which `item_wears` alone cannot
+answer — a new outfit-scoped notion of "worn" is needed regardless of what else it does.
+
+### Decision: both. A new `outfit_wears` table for the outfit-level sort, plus an `item_wears`
+upsert for every item still owned by the caller
+
+Logging an outfit as worn writes:
+1. One `outfit_wears` row (upsert, no-op on repeat), giving "Most worn" something to sort by.
+2. One `item_wears` row **per item currently in the outfit that the caller still owns** (the
+   exact `record_wear`-shaped `INSERT ... ON CONFLICT (item_id, worn_date) DO NOTHING` 005 already
+   uses), silently skipping any item id no longer present in the caller's wardrobe rather than
+   failing the whole action — an outfit can legitimately reference an item the user later removed
+   from their closet (see spec.md Edge Cases), and that item obviously cannot receive a wear
+   record that no longer has an owner-verified row to attach to.
+
+Both writes happen in the same transaction as one route/repository call — a wear log split across
+two round trips risks a half-applied state (outfit marked worn, items not, or vice versa) that a
+retried request could then double up on the side that succeeded. Idempotency is per-row
+(`unique (outfit_id, worn_date)` / `unique (item_id, worn_date)`), so retrying the whole
+transaction after a partial failure is always safe.
+
+**Why both, not one:** the clarification's own reasoning is definitive here — physically wearing
+an outfit *is* wearing every item in it, so an item-level wear ledger that never reflects
+outfit-driven wears would silently under-count actual wear for any item a user only ever wears as
+part of a saved outfit rather than tapping "Log as worn" individually from Item detail. The
+initial recommendation (outfit-level only) was based on "nothing today reads a per-item wear
+count in the UI" being true right now, but that's a fragile justification — item_wears existing
+at all (0005) already anticipates a future reader, and letting outfit-driven wear silently not
+count toward it would make that future reader's data wrong from day one, not just incomplete.
+
+### Schema (migration `0010`)
+
+```sql
+create table outfit_wears (
+  id uuid primary key default gen_random_uuid(),
+  outfit_id uuid not null,
+  user_id uuid not null,
+  worn_date date not null default current_date,
+  created_at timestamptz not null default now(),
+  unique (outfit_id, worn_date),
+  foreign key (outfit_id, user_id) references outfits (id, user_id) on delete cascade
+);
+
+alter table outfits add constraint outfits_id_user_id_key unique (id, user_id);
+
+alter table outfit_wears enable row level security;
+
+create policy "outfit_wears_modify_own" on outfit_wears
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+grant select, insert, update, delete on outfit_wears to authenticated;
+```
+
+Same shape as `item_wears` (0005) exactly: one row per entity per calendar day
+(`unique (outfit_id, worn_date)`), a composite FK against `(outfits.id, outfits.user_id)` so a
+forged `(outfit_id, user_id)` pair is rejected at the database level (proven the same way 0005's
+`test_wardrobe_rls.py::TestItemWearsRLS::test_user_cannot_insert_a_wear_row_against_another_users_item`
+proves it, mirrored for outfits), and RLS + GRANT per the `0002` pattern. No `item_wears` schema
+change at all — the per-item writes this decision also makes go through the existing
+`record_wear`-shaped statement unchanged.
+
+**Rejected alternatives:**
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — new `outfit_wears` table, and an `item_wears` upsert per item | — |
+| (b) Outfit-level only, no `item_wears` writes | The initial recommendation before clarification; overridden because it would make item-level wear data silently wrong (undercounted) for any item worn only via outfits, not merely incomplete-until-a-future-feature as first framed. |
+| (c) `item_wears` writes only, no `outfit_wears` table (derive "most worn outfit" by joining through `item_ids` at read time) | Rejected — an outfit's "worn count" would have to be some aggregate over its items' wear rows (max? min? mean?), which is a made-up combination rule with no obvious right answer, is expensive to compute at read time for a sort, and produces a nonsensical result the moment an outfit's `item_ids` no longer perfectly reflects what was worn together (an item removed from the closet after the fact, e.g.). A first-class `outfit_wears` row answers "was *this outfit* worn today" directly and unambiguously, same as `item_wears` does for a single item. |
+| A `last_worn_at` timestamp / `worn_count` integer column on `outfits` instead of a table | Rejected for the identical reason 005 rejected both shapes for items (§22.1): can't answer "most worn" as a count over time, can't be an idempotent, undoable-in-principle audit trail, and a bare counter is exposed to the same accidental-double-tap inflation problem 005 already reasoned through — this feature's overflow sheet gives "Log as worn today" no confirmation or on-page feedback either, so the identical double-tap blind spot applies. |
+
+## 40. Feature 010 (Outfit detail) — Delete requires confirmation
+
+**Status: decided.** The handoff explicitly asks this be decided deliberately per feature rather
+than copied from 005's own flagged-as-a-gap precedent.
+
+### Decision: yes, confirm — reuse 005's exact bespoke dialog pattern
+
+Deleting a saved outfit shows the same bespoke confirmation `<dialog>` design-decisions.md §22.2
+already built for closet items (title `Delete {outfit title}?`, body `This can't be undone.`,
+outline "Cancel" + danger-toned "Delete", `showModal()`/focus-trap/restore, safe-area-aware
+bottom padding) — not a new component, the same one, parameterized by outfit title instead of
+item name.
+
+**Why the same call as §22.2, not a fresh one:** every reason §22.2 gave for closet items applies
+identically here, with no material difference in stakes. A saved outfit is the record of a real
+styling decision plus (as of §38) its saved reasoning — losing it to a mis-tap in a three-row menu
+(Log as worn today / Edit title / Delete) is the same "harsh outcome for one imprecise tap" §22.2
+already reasoned through, and the design system gives Outfit detail's overflow sheet no more
+built-in friction than Item detail's had. Deciding differently here — e.g. no confirmation, since
+"the design doesn't ask for one" — would produce an inconsistent app where one entity type is
+protected and a materially similar one isn't, for no reason a user could explain.
+
+**Rejected alternatives** (restated from §22.2, since they apply unchanged; not re-litigated):
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — bespoke confirmation dialog, reusing §22.2's exact pattern | — |
+| No confirmation, matching a literal reading of the design system's silence | Same failure mode §22.2 already named: a danger-toned row that *looks* risky but *behaves* with no friction at all is the worst combination, not a neutral default. |
+| Soft delete + "Undo" toast | More schema and route surface (`deleted_at`, a restore path) than either this feature or 005 specifies; a deliberate future decision, not a side effect of filling this gap. |
+| Browser-native `confirm()` | Untestable in design-system terms (no tokens, no copy/button control, inconsistent across browsers); the bespoke pattern already exists and costs nothing extra to reuse. |
+
+## 41. Feature 010 (Outfits gallery) — filter facets dropped, sort-only; a data-shape gap the handoff didn't name
+
+**Status: decided**, via `/speckit-clarify` (spec.md, session 2026-08-02). Not one of the
+handoff's three named gaps — found while drafting the spec, and surfaced for a decision rather
+than guessed silently, per the handoff's own standing instruction ("the failure mode to guard
+against is an incomplete option list").
+
+### The gap
+
+Design-system.md §5 (Filter & sort dimensions) specifies three independent filter facets for the
+Outfits gallery — Occasion (All/Dinner/Commute/Work/Everyday), Weather (All/Rainy/Mild/Warm/Cold),
+Formality (All/Casual/Business casual/Formal) — plus a sort (Date added/Favorited
+first/Most worn). None of the three filter facets has a reliable source in the `outfits` table as
+it exists after 009: `occasion` is free pipeline-normalized text (e.g. "a rainy Tuesday commute"),
+never one of the four fixed values; `meta_line` collapses formality-or-weather into a single
+human-readable string chosen by which one the pipeline detected (design-decisions.md §34) — the
+two can't even be told apart from the stored string alone, let alone bucketed into the design's
+fixed options.
+
+### Decision: ship sort only; filtering is a deliberately deferred gap, not built
+
+Date added (default), Favorited first, and Most worn (§39's new `outfit_wears` count) all ship.
+Occasion/Weather/Formality filtering does not ship in this feature — the "Filter & sort" pill
+becomes, for now, a sort-only trigger (no facet chips, no non-"All" count badge, no "Clear" link,
+since nothing is ever in a non-default filtered state to clear).
+
+**Rejected alternatives** (presented at clarification; the deferral above was the chosen answer):
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — drop filtering, ship sort only, record the gap | — |
+| (b) Bucket into the fixed categories at save time, from the pipeline's own `Context` (new columns, populated when an outfit is saved) | The technically complete fix, and the one this section would have implemented absent the clarification answer — `Context.formality` (six-value enum) collapses cleanly to the three formality buckets, and `Context.occasion`/`condition` could be keyword-classified into the four occasion/four weather buckets. Not chosen now because the product owner explicitly deprioritized it ("keep it somewhere so we don't miss it, but it's not important for now") rather than declining it outright — this remains the recommended shape for whichever future feature picks it back up, to avoid re-deriving it from scratch. |
+| (c) Match against the stored free text at read time (keyword/substring matching against `occasion`/`meta_line`) | Rejected on its merits regardless of the clarification answer — free text like "a rainy commute" won't reliably match a fixed filter option, and formality has no textual representation to match against at all once `meta_line` chose weather over it for that reply. Fragile in a way that would look like a bug ("I filtered to Formal and my formal outfit didn't show up") rather than a clearly-scoped absence. |
+| (d) Keep only the Occasion filter, drop Weather/Formality | Considered as a middle ground before the clarification question was asked — still doesn't solve the underlying problem (free text still doesn't cleanly match a 4-value fixed list) and produces a half-working filter UI that's arguably more confusing than no filter UI at all. Superseded by the clarification answer, which dropped all three uniformly rather than picking a "least broken" one to keep. |
+
+**Not lost**: this section itself is the record `known-gaps.md`-style features use elsewhere in
+this project — a future feature can implement option (b) directly from this write-up without
+re-deriving the bucketing approach from scratch.
