@@ -1,8 +1,10 @@
-"""Integration tests for the styling chat routes (specs/008-styling-chat/
-contracts/recommend.md). Runs against a real local Supabase database for
-wardrobe reads — no mocked database layer, matching test_closet_routes.py's
-precedent. The LLM gateway is never called: `get_compiled_graph` itself is
-patched at the route module's own import site
+"""Integration tests for the styling chat + outfit-persistence routes
+(specs/008-styling-chat/contracts/recommend.md,
+specs/009-suggestion-pager/contracts/recommend.md). Runs against a real
+local Supabase database for wardrobe/outfit reads and writes — no mocked
+database layer, matching test_closet_routes.py's precedent. The LLM
+gateway is never called: `get_compiled_graph` itself is patched at the
+route module's own import site
 (`whattowear.api.v1.routes.recommend.get_compiled_graph`), the same
 "patch where it's imported, not where it's defined" pattern
 tests/unit/pipeline/test_engine.py uses for `get_chat_model`.
@@ -21,7 +23,7 @@ from sqlalchemy import text
 from whattowear.auth import get_current_access_token, get_current_user_id
 from whattowear.core.db import get_engine
 from whattowear.main import app
-from whattowear.schema import CitedSource, DimensionScore, Rationale, ScoredOutfit, SuggestResult
+from whattowear.schema import CitedSource, Context, DimensionScore, Rationale, ScoredOutfit, SuggestResult
 
 USER_READY = str(uuid.uuid4())
 USER_BLOCKED = str(uuid.uuid4())
@@ -62,6 +64,7 @@ def ready_closet() -> Iterator[dict[str, str]]:
     yield {"top": top, "bottom": bottom, "shoes": shoes}
     with get_engine().begin() as conn:
         conn.execute(text("DELETE FROM wardrobe_items WHERE user_id = :u"), {"u": USER_READY})
+        conn.execute(text("DELETE FROM outfits WHERE user_id = :u"), {"u": USER_READY})
 
 
 @pytest.fixture
@@ -139,6 +142,9 @@ class TestSendMessage:
         result = SuggestResult(
             outfits=[outfit],
             sources=[CitedSource(rule_id="rule-1", source="Pair casual denim with a relaxed top.", url="", layer="L3")],
+            context=Context(
+                occasion="business casual for a rainy commute", formality="business_casual", condition="rain"
+            ),
         )
         mock_graph = MagicMock()
         mock_graph.invoke.return_value = {"result": result, "note": None}
@@ -151,16 +157,35 @@ class TestSendMessage:
 
         assert response.status_code == 200
         body = response.json()
-        assert body["outfit"] is not None
-        returned_ids = {item["id"] for item in body["outfit"]["items"]}
+        assert len(body["outfits"]) == 1
+        outfit_body = body["outfits"][0]
+        returned_ids = {item["id"] for item in outfit_body["items"]}
         assert returned_ids == {ready_closet["top"], ready_closet["bottom"], ready_closet["shoes"]}
-        assert body["outfit"]["match_label"] == "great"
-        assert len(body["citations"]) == 1
-        assert body["citations"][0]["number"] == 1
-        assert "[1]" in body["outfit"]["rationale_text"]
-        assert "rank_score" not in body["outfit"]
+        assert outfit_body["match_label"] == "great"
+        assert outfit_body["id"] is None  # not saved yet
+        assert "[1]" not in outfit_body["rationale_text"]  # no citation markers on the card (§33/§35)
+        assert outfit_body["meta_line"] == "business casual for a rainy commute · rain"
+        assert "rank_score" not in outfit_body
+        assert "citations" not in body  # field removed entirely — no remaining renderer
         assert "score" not in str(body).lower().replace("scores", "")  # no stray numeric score field
         assert body["thread_id"]
+
+    def test_multiple_outfits_returned_in_rank_order_below_floor_dropped(self, ready_closet: dict[str, str]) -> None:
+        great = _scored_outfit([ready_closet["top"]], rank_score=0.85, cites=[])
+        good = _scored_outfit([ready_closet["bottom"]], rank_score=0.65, cites=[])
+        below_floor = _scored_outfit([ready_closet["shoes"]], rank_score=0.2, cites=[])
+        result = SuggestResult(outfits=[great, good, below_floor], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": None}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post("/api/v1/recommend/messages", json={"message": "smart casual"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body["outfits"]) == 2  # below_floor dropped entirely, not shown unlabeled
+        assert [o["match_label"] for o in body["outfits"]] == ["great", "good"]
 
     def test_zero_outfits_returns_honest_note_no_fabricated_outfit(self, ready_closet: dict[str, str]) -> None:
         result = SuggestResult(outfits=[], sources=[])
@@ -176,9 +201,23 @@ class TestSendMessage:
 
         assert response.status_code == 200
         body = response.json()
-        assert body["outfit"] is None
-        assert body["citations"] == []
+        assert body["outfits"] == []
         assert body["reply_text"] == "Your closet doesn't have enough items to assemble an outfit for this request."
+
+    def test_all_outfits_below_floor_is_the_empty_case_not_an_error(self, ready_closet: dict[str, str]) -> None:
+        below_floor = _scored_outfit([ready_closet["top"]], rank_score=0.1, cites=[])
+        result = SuggestResult(outfits=[below_floor], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": None}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post("/api/v1/recommend/messages", json={"message": "something obscure"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["outfits"] == []
+        assert body["reply_text"]  # generic fallback note, not a fabricated outfit
 
     def test_backstop_timeout_returns_504(self, ready_closet: dict[str, str]) -> None:
         import time
@@ -233,3 +272,104 @@ class TestSendMessage:
         assert second_call_config == {"configurable": {"thread_id": thread_id}}
         second_call_input = mock_graph.invoke.call_args_list[1].args[0]
         assert second_call_input["thread_id"] == thread_id
+
+
+class TestSaveOutfit:
+    """specs/009-suggestion-pager/contracts/recommend.md — the pager
+    heart's first tap."""
+
+    def _save_body(self, item_ids: list[str]) -> dict:
+        return {
+            "occasion": "Rainy day commute",
+            "meta_line": "Rainy day commute · Business casual",
+            "rationale_text": "A cohesive, weather-ready look.",
+            "match_label": "great",
+            "item_ids": item_ids,
+        }
+
+    def test_happy_path_creates_a_row_and_returns_favorite_true(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            response = client.post(
+                "/api/v1/recommend/outfits",
+                json=self._save_body([ready_closet["top"], ready_closet["bottom"]]),
+            )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["favorite"] is True
+        assert body["id"]
+
+        # Read the row back directly — a 2xx proves nothing about what was
+        # actually stored (handoff §10).
+        with get_engine().begin() as conn:
+            row = (
+                conn.execute(
+                    text(
+                        "SELECT user_id, occasion, meta_line, rationale_text, match_label, item_ids, favorite "
+                        "FROM outfits WHERE id = :id"
+                    ),
+                    {"id": body["id"]},
+                )
+                .mappings()
+                .fetchone()
+            )
+        assert row is not None
+        assert str(row["user_id"]) == USER_READY
+        assert row["occasion"] == "Rainy day commute"
+        assert row["meta_line"] == "Rainy day commute · Business casual"
+        assert row["rationale_text"] == "A cohesive, weather-ready look."
+        assert row["match_label"] == "great"
+        assert {str(item_id) for item_id in row["item_ids"]} == {ready_closet["top"], ready_closet["bottom"]}
+        assert row["favorite"] is True
+
+    def test_rejects_an_item_the_caller_does_not_own(self, ready_closet: dict[str, str]) -> None:
+        someone_elses_item = str(uuid.uuid4())
+        with _client_as(USER_READY) as client:
+            response = client.post(
+                "/api/v1/recommend/outfits",
+                json=self._save_body([ready_closet["top"], someone_elses_item]),
+            )
+
+        assert response.status_code == 422
+        with get_engine().begin() as conn:
+            count = conn.execute(
+                text("SELECT count(*) FROM outfits WHERE user_id = :u"), {"u": USER_READY}
+            ).scalar_one()
+        assert count == 0  # nothing was inserted — validated before, not after, the write
+
+    def test_requires_authentication(self, ready_closet: dict[str, str]) -> None:
+        app.dependency_overrides.clear()
+        with TestClient(app) as client:
+            response = client.post("/api/v1/recommend/outfits", json=self._save_body([ready_closet["top"]]))
+        assert response.status_code == 401
+
+
+class TestToggleOutfitFavorite:
+    def test_flips_favorite_and_does_not_delete(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            created = client.post(
+                "/api/v1/recommend/outfits",
+                json=TestSaveOutfit()._save_body([ready_closet["top"]]),
+            )
+            outfit_id = created.json()["id"]
+
+            first_toggle = client.post(f"/api/v1/recommend/outfits/{outfit_id}/favorite")
+            assert first_toggle.status_code == 200
+            assert first_toggle.json()["favorite"] is False
+
+            second_toggle = client.post(f"/api/v1/recommend/outfits/{outfit_id}/favorite")
+            assert second_toggle.json()["favorite"] is True
+
+        with get_engine().begin() as conn:
+            row = (
+                conn.execute(text("SELECT favorite FROM outfits WHERE id = :id"), {"id": outfit_id})
+                .mappings()
+                .fetchone()
+            )
+        assert row is not None  # still exists — unsaving toggles, never deletes (design-decisions.md §32)
+        assert row["favorite"] is True
+
+    def test_404_for_nonexistent_or_foreign_outfit(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            response = client.post(f"/api/v1/recommend/outfits/{uuid.uuid4()}/favorite")
+        assert response.status_code == 404
