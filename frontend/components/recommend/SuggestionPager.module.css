@@ -1,0 +1,49 @@
+.group {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-sm);
+}
+
+/* Mobile: exactly one card visible, no native scroll/swipe at all — the
+   only way the visible card changes is the transform below, driven by
+   `index` state and the arrow buttons (design-system.md § Outfit
+   suggestion pager, "Pager mechanics"). */
+.trackMobile {
+  overflow: hidden;
+}
+
+.slideMobileInner {
+  display: flex;
+  transition: transform var(--motion-duration-base) var(--motion-easing-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slideMobileInner {
+    transition: none;
+  }
+}
+
+.slideMobile {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+/* Tablet/desktop: a native horizontal scroller, one card per snap point,
+   neighbors peeking at ~92% card width. */
+.trackDesktop {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  gap: var(--space-md);
+  scrollbar-width: none;
+}
+
+.trackDesktop::-webkit-scrollbar {
+  display: none;
+}
+
+.slideDesktop {
+  flex: 0 0 92%;
+  min-width: 0;
+  scroll-snap-align: center;
+}

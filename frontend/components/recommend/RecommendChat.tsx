@@ -92,9 +92,8 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
       {
         id: crypto.randomUUID(),
         role: "assistant",
-        text: data.outfit ? data.outfit.rationale_text : (data.reply_text ?? ""),
-        outfit: data.outfit,
-        citations: data.citations,
+        outfits: data.outfits,
+        replyText: data.reply_text,
       },
     ]);
     setPendingTexts([]);

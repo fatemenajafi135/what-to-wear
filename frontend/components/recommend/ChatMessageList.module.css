@@ -45,3 +45,18 @@
     max-width: 92%;
   }
 }
+
+.addItemLink {
+  align-self: flex-start;
+  margin-top: var(--space-sm);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+@media (hover: hover) {
+  .addItemLink:hover {
+    opacity: 0.7;
+  }
+}

@@ -16,6 +16,9 @@ vi.mock("@/lib/api/client", () => ({
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({ auth: { getSession: () => Promise.resolve({ data: { session: null } }) } }),
 }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 import { apiClient } from "@/lib/api/client";
 
@@ -43,12 +46,16 @@ describe("RecommendPage", () => {
       data: {
         thread_id: "thread-1",
         reply_text: null,
-        outfit: {
-          rationale_text: "Reply.",
-          items: [],
-          match_label: "great",
-        },
-        citations: [],
+        outfits: [
+          {
+            id: null,
+            occasion: "business casual",
+            rationale_text: "Reply.",
+            items: [],
+            match_label: "great",
+            meta_line: "business casual · Business casual",
+          },
+        ],
       },
       error: undefined,
       response: new Response(),

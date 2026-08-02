@@ -11,6 +11,9 @@ vi.mock("@/lib/supabase/client", () => ({
     auth: { getSession: () => Promise.resolve({ data: { session: { user: { email: "maya@example.com" } } } }) },
   }),
 }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 import { apiClient } from "@/lib/api/client";
 
@@ -22,13 +25,24 @@ function mockGetByUrl(url: string) {
 }
 
 const mockOutfit = {
-  rationale_text: "A relaxed pairing that works well here.[1]",
+  id: null,
+  occasion: "business casual",
+  rationale_text: "A relaxed pairing that works well here.",
   items: [
-    { id: "item-1", name: "Navy tee", category: "t-shirt", category_group: "top", colors: [], color_names: [], photo_url: null, photo_background_color: null },
+    {
+      id: "item-1",
+      name: "Navy tee",
+      category: "t-shirt",
+      category_group: "top",
+      colors: [],
+      color_names: [],
+      photo_url: null,
+      photo_background_color: null,
+    },
   ],
   match_label: "great",
+  meta_line: "business casual · Business casual",
 };
-const mockCitations = [{ number: 1, text: "Casual pieces pair well together." }];
 
 describe("RecommendChat", () => {
   beforeEach(() => {
@@ -37,7 +51,7 @@ describe("RecommendChat", () => {
     Object.defineProperty(window.navigator, "onLine", { value: true, configurable: true });
   });
 
-  it("full happy path: hero -> compose -> Start styling -> reply with citations and thumbnails", async () => {
+  it("full happy path: hero -> compose -> Start styling -> pager reply with thumbnails", async () => {
     let resolvePost!: (value: unknown) => void;
     vi.mocked(apiClient.POST).mockReturnValue(new Promise((resolve) => (resolvePost = resolve)) as never);
 
@@ -48,10 +62,10 @@ describe("RecommendChat", () => {
     expect(startButton).toBeEnabled();
     await userEvent.click(startButton);
 
-    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Styling your outfit…" })).toBeInTheDocument();
 
     resolvePost({
-      data: { thread_id: "thread-1", reply_text: null, outfit: mockOutfit, citations: mockCitations },
+      data: { thread_id: "thread-1", reply_text: null, outfits: [mockOutfit] },
       error: undefined,
       response: new Response(),
     });
@@ -59,7 +73,7 @@ describe("RecommendChat", () => {
     await waitFor(() => {
       expect(screen.getByText(/A relaxed pairing that works well here\./)).toBeInTheDocument();
     });
-    expect(screen.getByText("Casual pieces pair well together.")).toBeInTheDocument();
+    expect(screen.queryByText(/\[\d+]/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Navy tee" })).toHaveAttribute("href", "/closet/item-1");
 
     expect(apiClient.POST).toHaveBeenCalledWith(
@@ -68,13 +82,12 @@ describe("RecommendChat", () => {
     );
   });
 
-  it("zero-outfit reply renders reply_text with no thumbnails or citations", async () => {
+  it("zero-outfit reply renders reply_text with no thumbnails or pager", async () => {
     vi.mocked(apiClient.POST).mockResolvedValue({
       data: {
         thread_id: "thread-1",
         reply_text: "Your closet doesn't have enough items to assemble an outfit for this request.",
-        outfit: null,
-        citations: [],
+        outfits: [],
       },
       error: undefined,
       response: new Response(),
@@ -90,6 +103,7 @@ describe("RecommendChat", () => {
       ).toBeInTheDocument();
     });
     expect(screen.queryByRole("link", { name: "Navy tee" })).not.toBeInTheDocument();
+    expect(screen.getByText("Add items to your closet")).toBeInTheDocument();
   });
 
   it("error path shows retry, and retry re-issues the same request", async () => {
@@ -108,7 +122,7 @@ describe("RecommendChat", () => {
     });
 
     vi.mocked(apiClient.POST).mockResolvedValueOnce({
-      data: { thread_id: "thread-1", reply_text: null, outfit: mockOutfit, citations: mockCitations },
+      data: { thread_id: "thread-1", reply_text: null, outfits: [mockOutfit] },
       error: undefined,
       response: new Response(),
     } as never);
@@ -177,7 +191,7 @@ describe("RecommendChat", () => {
 
   it("US2: a second Start-styling call echoes the first response's thread_id", async () => {
     vi.mocked(apiClient.POST).mockResolvedValueOnce({
-      data: { thread_id: "thread-1", reply_text: null, outfit: mockOutfit, citations: mockCitations },
+      data: { thread_id: "thread-1", reply_text: null, outfits: [mockOutfit] },
       error: undefined,
       response: new Response(),
     } as never);
@@ -190,7 +204,7 @@ describe("RecommendChat", () => {
     });
 
     vi.mocked(apiClient.POST).mockResolvedValueOnce({
-      data: { thread_id: "thread-1", reply_text: null, outfit: mockOutfit, citations: mockCitations },
+      data: { thread_id: "thread-1", reply_text: null, outfits: [mockOutfit] },
       error: undefined,
       response: new Response(),
     } as never);

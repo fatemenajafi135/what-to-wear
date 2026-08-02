@@ -1,16 +1,42 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ChatMessageList, type ChatMessage } from "./ChatMessageList";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+vi.mock("@/lib/api/client", () => ({
+  apiClient: { GET: vi.fn(), POST: vi.fn() },
+}));
+
 const outfit = {
-  rationale_text: "",
+  id: null,
+  occasion: "business casual",
+  rationale_text: "A relaxed top pairs well here.",
   items: [
-    { id: "item-1", name: "Navy tee", category: "t-shirt", category_group: "top" as const, colors: [], color_names: [], photo_url: null, photo_background_color: null },
+    {
+      id: "item-1",
+      name: "Navy tee",
+      category: "t-shirt",
+      category_group: "top" as const,
+      colors: [],
+      color_names: [],
+      photo_url: null,
+      photo_background_color: null,
+    },
   ],
   match_label: "great" as const,
+  meta_line: "business casual · Business casual",
 };
 
-const citations = [{ number: 1, text: "Casual denim pairs with a relaxed top." }];
+beforeEach(() => {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+});
 
 describe("ChatMessageList", () => {
   it("renders user messages right-aligned", () => {
@@ -19,31 +45,30 @@ describe("ChatMessageList", () => {
     expect(screen.getByText("business casual")).toBeInTheDocument();
   });
 
-  it("parses [n] tokens into citation badges", () => {
-    const messages: ChatMessage[] = [
-      { id: "1", role: "assistant", text: "A relaxed top pairs well here.[1]" },
-    ];
+  it("renders an outfit reply as a pager card with no citation markers", () => {
+    const messages: ChatMessage[] = [{ id: "1", role: "assistant", outfits: [outfit] }];
     render(<ChatMessageList messages={messages} inFlight={false} />);
-    expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByText(/A relaxed top pairs well here\./)).toBeInTheDocument();
+    expect(screen.queryByText(/\[\d+]/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Navy tee" })).toHaveLength(1);
   });
 
-  it("renders the thumbnail row and rule list count matching citations", () => {
+  it("renders the Empty message plus an Add-item link when a reply has zero outfits", () => {
     const messages: ChatMessage[] = [
-      { id: "1", role: "assistant", text: "Reply text.[1]", outfit, citations },
+      { id: "1", role: "assistant", outfits: [], replyText: "I couldn't put an outfit together from that." },
     ];
     render(<ChatMessageList messages={messages} inFlight={false} />);
-    expect(screen.getAllByRole("link")).toHaveLength(1);
-    expect(screen.getByText("Casual denim pairs with a relaxed top.")).toBeInTheDocument();
+    expect(screen.getByText("I couldn't put an outfit together from that.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Add items to your closet" })).toHaveAttribute("href", "/add");
   });
 
-  it("shows a Thinking… row while in flight", () => {
+  it("shows the pager's skeleton card while in flight", () => {
     render(<ChatMessageList messages={[]} inFlight={true} />);
-    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Styling your outfit…" })).toBeInTheDocument();
   });
 
-  it("hides the Thinking… row when not in flight", () => {
+  it("hides the skeleton card when not in flight", () => {
     render(<ChatMessageList messages={[]} inFlight={false} />);
-    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "Styling your outfit…" })).not.toBeInTheDocument();
   });
 });

@@ -307,9 +307,13 @@ def send_message(
     elif note:
         reply_text = note
     else:
+        # Verbatim design-system.md § Outfit suggestion pager, Empty group-
+        # state copy — 008's original fallback paraphrased this ("put
+        # together a confident outfit" vs. "put an outfit together");
+        # Constitution VIII requires shipping copy verbatim, not
+        # approximately.
         reply_text = (
-            "I couldn't put together a confident outfit from that — "
-            "try loosening a constraint or adding a few more pieces."
+            "I couldn't put an outfit together from that — try loosening a constraint or adding a few more pieces."
         )
 
     return SendMessageResponse(
