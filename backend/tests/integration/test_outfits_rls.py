@@ -50,9 +50,12 @@ def seeded_rows() -> Iterator[dict[str, str]]:
     with admin.cursor() as cur:
         for key, user_id, occasion in [("a", USER_A, "Rainy commute"), ("b", USER_B, "Dinner date")]:
             cur.execute(
-                "INSERT INTO outfits (user_id, occasion, meta_line, rationale_text, match_label, item_ids)"
-                " VALUES (%s, %s, 'meta', 'rationale', 'great', '{}') RETURNING id",
-                (user_id, occasion),
+                "INSERT INTO outfits (user_id, occasion, meta_line, rationale_text, match_label, item_ids, title, "
+                "rationale_with_citations, citations, dimension_scores)"
+                " VALUES (%s, %s, 'meta', 'rationale', 'great', '{}', %s, 'rationale [1]', "
+                '\'[{"number": 1, "text": "Some rule"}]\'::jsonb, '
+                '\'[{"dimension": "color_harmony", "value": 0.8}]\'::jsonb) RETURNING id',
+                (user_id, occasion, occasion),
             )
             (outfit_id,) = cur.fetchone()
             ids[key] = str(outfit_id)
@@ -73,6 +76,27 @@ class TestOutfitsRLS:
             conn_a.close()
 
         assert [(str(user_id), occasion) for user_id, occasion in rows] == [(USER_A, "Rainy commute")]
+
+    def test_user_sees_own_rows_new_010_columns_too(self, seeded_rows: dict[str, str]) -> None:
+        """Feature 010's new columns (title, rationale_with_citations,
+        citations, dimension_scores) are plain columns on the same table —
+        this proves they're reachable under the existing policy/GRANT
+        (0009) with no separate policy needed, and that another user's
+        values for these columns aren't leaked through some other path."""
+        conn_a = _connect_as(USER_A)
+        try:
+            with conn_a.cursor() as cur:
+                cur.execute("SELECT title, rationale_with_citations, citations, dimension_scores FROM outfits")
+                rows = cur.fetchall()
+        finally:
+            conn_a.close()
+
+        assert len(rows) == 1
+        title, rationale_with_citations, citations, dimension_scores = rows[0]
+        assert title == "Rainy commute"
+        assert rationale_with_citations == "rationale [1]"
+        assert citations == [{"number": 1, "text": "Some rule"}]
+        assert dimension_scores == [{"dimension": "color_harmony", "value": 0.8}]
 
     def test_second_user_sees_only_their_own_rows(self, seeded_rows: dict[str, str]) -> None:
         conn_b = _connect_as(USER_B)
@@ -145,8 +169,8 @@ class TestOutfitsRLS:
         try:
             with conn_b.cursor() as cur, pytest.raises(psycopg.errors.InsufficientPrivilege):
                 cur.execute(
-                    "INSERT INTO outfits (user_id, occasion, meta_line, rationale_text, match_label, item_ids)"
-                    " VALUES (%s, 'forged', 'meta', 'rationale', 'great', '{}')",
+                    "INSERT INTO outfits (user_id, occasion, meta_line, rationale_text, match_label, item_ids, title)"
+                    " VALUES (%s, 'forged', 'meta', 'rationale', 'great', '{}', 'forged')",
                     (USER_A,),
                 )
         finally:

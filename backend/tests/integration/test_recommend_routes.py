@@ -276,18 +276,41 @@ class TestSendMessage:
 
 class TestSaveOutfit:
     """specs/009-suggestion-pager/contracts/recommend.md — the pager
-    heart's first tap."""
+    heart's first tap. specs/010-outfits/contracts/recommend-outfits.md —
+    the added `thread_id` and server-side citation/dimension-score capture
+    (design-decisions.md §38)."""
 
-    def _save_body(self, item_ids: list[str]) -> dict:
+    def _save_body(self, item_ids: list[str], thread_id: str = "no-such-thread") -> dict:
         return {
             "occasion": "Rainy day commute",
             "meta_line": "Rainy day commute · Business casual",
             "rationale_text": "A cohesive, weather-ready look.",
             "match_label": "great",
             "item_ids": item_ids,
+            "thread_id": thread_id,
         }
 
+    def _row(self, outfit_id: str) -> dict:
+        with get_engine().begin() as conn:
+            row = (
+                conn.execute(
+                    text(
+                        "SELECT user_id, occasion, meta_line, rationale_text, match_label, item_ids, favorite, "
+                        "title, rationale_with_citations, citations, dimension_scores "
+                        "FROM outfits WHERE id = :id"
+                    ),
+                    {"id": outfit_id},
+                )
+                .mappings()
+                .fetchone()
+            )
+        assert row is not None
+        return dict(row)
+
     def test_happy_path_creates_a_row_and_returns_favorite_true(self, ready_closet: dict[str, str]) -> None:
+        # No matching thread state (a real, never-invoked thread_id) —
+        # citations/dimension_scores must degrade to empty, not fail the
+        # save (design-decisions.md §38).
         with _client_as(USER_READY) as client:
             response = client.post(
                 "/api/v1/recommend/outfits",
@@ -301,19 +324,7 @@ class TestSaveOutfit:
 
         # Read the row back directly — a 2xx proves nothing about what was
         # actually stored (handoff §10).
-        with get_engine().begin() as conn:
-            row = (
-                conn.execute(
-                    text(
-                        "SELECT user_id, occasion, meta_line, rationale_text, match_label, item_ids, favorite "
-                        "FROM outfits WHERE id = :id"
-                    ),
-                    {"id": body["id"]},
-                )
-                .mappings()
-                .fetchone()
-            )
-        assert row is not None
+        row = self._row(body["id"])
         assert str(row["user_id"]) == USER_READY
         assert row["occasion"] == "Rainy day commute"
         assert row["meta_line"] == "Rainy day commute · Business casual"
@@ -321,6 +332,83 @@ class TestSaveOutfit:
         assert row["match_label"] == "great"
         assert {str(item_id) for item_id in row["item_ids"]} == {ready_closet["top"], ready_closet["bottom"]}
         assert row["favorite"] is True
+        assert row["title"] == "Rainy day commute"  # seeded from occasion (§36)
+        assert row["rationale_with_citations"] == ""
+        assert row["citations"] == []
+        assert row["dimension_scores"] == []
+
+    def test_captures_citations_and_dimension_scores_from_the_threads_last_result(
+        self, ready_closet: dict[str, str]
+    ) -> None:
+        item_ids = [ready_closet["top"], ready_closet["bottom"]]
+        outfit = _scored_outfit(item_ids, rank_score=0.85, cites=["rule-1"])
+        result = SuggestResult(
+            outfits=[outfit],
+            sources=[CitedSource(rule_id="rule-1", source="Pair casual denim with a relaxed top.", url="", layer="L3")],
+        )
+        mock_graph = MagicMock()
+        mock_graph.get_state.return_value = MagicMock(values={"user_id": USER_READY, "last_result": result})
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post(
+                    "/api/v1/recommend/outfits", json=self._save_body(item_ids, thread_id="thread-1")
+                )
+
+        assert response.status_code == 201
+        row = self._row(response.json()["id"])
+        assert row["rationale_with_citations"] == "A clean, casual pairing. [1]"
+        assert row["citations"] == [{"number": 1, "text": "Pair casual denim with a relaxed top."}]
+        assert row["dimension_scores"] == [
+            {"dimension": "color_harmony", "value": 0.8},
+            {"dimension": "formality_coherence", "value": 0.8},
+            {"dimension": "weather_fitness", "value": 0.8},
+            {"dimension": "silhouette_balance", "value": 0.8},
+        ]
+
+    def test_degrades_to_empty_when_thread_belongs_to_another_user(self, ready_closet: dict[str, str]) -> None:
+        item_ids = [ready_closet["top"]]
+        outfit = _scored_outfit(item_ids, rank_score=0.85, cites=["rule-1"])
+        result = SuggestResult(
+            outfits=[outfit],
+            sources=[CitedSource(rule_id="rule-1", source="Some rule.", url="", layer="L3")],
+        )
+        mock_graph = MagicMock()
+        mock_graph.get_state.return_value = MagicMock(values={"user_id": "someone-else", "last_result": result})
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post(
+                    "/api/v1/recommend/outfits", json=self._save_body(item_ids, thread_id="thread-1")
+                )
+
+        assert response.status_code == 201
+        row = self._row(response.json()["id"])
+        assert row["citations"] == []
+        assert row["dimension_scores"] == []
+
+    def test_degrades_to_empty_when_no_outfit_in_last_result_matches_item_ids(
+        self, ready_closet: dict[str, str]
+    ) -> None:
+        other_outfit = _scored_outfit([ready_closet["shoes"]], rank_score=0.85, cites=["rule-1"])
+        result = SuggestResult(
+            outfits=[other_outfit],
+            sources=[CitedSource(rule_id="rule-1", source="Some rule.", url="", layer="L3")],
+        )
+        mock_graph = MagicMock()
+        mock_graph.get_state.return_value = MagicMock(values={"user_id": USER_READY, "last_result": result})
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post(
+                    "/api/v1/recommend/outfits",
+                    json=self._save_body([ready_closet["top"], ready_closet["bottom"]], thread_id="thread-1"),
+                )
+
+        assert response.status_code == 201
+        row = self._row(response.json()["id"])
+        assert row["citations"] == []
+        assert row["dimension_scores"] == []
 
     def test_rejects_an_item_the_caller_does_not_own(self, ready_closet: dict[str, str]) -> None:
         someone_elses_item = str(uuid.uuid4())
