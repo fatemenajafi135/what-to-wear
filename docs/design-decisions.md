@@ -1943,3 +1943,83 @@ since nothing is ever in a non-default filtered state to clear).
 **Not lost**: this section itself is the record `known-gaps.md`-style features use elsewhere in
 this project — a future feature can implement option (b) directly from this write-up without
 re-deriving the bucketing approach from scratch.
+
+## 42. Every generated outfit is now saved automatically — amends §32 and §38
+
+**Status: decided.** A direct product request during feature 010's own testing pass, not a gap
+found while building — but it reverses the persistence model §32 and §38 recorded, so it's
+documented with the same rigor: what changed, what it obsoletes, and what was rejected.
+
+### The request
+
+"I want them all to be saved" — every outfit a styling reply surfaces should be persisted the
+moment it's generated, with no heart tap required. Clarified explicitly (not assumed): this
+means true zero-interaction auto-save, favorited by default, not a "Save all" button the user
+still has to press.
+
+### The decision
+
+`POST /recommend/messages` now persists every outfit it returns, in the same request, before
+the response is sent. Concretely:
+
+- For each `ScoredOutfit` that clears the "not surfaced" floor (§ Scores, unchanged), the route
+  builds the view (`_resolve_outfit`, now returning a lightweight `_ResolvedOutfit` — rationale
+  text, resolved items, label — rather than the final response model directly) and, in the same
+  loop, calls `SupabaseOutfitRepository.create(...)` for it, using the pipeline's own in-hand
+  `ScoredOutfit`/`SuggestResult.sources` to build `rationale_with_citations`/`citations`/
+  `dimension_scores` (the same `_build_rationale_with_citations` helper §38 introduced —
+  unchanged in what it computes, only in when and how it's invoked).
+- `StylingOutfit.id` changes from `str | None = None` to a required `str` — every outfit this
+  route ever returns already has a row. `StylingOutfit` also gains a required `favorite: bool`
+  (always `true` at creation — the row's own default) so the frontend can render the heart's
+  fill state from the response instead of assuming.
+- `POST /recommend/outfits` (the manual save route `SaveOutfitRequest`/`save_outfit` implemented)
+  is deleted outright, along with `_get_state_for_thread` — both are dead code the moment nothing
+  calls them, per this project's own "clean removal, not retained dead weight" convention (§35
+  did the same for the `[n]`-marker embedding once its only caller went away). The heart
+  (`SuggestionPager.tsx`) now only ever calls `POST /recommend/outfits/{id}/favorite` — never a
+  create — because every card already has a real `id` from the moment it renders.
+
+### This obsoletes §38's checkpointer-lookup mechanism entirely, not just its call site
+
+§38 solved "how does a *later* save action recover citations/scores" by reading the pipeline's
+checkpointed `GraphState` back out for a given `thread_id` — a real but inherently fragile
+mechanism (the state might have evicted, the thread might not match, ownership had to be
+re-checked against a second piece of per-user state with no RLS of its own). Auto-save at
+generation time deletes the entire problem it solved: citations/scores are captured from data
+already sitting in a local variable in the same function, in the same request, with no
+checkpointer read, no thread-ownership check, and — critically — **no degrade path**, because
+there is no longer a window in which the data could be unavailable. This is a strictly simpler
+and more robust mechanism than §38's, not a smaller version of it. §38's own text is left
+standing as the record of what was true before this section, per this document's convention of
+amending forward rather than editing history (matching how §37 relates to §28).
+
+### A correctness fix folded in here: persisted `item_ids` must match what was shown, not the pipeline's raw list
+
+While implementing this, a real discrepancy surfaced: a `ScoredOutfit.items` list may legitimately
+include a shared-catalog item id (Constitution IV allows citing the catalog, not just the user's
+own wardrobe), but `_resolve_outfit`'s `wardrobe_by_id` lookup — used to build the *displayed*
+`items` — only ever contains the caller's own wardrobe, so a catalog item silently never appears
+in what's shown. The old manual-save flow never hit this because the client could only ever echo
+back `item_ids` it had actually received (already catalog-filtered by construction). Auto-save,
+persisting server-side, had no such filter for free — the first version of this change passed
+`scored_outfit.items` (the pipeline's raw list) straight to `create(...)`, which would have stored
+a catalog item's id in a row whose displayed items never included it. Fixed to persist
+`[item.id for item in resolved.items]` instead — the same filtered list already used for the
+response — so the stored row and what was shown always agree. Covered by
+`test_outfit_including_a_catalog_item_persists_only_the_owned_ones`.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — auto-save every outfit at generation time, no tap | — |
+| (b) "Save all" button next to the pager — one deliberate tap saves the whole batch | The recommendation offered before asking; explicitly declined once the user clarified they wanted zero interaction, not a lower-friction bulk action. Would have been the smaller, more reversible change (closer to §32's original model), but isn't what was actually wanted. |
+| Keep the manual save endpoint alongside auto-save, for API completeness / a hypothetical future caller | Rejected on the same grounds §35 already established for this exact shape of question: no code is kept "just in case" once its only caller is gone — a second, unused way to create the identical row is a liability (two paths to keep in sync, e.g. this feature's own item_ids-filtering fix would have had to be applied to both) with no present benefit. |
+| Keep `_get_state_for_thread`/the checkpointer-lookup path for `send_message` too, rather than reading `result` directly | There is nothing to look up — `result` (the `SuggestResult` just produced by this very request) is already the freshest, most authoritative copy of the data the checkpointer would have been asked to reproduce. Reaching into the checkpointer here would be strictly worse: an unnecessary round trip to fetch a copy of data already in scope. |
+
+### Consequence for §36 (the card's title)
+
+Unchanged in substance — `title` is still seeded from `occasion` at the moment of creation, still
+user-editable after. What changes is only *when* that creation happens (now always, at generation
+time, rather than only if/when a user saved it).

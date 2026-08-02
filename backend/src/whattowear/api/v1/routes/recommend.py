@@ -13,11 +13,13 @@ whatever the client already showed — a client-only gate is a spec violation
 
 `POST /recommend/messages` now returns **every** surfaced outfit (`outfits`,
 not just `outfits[0]`) — feature 009 replaces 008's single-flat-card
-rendering with a pager, and citations no longer render anywhere on that
-path (design-decisions.md §33/§35), so `_resolve_outfit` no longer embeds
-`[n]` markers and the response carries no `citations` field.
-`POST /recommend/outfits` / `POST /recommend/outfits/{id}/favorite` persist
-and toggle a saved suggestion (design-decisions.md §32).
+rendering with a pager. As of design-decisions.md §42, every returned
+outfit is also persisted immediately, in the same request, using the
+pipeline's own in-hand `ScoredOutfit`/`SuggestResult.sources` — no separate
+"save" action exists anymore (reversing §32's "heart's first tap creates
+the row" model; the heart now only ever toggles `favorite` via
+`POST /recommend/outfits/{id}/favorite`, on a row that already exists from
+the moment the reply was generated).
 """
 
 from __future__ import annotations
@@ -27,10 +29,10 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import datetime
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from whattowear.adapters import storage
 from whattowear.auth import get_current_access_token, get_current_user_id
@@ -41,7 +43,7 @@ from whattowear.pipeline.graph import get_compiled_graph
 from whattowear.readiness import ReadinessResult, evaluate_wardrobe_readiness
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
 from whattowear.repositories.supabase_outfits import Sort, SupabaseOutfitRepository
-from whattowear.schema import CitedSource, Context, ScoredOutfit, SuggestResult, WardrobeItem
+from whattowear.schema import CitedSource, Context, ScoredOutfit, WardrobeItem
 
 logger = logging.getLogger(__name__)
 
@@ -145,36 +147,27 @@ MatchLabel = Literal["great", "good", "might_work"]
 
 
 class StylingOutfit(BaseModel):
-    id: str | None = None
+    # Always present (design-decisions.md §42) — every outfit returned here
+    # was already persisted before the response was sent, never a
+    # not-yet-saved placeholder.
+    id: str
     # The card's own "title" (design-decisions.md §36 — nothing else produces
-    # one for a fresh suggestion) and `meta_line`'s first segment; also what
-    # the client echoes back verbatim in `SaveOutfitRequest.occasion`, since
-    # `Context.occasion` (pipeline-normalized) may differ from the raw
-    # composer text the client itself has no other copy of.
+    # one for a fresh suggestion) and `meta_line`'s first segment.
     occasion: str
     rationale_text: str
     items: list[RecommendItemView]
     match_label: MatchLabel
     meta_line: str
+    # Always `true` at creation (the row's own default) — exposed so the
+    # client can initialize the heart's fill state from this response
+    # instead of assuming, and reflect a later toggle without a refetch.
+    favorite: bool
 
 
 class SendMessageResponse(BaseModel):
     thread_id: str
     reply_text: str | None
     outfits: list[StylingOutfit]
-
-
-class SaveOutfitRequest(BaseModel):
-    occasion: str
-    meta_line: str
-    rationale_text: str
-    match_label: MatchLabel
-    item_ids: list[str] = Field(min_length=1)
-    # design-decisions.md §38 — identifies which thread's checkpointed
-    # `last_result` to re-resolve citations/dimension scores from. Required,
-    # not optional: every pager save originates from a real `SendMessage`
-    # reply, which always has a `thread_id`.
-    thread_id: str
 
 
 class SavedOutfitResponse(BaseModel):
@@ -257,21 +250,32 @@ def match_label(rank_score: float) -> MatchLabel | None:
     return None
 
 
+class _ResolvedOutfit(NamedTuple):
+    """The view-building half of turning a `ScoredOutfit` into a
+    `StylingOutfit` — everything that doesn't depend on the row that's
+    about to be created for it (design-decisions.md §42). Kept separate
+    from persistence so `_resolve_outfit` stays a pure view-builder."""
+
+    rationale_text: str
+    items: list[RecommendItemView]
+    match_label: MatchLabel
+
+
 def _resolve_outfit(
     outfit: ScoredOutfit,
-    occasion: str,
-    meta_line: str,
     wardrobe_by_id: dict[str, WardrobeItem],
     access_token: str,
-) -> StylingOutfit | None:
+) -> _ResolvedOutfit | None:
     """`None` when this outfit scores below the "not surfaced at all" floor
-    (design-system.md § Scores, < 0.4) — the caller drops it from the
-    response entirely rather than including it with no label.
+    (design-system.md § Scores, < 0.4) — the caller drops it entirely
+    rather than persisting it or including it with no label.
 
     No citation markers are embedded in `rationale_text` — every outfit
     reply now renders through the pager, which never shows a citation
     (design-decisions.md §33/§35); plain joined rationale text is all any
-    caller of this function needs."""
+    caller of this function needs. The saved row's own
+    `rationale_with_citations` (Outfit detail's concern) is built
+    separately, from the same `ScoredOutfit`, by `_build_rationale_with_citations`."""
     label = match_label(outfit.rank_score)
     if label is None:
         return None
@@ -294,13 +298,7 @@ def _resolve_outfit(
 
     rationale_text = " ".join(rationale.text for rationale in outfit.rationale)
 
-    return StylingOutfit(
-        occasion=occasion,
-        rationale_text=rationale_text,
-        items=items,
-        match_label=label,
-        meta_line=meta_line,
-    )
+    return _ResolvedOutfit(rationale_text=rationale_text, items=items, match_label=label)
 
 
 @router.get("/recommend/readiness")
@@ -324,6 +322,7 @@ def send_message(
     user_id: str = Depends(get_current_user_id),  # noqa: B008
     access_token: str = Depends(get_current_access_token),  # noqa: B008
     repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
+    outfit_repository: SupabaseOutfitRepository = Depends(_get_outfit_repository),  # noqa: B008
 ) -> SendMessageResponse:
     settings = get_settings()
     items = repository.list_wardrobe_items(user_id)
@@ -368,12 +367,54 @@ def send_message(
 
     # Resolve every surfaced outfit (not just the top-ranked one, per the
     # handoff's mission — feature 009), dropping any that scores below the
-    # "not surfaced at all" floor rather than including it unlabeled.
-    outfits = [
-        resolved
-        for scored_outfit in result.outfits
-        if (resolved := _resolve_outfit(scored_outfit, occasion, meta_line, wardrobe_by_id, access_token)) is not None
-    ]
+    # "not surfaced at all" floor rather than including it unlabeled — then
+    # persist it immediately (design-decisions.md §42: every returned
+    # outfit is already saved, favorited by default; there is no separate
+    # save action anymore). Citations/dimension_scores are built straight
+    # from this same in-hand `scored_outfit`/`result.sources` — no
+    # checkpointer round-trip needed, since generation and persistence now
+    # happen in the same request.
+    outfits: list[StylingOutfit] = []
+    for scored_outfit in result.outfits:
+        resolved = _resolve_outfit(scored_outfit, wardrobe_by_id, access_token)
+        if resolved is None:
+            continue
+
+        rationale_with_citations, citations = _build_rationale_with_citations(scored_outfit, result.sources)
+        dimension_scores = [{"dimension": s.dimension, "value": s.value} for s in scored_outfit.scores]
+        # `resolved.items` (not `scored_outfit.items` raw) — a scored outfit
+        # may legitimately include a shared-catalog item (Constitution IV),
+        # which `_resolve_outfit` already drops from what's shown (its
+        # `wardrobe_by_id` only ever holds the caller's own wardrobe). Saving
+        # the raw pipeline list here would silently persist an id nothing
+        # ever displays; using the same filtered list that was just shown
+        # keeps the stored row and the response in agreement.
+        item_ids = [item.id for item in resolved.items]
+        outfit_id = outfit_repository.create(
+            user_id=user_id,
+            occasion=occasion,
+            meta_line=meta_line,
+            rationale_text=resolved.rationale_text,
+            match_label=resolved.match_label,
+            item_ids=item_ids,
+            # design-decisions.md §36: seeded from occasion (nothing else
+            # produces a title for a fresh suggestion); user-editable after.
+            title=occasion,
+            rationale_with_citations=rationale_with_citations,
+            citations=citations,
+            dimension_scores=dimension_scores,
+        )
+        outfits.append(
+            StylingOutfit(
+                id=outfit_id,
+                occasion=occasion,
+                rationale_text=resolved.rationale_text,
+                items=resolved.items,
+                match_label=resolved.match_label,
+                meta_line=meta_line,
+                favorite=True,
+            )
+        )
 
     # `note` covers the pipeline's own "zero outfits" honesty copy
     # (research.md §6); the generic fallback covers the one case the
@@ -402,18 +443,6 @@ def send_message(
     )
 
 
-def _get_state_for_thread(repository: SupabaseClosetRepository, thread_id: str) -> dict | None:
-    """design-decisions.md §38: reads the pipeline's own checkpointed
-    `GraphState` for `thread_id`, used by `save_outfit` to capture citations
-    and dimension scores server-side rather than trusting the client.
-    LangGraph returns an empty snapshot (`.values == {}`) for an unknown
-    thread rather than raising, so this normalizes that to `None` — one
-    clear "nothing to read" signal for the caller to degrade on."""
-    graph = get_compiled_graph(repository)
-    snapshot = graph.get_state({"configurable": {"thread_id": thread_id}})
-    return snapshot.values or None
-
-
 def _build_rationale_with_citations(
     outfit: ScoredOutfit, sources: list[CitedSource]
 ) -> tuple[str, list[dict[str, object]]]:
@@ -440,64 +469,6 @@ def _build_rationale_with_citations(
         markers = "".join(f"[{n}]" for n in segment_numbers)
         text_parts.append(f"{rationale.text} {markers}".rstrip() if markers else rationale.text)
     return " ".join(text_parts), citations
-
-
-@router.post("/recommend/outfits", status_code=status.HTTP_201_CREATED)
-def save_outfit(
-    body: SaveOutfitRequest,
-    user_id: str = Depends(get_current_user_id),  # noqa: B008
-    repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
-    outfit_repository: SupabaseOutfitRepository = Depends(_get_outfit_repository),  # noqa: B008
-) -> SavedOutfitResponse:
-    """The pager heart's first tap (design-decisions.md §32) — a save can
-    never record an item the caller doesn't own, independent of whatever
-    the client sent (Constitution IV), so every `item_ids` entry is checked
-    against the caller's own wardrobe before the row is created.
-
-    Citations and per-dimension scores are captured server-side from the
-    pipeline's own checkpointed state for `body.thread_id`
-    (design-decisions.md §38) — never trusted from the client, never
-    re-generated. Any miss (no state for the thread, the thread belongs to
-    another user, or no outfit in `last_result` matches `body.item_ids`
-    exactly) degrades to empty citations/scores rather than failing the
-    save — the outfit is still worth keeping even when this additional
-    reasoning detail can no longer be proven."""
-    owned_ids = {item.id for item in repository.list_wardrobe_items(user_id)}
-    unowned = [item_id for item_id in body.item_ids if item_id not in owned_ids]
-    if unowned:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            f"item(s) not found in your closet: {', '.join(unowned)}",
-        )
-
-    rationale_with_citations = ""
-    citations: list[dict[str, object]] = []
-    dimension_scores: list[dict[str, object]] = []
-
-    state = _get_state_for_thread(repository, body.thread_id)
-    if state is not None and state.get("user_id") == user_id:
-        last_result: SuggestResult | None = state.get("last_result")
-        if last_result is not None:
-            matched = next((o for o in last_result.outfits if o.items == body.item_ids), None)
-            if matched is not None:
-                rationale_with_citations, citations = _build_rationale_with_citations(matched, last_result.sources)
-                dimension_scores = [{"dimension": s.dimension, "value": s.value} for s in matched.scores]
-
-    outfit_id = outfit_repository.create(
-        user_id=user_id,
-        occasion=body.occasion,
-        meta_line=body.meta_line,
-        rationale_text=body.rationale_text,
-        match_label=body.match_label,
-        item_ids=body.item_ids,
-        # design-decisions.md §36: seeded from occasion (nothing else
-        # produces a title for a fresh suggestion); user-editable after.
-        title=body.occasion,
-        rationale_with_citations=rationale_with_citations,
-        citations=citations,
-        dimension_scores=dimension_scores,
-    )
-    return SavedOutfitResponse(id=outfit_id, favorite=True)
 
 
 @router.get("/recommend/outfits")

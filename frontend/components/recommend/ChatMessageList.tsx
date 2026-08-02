@@ -12,10 +12,6 @@ export interface ChatMessage {
   text?: string;
   outfits?: StylingOutfit[];
   replyText?: string | null;
-  /** The reply's own thread_id — threaded down to the pager's save call so
-   * it can capture citations/dimension scores server-side from this
-   * thread's checkpointed state (design-decisions.md §38). */
-  threadId?: string;
 }
 
 export interface ChatMessageListProps {
@@ -48,7 +44,7 @@ export function ChatMessageList({ messages, inFlight }: ChatMessageListProps) {
           </div>
         ) : message.outfits && message.outfits.length > 0 ? (
           <div key={message.id} className={styles.assistantGroup}>
-            <SuggestionPager outfits={message.outfits} threadId={message.threadId ?? ""} />
+            <SuggestionPager outfits={message.outfits} />
           </div>
         ) : (
           <div key={message.id} className={styles.assistantGroup}>

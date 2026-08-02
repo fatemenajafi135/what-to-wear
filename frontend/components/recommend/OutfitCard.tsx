@@ -25,8 +25,9 @@ export interface OutfitCardProps {
  * distinct from the Outfits-gallery card. The description is plain text —
  * no citation Badges here, ever (§ Badge; design-decisions.md §33/§35).
  * The card body (outside the heart, thumbnails, and feedback controls) is
- * tappable → navigates toward that suggestion's Outfit detail (010, not
- * built — a 404 there is expected, per design-decisions.md §32).
+ * tappable → navigates to that outfit's real, already-saved Outfit detail
+ * page (design-decisions.md §42 — every card here has a real id from the
+ * moment it's generated, never a not-yet-saved placeholder).
  */
 export function OutfitCard({ outfit, saved, feedback, onToggleHeart, onFeedback, onCardTap }: OutfitCardProps) {
   return (
