@@ -127,6 +127,7 @@ describe("AddItemFlow", () => {
             formality: "casual",
             warmth: 2,
             season: ["spring"],
+            background_color: "#e8e2d5",
           },
           color_names: ["navy"],
         },
@@ -152,6 +153,11 @@ describe("AddItemFlow", () => {
           formality: "casual",
           warmth: 2,
           season: ["spring"],
+          // The photo's backdrop, detected but never shown — it letterboxes
+          // a non-square photo to 1:1. Was extracted and stored in the
+          // database, then not threaded to the request for one commit, so
+          // every item saved through the UI got null (design-decisions §31).
+          photo_background_color: "#e8e2d5",
         }),
       })
     );

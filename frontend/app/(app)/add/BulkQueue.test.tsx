@@ -25,6 +25,7 @@ function extractResponse(photoPath: string, category: string) {
         fabric: "cotton",
         pattern: "solid",
         fit: "regular",
+        background_color: "#e8e2d5",
       },
       color_names: ["navy"],
     },
@@ -97,6 +98,25 @@ describe("BulkQueue", () => {
     expect(await screen.findByRole("button", { name: "Try again" })).toBeInTheDocument();
     // Still on card 2 — the queue did not silently skip past the failure.
     expect(screen.getByText("Reviewing item 2 of 2")).toBeInTheDocument();
+  });
+
+  // The backdrop the scan read from the photo, never shown to the user — it
+  // fills the letterbox when a non-square photo is padded to 1:1. It was
+  // added to the extractor and the database and then, for one commit, not
+  // threaded into the request body at all.
+  it("sends the detected photo background colour", async () => {
+    mockedPost
+      .mockResolvedValueOnce(extractResponse("user-a/0.jpg", "top"))
+      .mockResolvedValueOnce({ data: { id: "item-1" }, error: undefined, response: new Response() });
+
+    render(<BulkQueue files={makeFiles(1)} onClose={vi.fn()} />);
+    await screen.findByText("Reviewing item 1 of 1");
+    await userEvent.click(screen.getByRole("button", { name: "Save to Closet" }));
+
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/api/v1/closet/items/from-upload",
+      expect.objectContaining({ body: expect.objectContaining({ photo_background_color: "#e8e2d5" }) })
+    );
   });
 
   it("finishes and closes the overlay when the last card saves successfully", async () => {

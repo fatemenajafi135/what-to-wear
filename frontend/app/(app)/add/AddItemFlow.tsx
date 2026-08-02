@@ -19,10 +19,11 @@ type FlowState =
       step: "review";
       photoUrl: string;
       photoPath: string;
+      backgroundColor: string | null;
       extracted: ExtractedAttributes | null;
       colorNames: string[];
     }
-  | { step: "empty"; photoUrl: string; photoPath: string }
+  | { step: "empty"; photoUrl: string; photoPath: string; backgroundColor: string | null }
   | { step: "error" }
   | { step: "saved" };
 
@@ -65,11 +66,17 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
           step: "review",
           photoUrl,
           photoPath: data.photo_path,
+          backgroundColor: data.extracted.background_color ?? null,
           extracted: data.extracted,
           colorNames: data.color_names,
         });
       } else {
-        setState({ step: "empty", photoUrl, photoPath: data.photo_path });
+        setState({
+          step: "empty",
+          photoUrl,
+          photoPath: data.photo_path,
+          backgroundColor: data.extracted.background_color ?? null,
+        });
       }
     } catch {
       setState({ step: "error" });
@@ -82,15 +89,16 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
       step: "review",
       photoUrl: state.photoUrl,
       photoPath: state.photoPath,
+      backgroundColor: state.backgroundColor,
       extracted: null,
       colorNames: [],
     });
   };
 
-  const handleSave = async (fields: ReviewCardFields, photoPath: string) => {
+  const handleSave = async (fields: ReviewCardFields, photoPath: string, backgroundColor: string | null) => {
     setSaveError(false);
     const { error } = await apiClient.POST("/api/v1/closet/items/from-upload", {
-      body: buildFromUploadBody(photoPath, fields),
+      body: buildFromUploadBody(photoPath, backgroundColor, fields),
     });
     if (error) {
       // Not thrown — ReviewCard's own submit handler awaits onSave inside
@@ -158,7 +166,7 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
         }}
         saveLabel="Save to Closet"
         saveError={saveError}
-        onSave={(fields) => handleSave(fields, state.photoPath)}
+        onSave={(fields) => handleSave(fields, state.photoPath, state.backgroundColor)}
       />
     );
   }

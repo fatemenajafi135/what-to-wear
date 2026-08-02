@@ -11,10 +11,25 @@ import type { ReviewCardFields } from "./ReviewCard";
  * Every attribute the extractor produces is sent. `colors` is a hex array,
  * not a single name — see ReviewCard's docstring for why the name round-trip
  * was destroying the detected value.
+ *
+ * `photo_background_color` is a parameter rather than a `ReviewCardFields`
+ * entry on purpose: it is a fact about the PHOTO, like `photo_path`, not an
+ * attribute of the garment, and it is never shown to or edited by the user.
+ * It was added to the extractor and the database first and then, for one
+ * commit, not actually threaded to here — so every item saved through the UI
+ * stored `null`, and every non-square photo letterboxed in the app's own
+ * surface colour instead of its own backdrop. Exactly the defect §30 records
+ * for the other five attributes, repeated. Keeping it in this shared builder
+ * is what stops the single and bulk flows dropping it independently.
  */
-export function buildFromUploadBody(photoPath: string, fields: ReviewCardFields) {
+export function buildFromUploadBody(
+  photoPath: string,
+  photoBackgroundColor: string | null | undefined,
+  fields: ReviewCardFields
+) {
   return {
     photo_path: photoPath,
+    photo_background_color: photoBackgroundColor ?? null,
     category: fields.category,
     colors: fields.colors,
     formality: fields.formality as

@@ -16,6 +16,7 @@ interface QueueEntry {
   photoUrl: string;
   status: "scanning" | "ready" | "upload-error" | "saving" | "saved" | "save-error";
   photoPath?: string;
+  backgroundColor?: string | null;
   extracted?: ExtractedAttributes | null;
   colorNames?: string[];
 }
@@ -72,6 +73,7 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
     formData.append("photo", file);
 
     let photoPath: string | undefined;
+    let backgroundColor: string | null = null;
     let extracted: ExtractedAttributes | null = null;
     let colorNames: string[] = [];
     try {
@@ -80,6 +82,7 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
         body: formData,
       });
       photoPath = data?.photo_path;
+      backgroundColor = data?.extracted?.background_color ?? null;
       if (data?.extraction_ok) {
         extracted = data.extracted;
         colorNames = data.color_names;
@@ -96,7 +99,7 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
         // back empty — this card could never be saved, so it must say so
         // rather than pose as an ordinary blank one.
         return photoPath
-          ? { ...entry, status: "ready", photoPath, extracted, colorNames }
+          ? { ...entry, status: "ready", photoPath, backgroundColor, extracted, colorNames }
           : { ...entry, status: "upload-error", photoPath: undefined, extracted: null, colorNames: [] };
       })
     );
@@ -139,7 +142,7 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
     }
     setEntries((prev) => prev.map((e, idx) => (idx === currentIndex ? { ...e, status: "saving" } : e)));
     const { error } = await apiClient.POST("/api/v1/closet/items/from-upload", {
-      body: buildFromUploadBody(current.photoPath, fields),
+      body: buildFromUploadBody(current.photoPath, current.backgroundColor, fields),
     });
     if (error) {
       // Not thrown — `saveError` is a prop ReviewCard already reads

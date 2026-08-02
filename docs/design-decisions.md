@@ -1336,7 +1336,22 @@ as an attribute of the item.
 
 Nullable, with `--color-surface-sunken` as the fallback — the VLM leaves it null
 on a busy backdrop, and every item added before `0008` has none. There is no
-correct value to invent.
+correct value to invent, and the app's own surface is the right answer when
+there is nothing better.
+
+**Threading it is the part that broke.** The field was added to the extractor,
+the request model and the database, and then for one commit not passed from the
+extract response into the save body at all — so every item added through the UI
+stored `null`, and every non-square photo letterboxed in the app's surface colour
+rather than its own backdrop. The same defect §30 records for the other five
+attributes, repeated within two commits of fixing it. `buildFromUploadBody` now
+takes it as a parameter, so the single and bulk flows cannot drop it
+independently, and both suites assert it reaches the request.
+
+Verified against the live VLM with a 600×900 photo of a dark red block on a sand
+backdrop: it returned `background_color: #d9c9a1` against a true `#d9c9a8`, and
+`colors: ["#7f1d2d"]` against a true `#7a1f2b` — genuinely separated, neither
+leaking into the other.
 
 **Deviation from design-system.md § Image treatment**, which specifies fixed
 heights (120px tile, 220px hero). Those were written against a prototype whose
