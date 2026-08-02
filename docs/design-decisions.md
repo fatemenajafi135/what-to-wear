@@ -1363,3 +1363,205 @@ leaking into the other.
 heights (120px tile, 220px hero). Those were written against a prototype whose
 "photos" were all the same placeholder rectangle, so the question of real,
 varying aspect ratios never arose.
+
+## 32. Feature 009 (Suggestion pager) — outfit persistence: schema and the favorite/save mechanic
+
+**Status: decided.**
+
+### The gap (handoff §3)
+
+No table anywhere in `infra/supabase/migrations/` persists an outfit. The pager's favorite heart
+and its card-tap-through (`design-system.md` § Outfit suggestion pager, item 1 and the closing
+paragraph) both need a saved outfit with an id to act on. The handoff names three options and
+recommends the first; this section adopts that recommendation and records the schema built on
+top of it, since the handoff explicitly asked for the schema shape and the favorite mechanic to
+be decided here, not guessed.
+
+### Decision: 009 owns persistence, 010 owns the browsing screens
+
+Adopted as the handoff frames it. Rejected alternatives (restated from the handoff, with why):
+
+| Option | Rejected because |
+|---|---|
+| Defer the heart and tap-through to 010 | Ships every card missing two design-specified elements, and 010 then has to revisit a screen it doesn't own to add them. |
+| Heart with component-local state only | Forgets on reload — indistinguishable from a broken feature to the user, and contradicts the design system's explicit tie to the gallery's shared favorite state. |
+| Build 010 (gallery) first | The gallery has nothing to list until an outfit can be saved — inherits the identical ordering problem, just pointed the other way. |
+
+### Schema — `outfits` table, minimal
+
+```sql
+create table outfits (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  occasion text not null,
+  meta_line text not null,
+  rationale_text text not null,
+  match_label text not null check (match_label in ('great', 'good', 'might_work')),
+  item_ids uuid[] not null,
+  favorite boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+Follows `0002`'s RLS-and-GRANT pattern exactly (`for all using (auth.uid() = user_id) with
+check (...)`, plus the table-level `grant select, insert, update, delete ... to authenticated`
+`0002`'s own comment documents as non-optional), proven by a two-user isolation test the same
+shape as `004`'s.
+
+**What's in, and why each field earns its place** ("what it costs to save and re-read a
+suggestion," per the handoff):
+
+- `item_ids uuid[]` — not a join table. A join table (`outfit_items(outfit_id, wardrobe_item_id,
+  position)`) is the more extensible shape 010 might eventually want (per-row metadata, easier
+  referential integrity), but nothing in this slice reads or writes per-item metadata — it would
+  be schema for a need that doesn't exist yet, which the Quality Bar's simplicity rule counsels
+  against. Order is preserved by array position, which is all the pager needs. **Rejected**: a
+  join table now (no measured need this slice has); a single `jsonb` blob of resolved item views
+  (photo URLs, names) captured at save time (stale the moment the source item's photo or name
+  changes — re-resolving live from `wardrobe_items` by id, the same pattern `_resolve_outfit`
+  already uses, is one query and stays correct).
+- `rationale_text`, `match_label` — exactly what the card displayed; re-deriving `match_label`
+  from a stored score would require storing the score too, which is the one thing § Scores
+  forbids persisting as a renderable value outside this table's own internal bookkeeping. Storing
+  the label directly (not the float) keeps the "never render a number" guarantee true even for
+  data at rest, not just data in transit.
+- `occasion`, `meta_line` — not obviously required by "save and re-read," but cheap to capture
+  now and otherwise **unrecoverable** later: the meta line is derived from the request-level
+  `Context` (§34 below), which this feature does not persist anywhere else. Omitting these two
+  fields would mean a saved outfit could never show its own meta line again once 010 builds a
+  screen for it — an honest gap that costs two text columns to avoid now versus a schema
+  migration later. **Rejected**: storing raw `Context` (formality/condition/temp_band) and
+  re-deriving the line at read time — more fields, more coupling to `Context`'s own shape, for a
+  string this feature already computes once and can freeze.
+- No `thread_id` — nothing in scope reads a saved outfit back by conversation, and 011 (chat
+  history) is a separate, later persistence story for threads themselves; adding it now would be
+  speculative.
+
+### The favorite/save mechanic: one boolean, toggled — not insert/delete
+
+**Decision**: the heart's first tap **inserts** a row with `favorite = true` (the row's mere
+existence *is* "saved" — there is no "saved but not yet decided" intermediate state in this
+slice, since nothing else can create the row). The heart's second tap **flips** `favorite` via
+the same `UPDATE ... SET favorite = NOT favorite ... RETURNING favorite` pattern
+`toggle_favorite` already uses for `wardrobe_items` (`repositories/supabase_closet.py`) — it does
+**not** delete the row.
+
+**Rejected**: delete the row on the second tap. This reads as simpler at first (unsave = gone,
+matching "the heart is the only way in"), but it conflates two actions design-system.md keeps
+separate on the Outfits gallery card: the direct heart (favorite/unfavorite) and the overflow
+`BottomSheet`'s own Delete row (§ Screen anatomy → Outfits, item 2's overflow menu, mirroring
+Item detail's Favorite/"Log as worn"/Edit/Delete split). If unfavoriting deletes, 010 can never
+offer a "saved but unfavorited" outfit — a real, useful state design already reserves an
+overflow-menu Delete action to control instead. Toggling a flag costs nothing extra now and
+avoids painting 010 into a corner. This mirrors the wardrobe item favorite convention already in
+the codebase rather than inventing a second one.
+
+## 33. Feature 009 (Suggestion pager) — the pager card carries no citations, contradicting one line of screen anatomy
+
+**Status: decided.** design-system.md contradicts itself, and `docs/design-decisions.md` is
+the resolution mechanism CLAUDE.md and Constitution VIII specify for exactly this case.
+
+### The contradiction
+
+§ Badge is unambiguous: the `citation` tone is *"used **only in Outfit detail's description**,
+never in the chat outfit card — the chat card's description is plain text with no citation
+markers."* § Outfit suggestion pager (the dedicated component spec) repeats this for the pager
+specifically: *"Description: the styling explanation as plain text directly on the card — no
+nested tinted surface, no inline citation Badges (Citations are detail-page-only, see § Badge)."*
+Both are detailed, deliberate, and reference each other.
+
+Screen anatomy → Recommend, item 3's closing sentence describes the pager differently: *"a
+swipeable card per suggestion, each with its own header ..., **its own citation-bearing
+reasoning block and rule list**, its own thumbnail row, and its own thumbs-up/down feedback
+footer."*
+
+### Resolution
+
+The two component-level sections (§ Badge, § Outfit suggestion pager) win. The anatomy
+sentence is read as an artifact of 008's single-outfit citation pattern (bubble text + inline
+`[n]` badges + rule list, which the anatomy paragraph describes correctly for the *non-pager*
+case one sentence earlier) that was never fully rewritten when the pager's own, later, far more
+detailed component section was added — it is describing the pager by analogy to the single-
+outfit case immediately above it, not stating an independent requirement. Weighing which
+passage to trust: § Badge is the section whose entire purpose is pinning down exactly where the
+`citation` tone may and may not appear, stated twice, both times naming the pager card by
+exclusion. A one-clause aside in a screen-anatomy paragraph that is otherwise a high-level tour
+is the weaker source when the two conflict — this is the same reasoning `docs/design-
+decisions.md` has applied to every prior contradiction in this document, not a new rule invented
+for this feature.
+
+**Consequence**: a pager card's description is plain text, full stop. No `[n]` markers, no
+`Badge`, no rule list on the card. Citations remain reachable only via the assistant bubble's
+existing single-outfit rendering path (unchanged, still used whenever a reply resolves to
+exactly one outfit total pre-pager — see §35) and, later, Outfit detail (010).
+
+## 34. Feature 009 (Suggestion pager) — the meta line's `{occasion} · {formality|weather}`
+
+**Status: decided.**
+
+### The gap
+
+§ Outfit suggestion pager item 4 specifies a meta line reading `{occasion} · {formality|
+weather}` per card, but neither `ScoredOutfit` nor `StylingOutfit` carries an occasion or a
+formality/weather field — those exist only on the pipeline's request-level `Context`
+(`schema.py`), which today isn't threaded into any response the frontend sees at all.
+
+### Decision
+
+Both halves of the meta line are read from `SuggestResult.context` — **once per reply, shared
+across every card in that reply's pager**, not derived per-outfit — because a `Context` is the
+pipeline's own understanding of the single request that produced every outfit in the reply; there
+is exactly one per reply, never one per outfit.
+
+- `{occasion}` = `context.occasion` (the pipeline's own normalized occasion text, not necessarily
+  identical to the raw composer text — it's already been through `parse_request`).
+- `{formality|weather}` = `context.condition` (e.g. "rain") when the pipeline detected one,
+  **falling back to** `context.formality`'s label when it did not. Weather is preferred when
+  present because it is the more specific, opt-in signal (only set when the request actually
+  implied weather); `formality` is always present (`Context.formality` is a required field) so it
+  is the correct fallback rather than an empty slot.
+
+**Rejected**: showing both formality and weather concatenated — the design's literal `{formality
+|weather}` token uses a pipe, read here as "one or the other," not "both"; showing both would
+also make an already-terse 10.5px line noticeably longer on every card for marginal gain.
+**Rejected**: computing formality from the resolved items' own `formality` fields (e.g. the
+modal value across the outfit's garments) instead of `context.formality` — this would silently
+diverge from what the user actually asked for (a request for "business casual" could return
+items whose stored formality reads slightly differently than the requested band) and would be
+new per-outfit computation the pipeline doesn't do today, which Principle I counsels against
+introducing in a route that has no reason to re-derive something the pipeline already decided.
+
+## 35. Feature 009 (Suggestion pager) — response shape: `outfits[]` replaces `outfit`, and where the single-outfit path goes
+
+**Status: decided.**
+
+`SendMessageResponse.outfit: StylingOutfit | None` becomes `outfits: list[StylingOutfit]`
+(never null — an empty list is the "nothing surfaced" case, matching § Outfit suggestion pager's
+own Empty group-state rather than a separate null branch). Every reply that resolves to one or
+more outfits now renders through the pager unconditionally, including the single-outfit case
+(FR-003: one card, no arrows/indicator) — the handoff's mission is explicit that this
+"replac[es] 008's single flat item-thumbnail-row rendering entirely," so there is no remaining
+surface, at any outfit count, that renders the old bubble-plus-inline-citations treatment.
+
+Consequently `SendMessageResponse.citations: list[CitedRule]` and the `[n]`-marker embedding
+`_resolve_outfit` used to splice into `rationale_text` are **removed outright**, not kept
+unused: per §33 no card ever shows a citation, and 008's only other citation surface (the
+assistant-bubble text) no longer exists as a distinct rendering path once outfit replies always
+go through the pager. `rationale_text` is now always the plain joined rationale text with no
+embedded markers. This is a clean removal rather than dead weight retained "just in case" —
+consistent with not carrying forward code with no remaining caller. Citation data is not lost
+forever: `Rationale.cites` and `SuggestResult.sources` remain on the pipeline's own unmodified
+`ScoredOutfit`/`SuggestResult` types (Principle I), so feature 010 (Outfit detail, which *does*
+need citations per its own spec) can re-resolve them at that time — either by widening the
+`outfits` schema with its own migration, or by keeping citations only ever computed from a live
+pipeline result and never persisted, which is 010's decision to make, not this one's.
+
+`StylingOutfit` gains `id: str | None` — the saved-outfit id once the user has saved that card
+in the current session, `None` until then. This is the frontend's only signal for whether a
+card's heart should render filled; it needs no client-side favorite cache because conversation
+state (§25) is never persisted across a reload, so there is no scenario in this feature where a
+previously-fetched, not-yet-saved card's saved status must be re-discovered after the fact.
+
+Frontend must regenerate `schema.d.ts` against the running backend once this lands (handoff
+trap #6).
