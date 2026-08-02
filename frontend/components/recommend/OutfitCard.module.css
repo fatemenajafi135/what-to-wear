@@ -1,0 +1,73 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  cursor: pointer;
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.pill {
+  flex-shrink: 0;
+  background-color: var(--color-accent-soft);
+  color: var(--color-primary);
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px var(--space-sm);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.description {
+  margin: var(--space-sm) 0 0;
+}
+
+.metaLine {
+  font-size: 10.5px;
+  color: var(--color-text-secondary);
+  margin: var(--space-sm) 0 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+/* Element-qualified to out-specificity IconButton's own `.iconButton`
+   background/color rules regardless of CSS-module bundling order. */
+button.thumbUpActive {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+button.thumbDownActive {
+  background-color: var(--color-text-secondary);
+  color: var(--color-surface);
+}

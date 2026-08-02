@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button/Button";
 import { RecommendCalendarContext } from "@/components/calendar/RecommendCalendarContext";
@@ -43,6 +43,26 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
   const [threadId, setThreadId] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+
+  // The footer (calendar-context line + Start-styling + composer) is fixed
+  // to the true bottom of the viewport so the composer is always reachable
+  // without scrolling, regardless of conversation length — but its own
+  // height changes (Start-styling appears/disappears, the error card comes
+  // and goes), so the scrollable message list needs matching bottom
+  // clearance or the fixed footer would cover the last message.
+  useEffect(() => {
+    const footerEl = footerRef.current;
+    const scrollEl = scrollRef.current;
+    if (!footerEl || !scrollEl) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) scrollEl.style.paddingBottom = `${entry.contentRect.height}px`;
+    });
+    observer.observe(footerEl);
+    return () => observer.disconnect();
+  }, [readiness]);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,9 +112,8 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
       {
         id: crypto.randomUUID(),
         role: "assistant",
-        text: data.outfit ? data.outfit.rationale_text : (data.reply_text ?? ""),
-        outfit: data.outfit,
-        citations: data.citations,
+        outfits: data.outfits,
+        replyText: data.reply_text,
       },
     ]);
     setPendingTexts([]);
@@ -122,7 +141,7 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
 
   return (
     <div className={styles.screen}>
-      <div className={styles.scroll}>
+      <div className={styles.scroll} ref={scrollRef}>
         {readiness.sparse && <SparseClosetBanner />}
         {!hasUserMessage && <HeroState onSuggestionTap={handleSend} />}
         {hasUserMessage && <ChatMessageList messages={messages} inFlight={status === "sending"} />}
@@ -135,17 +154,21 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
             </Button>
           </div>
         )}
-
-        <RecommendCalendarContext />
       </div>
 
-      <StartStylingButton
-        visible={hasUserMessage}
-        hasPending={pendingTexts.length > 0}
-        inFlight={status === "sending"}
-        onClick={handleStartStyling}
-      />
-      <Composer onSend={handleSend} inFlight={status === "sending"} />
+      <div className={styles.footer} ref={footerRef}>
+        <div className={styles.calendarContextRow}>
+          <RecommendCalendarContext />
+        </div>
+
+        <StartStylingButton
+          visible={hasUserMessage}
+          hasPending={pendingTexts.length > 0}
+          inFlight={status === "sending"}
+          onClick={handleStartStyling}
+        />
+        <Composer onSend={handleSend} inFlight={status === "sending"} />
+      </div>
     </div>
   );
 });

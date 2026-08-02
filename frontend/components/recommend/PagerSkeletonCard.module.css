@@ -1,0 +1,32 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+}
+
+.title {
+  width: 45%;
+  height: 14px;
+  border-radius: var(--radius-pill);
+}
+
+.description {
+  width: 85%;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+.thumbnails {
+  display: flex;
+  gap: 6px;
+}
+
+.thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+}
