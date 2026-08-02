@@ -1334,6 +1334,12 @@ the colour-harmony scorer, which would otherwise score the wall the user
 photographed against. It is a presentation attribute of the photo, never surfaced
 as an attribute of the item.
 
+The vision golden set compares `category` at **group** level rather than by
+exact string, since the prompt now asks for a specific type: a correct
+`t-shirt` would otherwise fail a case expecting `top`. `categories.group_of` is
+the same mapping the app uses to slot an item, which is what those cases are
+really asserting.
+
 Nullable, with `--color-surface-sunken` as the fallback — the VLM leaves it null
 on a busy backdrop, and every item added before `0008` has none. There is no
 correct value to invent, and the app's own surface is the right answer when

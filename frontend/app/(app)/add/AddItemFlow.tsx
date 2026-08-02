@@ -21,7 +21,6 @@ type FlowState =
       photoPath: string;
       backgroundColor: string | null;
       extracted: ExtractedAttributes | null;
-      colorNames: string[];
     }
   | { step: "empty"; photoUrl: string; photoPath: string; backgroundColor: string | null }
   | { step: "error" }
@@ -68,7 +67,6 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
           photoPath: data.photo_path,
           backgroundColor: data.extracted.background_color ?? null,
           extracted: data.extracted,
-          colorNames: data.color_names,
         });
       } else {
         setState({
@@ -91,7 +89,6 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
       photoPath: state.photoPath,
       backgroundColor: state.backgroundColor,
       extracted: null,
-      colorNames: [],
     });
   };
 

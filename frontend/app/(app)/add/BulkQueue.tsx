@@ -18,7 +18,6 @@ interface QueueEntry {
   photoPath?: string;
   backgroundColor?: string | null;
   extracted?: ExtractedAttributes | null;
-  colorNames?: string[];
 }
 
 export interface BulkQueueProps {
@@ -75,7 +74,6 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
     let photoPath: string | undefined;
     let backgroundColor: string | null = null;
     let extracted: ExtractedAttributes | null = null;
-    let colorNames: string[] = [];
     try {
       const { data } = await apiClient.POST("/api/v1/closet/items/extract", {
         // @ts-expect-error — multipart request body isn't usefully typed (research.md §10)
@@ -85,7 +83,6 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
       backgroundColor = data?.extracted?.background_color ?? null;
       if (data?.extraction_ok) {
         extracted = data.extracted;
-        colorNames = data.color_names;
       }
     } catch {
       // Leaves photoPath undefined — handled identically to a non-2xx
@@ -99,8 +96,8 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
         // back empty — this card could never be saved, so it must say so
         // rather than pose as an ordinary blank one.
         return photoPath
-          ? { ...entry, status: "ready", photoPath, backgroundColor, extracted, colorNames }
-          : { ...entry, status: "upload-error", photoPath: undefined, extracted: null, colorNames: [] };
+          ? { ...entry, status: "ready", photoPath, backgroundColor, extracted }
+          : { ...entry, status: "upload-error", photoPath: undefined, extracted: null };
       })
     );
   }, []);

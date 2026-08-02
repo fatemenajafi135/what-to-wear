@@ -32,7 +32,6 @@ export const addItemCopy = {
     // rather than re-imported from lib/auth-validation.ts (same canonical
     // string, wrong-domain module name for this form).
     required: "This field is required.",
-    notRecognized: "I don't recognize that color. Try a name like navy, charcoal or olive.",
     // The field is hex-only now (swatch + #rrggbb), so a bad value is a
     // malformed code, not an unknown name.
     notHex: "Every color needs to be a hex code like #1b2a4a.",

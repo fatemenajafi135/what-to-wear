@@ -34,10 +34,11 @@ export function humanizeCategory(value: string): string {
  * `{group: [specific categories]}` from `GET /api/v1/taxonomy/categories`.
  *
  * Fetched rather than hard-coded: `categories.CATEGORY_GROUPS` is the single
- * source of truth and grows whenever new garment types show up in data. The
- * colour palette in `lib/colors/validateColorName.ts` is already mirrored by
- * hand with a "keep in sync" comment; a second hand-copy of a table that
- * changes more often would drift (constitution VII).
+ * source of truth and grows whenever new garment types show up in data. A
+ * hand-mirrored copy of it would drift — this project already had one such
+ * mirror (the colour palette, carrying a "keep in sync by hand" comment)
+ * and deleted it once the review card stopped needing names at all
+ * (constitution VII).
  *
  * Returns `{}` until it loads, and on failure — the Group control degrades
  * to free text, which is exactly what `category` is on the backend anyway,
