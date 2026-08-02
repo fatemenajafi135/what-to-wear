@@ -1565,3 +1565,33 @@ previously-fetched, not-yet-saved card's saved status must be re-discovered afte
 
 Frontend must regenerate `schema.d.ts` against the running backend once this lands (handoff
 trap #6).
+
+## 36. Feature 009 (Suggestion pager) — the card's "outfit title" has no source
+
+**Status: decided.** Not one of the handoff's four named traps, but a real gap found while
+building the card: § Outfit suggestion pager item 1 specifies a header row starting with
+"outfit title (13px/700, truncates)", and § Screen anatomy → Outfits/Outfit detail confirm this
+is a genuine, **user-editable, persisted** field on a *saved* outfit (the gallery card's inline
+rename, Outfit detail's `TopHeader` title). Nothing produces this value for a fresh, unsaved
+suggestion: `ScoredOutfit`/`StylingOutfit` carry no title anywhere, and the reference prototype's
+own simulation only appears to solve this because its demo data pre-seeds every outfit
+(including ones a chat reply merely "shows") with a title invented at mock-data-authoring time —
+not something a real pipeline reply produces (`design/prototype/What to Wear.dc.html`'s
+`pagerCards` mapping reads `o.title` off already-existing `s.outfits` state; reference only, nothing
+from it is ported).
+
+**Decision**: the pager card's title is the **occasion text** (`meta_line`'s own first segment,
+i.e. `Context.occasion` — no separate computation), truncated with the existing ellipsis
+treatment. No new "title" concept or column is introduced in this feature's schema; `occasion` is
+the only string 009 has that plausibly reads as a title, and reusing it costs nothing new to
+store. The gallery's separate, editable, persisted title (010's own concern) can seed itself from
+this same `occasion` value at save time and diverge from there once a user renames it — that
+seeding is 010's migration to write, not this one's, since 009's `outfits` table has no `title`
+column and none is added here (minimal-schema principle, §32).
+
+**Rejected**: adding a `title` column to `outfits` now, generated as a copy of `occasion` at save
+time — plausible, but speculative for a feature that never reads or displays a *separate* title
+value anywhere in its own scope (the card always shows `occasion` directly, never a divergent
+stored copy); 010 can add exactly this column, seeded correctly, when it actually needs one to
+be independently editable. **Rejected**: leaving the header title blank/omitted — contradicts the
+design system's explicit, twice-stated anatomy item.

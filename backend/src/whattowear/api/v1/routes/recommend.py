@@ -134,6 +134,12 @@ MatchLabel = Literal["great", "good", "might_work"]
 
 class StylingOutfit(BaseModel):
     id: str | None = None
+    # The card's own "title" (design-decisions.md §36 — nothing else produces
+    # one for a fresh suggestion) and `meta_line`'s first segment; also what
+    # the client echoes back verbatim in `SaveOutfitRequest.occasion`, since
+    # `Context.occasion` (pipeline-normalized) may differ from the raw
+    # composer text the client itself has no other copy of.
+    occasion: str
     rationale_text: str
     items: list[RecommendItemView]
     match_label: MatchLabel
@@ -174,6 +180,7 @@ def match_label(rank_score: float) -> MatchLabel | None:
 
 def _resolve_outfit(
     outfit: ScoredOutfit,
+    occasion: str,
     meta_line: str,
     wardrobe_by_id: dict[str, WardrobeItem],
     access_token: str,
@@ -209,6 +216,7 @@ def _resolve_outfit(
     rationale_text = " ".join(rationale.text for rationale in outfit.rationale)
 
     return StylingOutfit(
+        occasion=occasion,
         rationale_text=rationale_text,
         items=items,
         match_label=label,
@@ -276,6 +284,7 @@ def send_message(
     note = final_state["note"]
 
     wardrobe_by_id = {item.id: item for item in items}
+    occasion = result.context.occasion if result.context is not None else body.message
     meta_line = _meta_line(result.context) if result.context is not None else body.message
 
     # Resolve every surfaced outfit (not just the top-ranked one, per the
@@ -284,7 +293,7 @@ def send_message(
     outfits = [
         resolved
         for scored_outfit in result.outfits
-        if (resolved := _resolve_outfit(scored_outfit, meta_line, wardrobe_by_id, access_token)) is not None
+        if (resolved := _resolve_outfit(scored_outfit, occasion, meta_line, wardrobe_by_id, access_token)) is not None
     ]
 
     # `note` covers the pipeline's own "zero outfits" honesty copy
