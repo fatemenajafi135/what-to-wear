@@ -26,6 +26,7 @@ import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -39,7 +40,7 @@ from whattowear.core.config import get_settings
 from whattowear.pipeline.graph import get_compiled_graph
 from whattowear.readiness import ReadinessResult, evaluate_wardrobe_readiness
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
-from whattowear.repositories.supabase_outfits import SupabaseOutfitRepository
+from whattowear.repositories.supabase_outfits import Sort, SupabaseOutfitRepository
 from whattowear.schema import CitedSource, Context, ScoredOutfit, SuggestResult, WardrobeItem
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,17 @@ def _get_repository() -> SupabaseClosetRepository:
 
 def _get_outfit_repository() -> SupabaseOutfitRepository:
     return SupabaseOutfitRepository()
+
+
+def _parse_outfit_id(outfit_id: str) -> None:
+    """Same guard `closet.py::_parse_item_id` uses for every write route —
+    a syntactically invalid id 404s here rather than reaching the
+    database's `uuid` column comparison, which would otherwise raise a raw,
+    unhandled `DataError`."""
+    try:
+        uuid.UUID(outfit_id)
+    except ValueError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Outfit not found") from None
 
 
 def _meta_line(context: Context) -> str:
@@ -168,6 +180,68 @@ class SaveOutfitRequest(BaseModel):
 class SavedOutfitResponse(BaseModel):
     id: str
     favorite: bool
+
+
+class OutfitSummary(BaseModel):
+    """The Outfits gallery card (design-system.md § Outfits (gallery)) —
+    feature 010. `item_thumbnails` is capped at 4 (the card's own real-
+    thumbnail limit); `item_count` lets the frontend compute the "+N"
+    overflow chip without a second request."""
+
+    id: str
+    title: str
+    match_label: MatchLabel
+    favorite: bool
+    created_at: datetime
+    item_thumbnails: list[RecommendItemView]
+    item_count: int
+
+
+class OutfitSummaryListResponse(BaseModel):
+    outfits: list[OutfitSummary]
+
+
+class DimensionScoreView(BaseModel):
+    """One bar in Outfit detail's Match breakdown (design-system.md §
+    Scores). `value` is transmitted for the frontend to compute a bar's
+    fill width — it is never rendered as visible text on any screen
+    (design-decisions.md §38's explicit transmit-vs-render distinction)."""
+
+    dimension: str
+    value: float
+
+
+class CitedRuleView(BaseModel):
+    """One row of Outfit detail's numbered styling-rules list — the
+    footnote a `[n]` marker in `rationale_with_citations` points at."""
+
+    number: int
+    text: str
+
+
+class OutfitDetailResponse(BaseModel):
+    """Outfit detail (design-system.md § Outfit detail) — feature 010."""
+
+    id: str
+    title: str
+    occasion: str
+    items: list[RecommendItemView]
+    rationale_text: str
+    rationale_with_citations: str
+    citations: list[CitedRuleView]
+    dimension_scores: list[DimensionScoreView]
+    match_label: MatchLabel
+    favorite: bool
+    created_at: datetime
+
+
+class RenameOutfitRequest(BaseModel):
+    title: str
+
+
+class RenamedOutfitResponse(BaseModel):
+    id: str
+    title: str
 
 
 def match_label(rank_score: float) -> MatchLabel | None:
@@ -424,6 +498,174 @@ def save_outfit(
         dimension_scores=dimension_scores,
     )
     return SavedOutfitResponse(id=outfit_id, favorite=True)
+
+
+@router.get("/recommend/outfits")
+def list_outfits(
+    sort: Sort = "date",
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
+    access_token: str = Depends(get_current_access_token),  # noqa: B008
+    outfit_repository: SupabaseOutfitRepository = Depends(_get_outfit_repository),  # noqa: B008
+) -> OutfitSummaryListResponse:
+    """The Outfits gallery (design-system.md § Outfits (gallery)) —
+    feature 010. Always `200`, `outfits: []` for the true empty case (no
+    separate empty response shape, matching 009's `outfits[]` convention
+    for the pager)."""
+    rows = outfit_repository.list_outfits(user_id, sort=sort)
+    wardrobe_by_id = {item.id: item for item in repository.list_wardrobe_items(user_id)}
+
+    # `item_ids` comes back from Postgres as a list of UUID objects, not
+    # strings — `wardrobe_by_id` is keyed by `WardrobeItem.id: str`, so every
+    # id is stringified here before lookup (a UUID-vs-str key mismatch would
+    # silently miss every item instead of raising).
+    def _item_ids(row: object) -> list[str]:
+        return [str(item_id) for item_id in (row.item_ids or [])]  # type: ignore[attr-defined]
+
+    # Sign every row's first-4 thumbnail photo paths in one batched call
+    # rather than one call per row.
+    all_photo_paths = [
+        item.photo_path
+        for row in rows
+        for item_id in _item_ids(row)[:4]
+        if (item := wardrobe_by_id.get(item_id)) is not None and item.photo_path is not None
+    ]
+    signed_urls = storage.create_signed_urls(access_token, all_photo_paths)
+
+    summaries = []
+    for row in rows:
+        item_ids = _item_ids(row)
+        thumbnails = [
+            RecommendItemView.from_wardrobe_item(
+                wardrobe_by_id[item_id],
+                photo_url=signed_urls.get(wardrobe_by_id[item_id].photo_path or ""),
+            )
+            for item_id in item_ids[:4]
+            if item_id in wardrobe_by_id
+        ]
+        summaries.append(
+            OutfitSummary(
+                id=str(row.id),
+                title=row.title,
+                match_label=row.match_label,
+                favorite=row.favorite,
+                created_at=row.created_at,
+                item_thumbnails=thumbnails,
+                item_count=len(item_ids),
+            )
+        )
+    return OutfitSummaryListResponse(outfits=summaries)
+
+
+@router.get("/recommend/outfits/{outfit_id}")
+def get_outfit(
+    outfit_id: str,
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
+    access_token: str = Depends(get_current_access_token),  # noqa: B008
+    outfit_repository: SupabaseOutfitRepository = Depends(_get_outfit_repository),  # noqa: B008
+) -> OutfitDetailResponse:
+    """Outfit detail (design-system.md § Outfit detail) — feature 010. An
+    item id in the outfit's `item_ids` no longer present in the caller's
+    wardrobe is silently omitted from `items` (Constitution IV — never a
+    stale/broken reference), never an error."""
+    _parse_outfit_id(outfit_id)
+    row = outfit_repository.get(user_id, outfit_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Outfit not found")
+
+    wardrobe_by_id = {item.id: item for item in repository.list_wardrobe_items(user_id)}
+    item_ids = [str(item_id) for item_id in (row.item_ids or [])]
+
+    photo_paths = [
+        item.photo_path
+        for item_id in item_ids
+        if (item := wardrobe_by_id.get(item_id)) is not None and item.photo_path is not None
+    ]
+    signed_urls = storage.create_signed_urls(access_token, photo_paths)
+
+    items = [
+        RecommendItemView.from_wardrobe_item(
+            wardrobe_by_id[item_id],
+            photo_url=signed_urls.get(wardrobe_by_id[item_id].photo_path or ""),
+        )
+        for item_id in item_ids
+        if item_id in wardrobe_by_id
+    ]
+
+    return OutfitDetailResponse(
+        id=str(row.id),
+        title=row.title,
+        occasion=row.occasion,
+        items=items,
+        rationale_text=row.rationale_text,
+        rationale_with_citations=row.rationale_with_citations,
+        citations=[CitedRuleView(**c) for c in row.citations],
+        dimension_scores=[DimensionScoreView(**s) for s in row.dimension_scores],
+        match_label=row.match_label,
+        favorite=row.favorite,
+        created_at=row.created_at,
+    )
+
+
+@router.patch("/recommend/outfits/{outfit_id}/title")
+def rename_outfit(
+    outfit_id: str,
+    body: RenameOutfitRequest,
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    outfit_repository: SupabaseOutfitRepository = Depends(_get_outfit_repository),  # noqa: B008
+) -> RenamedOutfitResponse:
+    """The gallery card's inline rename and the overflow sheet's "Edit
+    title" row both call this (design-system.md § Outfits (gallery) item
+    2). Rejects an empty/whitespace-only title (FR-006) before it ever
+    reaches the repository."""
+    _parse_outfit_id(outfit_id)
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "title must not be empty")
+
+    new_title = outfit_repository.rename(user_id, outfit_id, title)
+    if new_title is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Outfit not found")
+    return RenamedOutfitResponse(id=outfit_id, title=new_title)
+
+
+@router.post("/recommend/outfits/{outfit_id}/wear", status_code=status.HTTP_204_NO_CONTENT)
+def log_outfit_worn(
+    outfit_id: str,
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
+    outfit_repository: SupabaseOutfitRepository = Depends(_get_outfit_repository),  # noqa: B008
+) -> None:
+    """design-decisions.md §39: logs the outfit itself as worn today AND
+    every item in it the caller still owns, via `SupabaseOutfitRepository.
+    log_worn`. Idempotent — a repeat call the same calendar day is a
+    no-op success, not an error (FR-005)."""
+    _parse_outfit_id(outfit_id)
+    row = outfit_repository.get(user_id, outfit_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Outfit not found")
+
+    owned_ids = {item.id for item in repository.list_wardrobe_items(user_id)}
+    owned_item_ids = [str(item_id) for item_id in (row.item_ids or []) if str(item_id) in owned_ids]
+
+    if not outfit_repository.log_worn(user_id, outfit_id, owned_item_ids):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Outfit not found")
+
+
+@router.delete("/recommend/outfits/{outfit_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_outfit(
+    outfit_id: str,
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    outfit_repository: SupabaseOutfitRepository = Depends(_get_outfit_repository),  # noqa: B008
+) -> None:
+    """design-decisions.md §40: confirmation is a client-side UI gate —
+    this route performs the delete unconditionally once called, matching
+    `DELETE /closet/items/{item_id}`'s own shape. Cascades to the outfit's
+    `outfit_wears` rows via the migration's `on delete cascade`."""
+    _parse_outfit_id(outfit_id)
+    if not outfit_repository.delete(user_id, outfit_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Outfit not found")
 
 
 @router.post("/recommend/outfits/{outfit_id}/favorite")

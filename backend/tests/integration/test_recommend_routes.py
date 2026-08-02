@@ -432,6 +432,247 @@ class TestSaveOutfit:
         assert response.status_code == 401
 
 
+class TestListOutfits:
+    """specs/010-outfits/contracts/recommend-outfits.md — the Outfits
+    gallery."""
+
+    def _save(self, client: TestClient, item_ids: list[str], occasion: str = "Rainy day commute") -> str:
+        body = TestSaveOutfit()._save_body(item_ids)
+        body["occasion"] = occasion
+        response = client.post("/api/v1/recommend/outfits", json=body)
+        assert response.status_code == 201
+        return str(response.json()["id"])
+
+    def test_returns_only_the_callers_outfits_newest_first(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            first_id = self._save(client, [ready_closet["top"]], occasion="First")
+            second_id = self._save(client, [ready_closet["bottom"]], occasion="Second")
+
+            response = client.get("/api/v1/recommend/outfits")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert [o["id"] for o in body["outfits"]] == [second_id, first_id]
+        assert [o["title"] for o in body["outfits"]] == ["Second", "First"]
+
+    def test_item_count_and_thumbnail_truncation_at_four(self, ready_closet: dict[str, str]) -> None:
+        five_items = [
+            ready_closet["top"],
+            ready_closet["bottom"],
+            ready_closet["shoes"],
+            _insert_item(USER_READY, "belt", name="Second belt"),
+            _insert_item(USER_READY, "cardigan", name="Second cardigan"),
+        ]
+        with _client_as(USER_READY) as client:
+            self._save(client, five_items)
+            response = client.get("/api/v1/recommend/outfits")
+
+        assert response.status_code == 200
+        outfit = response.json()["outfits"][0]
+        assert outfit["item_count"] == 5
+        assert len(outfit["item_thumbnails"]) == 4  # never more than 4 real thumbnails
+
+    def test_empty_list_for_a_user_with_no_saved_outfits(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            response = client.get("/api/v1/recommend/outfits")
+
+        assert response.status_code == 200
+        assert response.json()["outfits"] == []
+
+    def test_does_not_return_another_users_outfits(self, ready_closet: dict[str, str], blocked_closet: None) -> None:
+        with _client_as(USER_READY) as client:
+            self._save(client, [ready_closet["top"]])
+
+        with _client_as(USER_BLOCKED) as client:
+            response = client.get("/api/v1/recommend/outfits")
+
+        assert response.status_code == 200
+        assert response.json()["outfits"] == []
+
+    def test_requires_authentication(self, ready_closet: dict[str, str]) -> None:
+        app.dependency_overrides.clear()
+        with TestClient(app) as client:
+            response = client.get("/api/v1/recommend/outfits")
+        assert response.status_code == 401
+
+
+class TestGetOutfit:
+    """specs/010-outfits/contracts/recommend-outfits.md — Outfit detail."""
+
+    def test_happy_path_returns_full_detail(self, ready_closet: dict[str, str]) -> None:
+        item_ids = [ready_closet["top"], ready_closet["bottom"]]
+        outfit = _scored_outfit(item_ids, rank_score=0.85, cites=["rule-1"])
+        result = SuggestResult(
+            outfits=[outfit],
+            sources=[CitedSource(rule_id="rule-1", source="Pair casual denim with a relaxed top.", url="", layer="L3")],
+        )
+        mock_graph = MagicMock()
+        mock_graph.get_state.return_value = MagicMock(values={"user_id": USER_READY, "last_result": result})
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                created = client.post(
+                    "/api/v1/recommend/outfits",
+                    json=TestSaveOutfit()._save_body(item_ids, thread_id="thread-1"),
+                )
+                outfit_id = created.json()["id"]
+
+                response = client.get(f"/api/v1/recommend/outfits/{outfit_id}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["id"] == outfit_id
+        assert {item["id"] for item in body["items"]} == set(item_ids)
+        assert body["rationale_with_citations"] == "A clean, casual pairing. [1]"
+        assert body["citations"] == [{"number": 1, "text": "Pair casual denim with a relaxed top."}]
+        assert body["dimension_scores"] == [
+            {"dimension": "color_harmony", "value": 0.8},
+            {"dimension": "formality_coherence", "value": 0.8},
+            {"dimension": "weather_fitness", "value": 0.8},
+            {"dimension": "silhouette_balance", "value": 0.8},
+        ]
+
+    def test_omits_an_item_no_longer_owned(self, ready_closet: dict[str, str]) -> None:
+        removable = _insert_item(USER_READY, "belt", name="Removable belt")
+        with _client_as(USER_READY) as client:
+            created = client.post(
+                "/api/v1/recommend/outfits",
+                json=TestSaveOutfit()._save_body([ready_closet["top"], removable]),
+            )
+            outfit_id = created.json()["id"]
+
+            with get_engine().begin() as conn:
+                conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": removable})
+
+            response = client.get(f"/api/v1/recommend/outfits/{outfit_id}")
+
+        assert response.status_code == 200
+        assert {item["id"] for item in response.json()["items"]} == {ready_closet["top"]}
+
+    def test_404_for_nonexistent_or_foreign_outfit(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            response = client.get(f"/api/v1/recommend/outfits/{uuid.uuid4()}")
+        assert response.status_code == 404
+
+    def test_requires_authentication(self, ready_closet: dict[str, str]) -> None:
+        app.dependency_overrides.clear()
+        with TestClient(app) as client:
+            response = client.get(f"/api/v1/recommend/outfits/{uuid.uuid4()}")
+        assert response.status_code == 401
+
+
+class TestRenameOutfit:
+    def test_happy_path_renames(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            created = client.post("/api/v1/recommend/outfits", json=TestSaveOutfit()._save_body([ready_closet["top"]]))
+            outfit_id = created.json()["id"]
+
+            response = client.patch(
+                f"/api/v1/recommend/outfits/{outfit_id}/title", json={"title": "Friday client dinner"}
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"id": outfit_id, "title": "Friday client dinner"}
+        with get_engine().begin() as conn:
+            result = conn.execute(text("SELECT title FROM outfits WHERE id = :id"), {"id": outfit_id})
+            row = result.mappings().fetchone()
+        assert row is not None
+        assert row["title"] == "Friday client dinner"
+
+    def test_rejects_blank_title(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            created = client.post("/api/v1/recommend/outfits", json=TestSaveOutfit()._save_body([ready_closet["top"]]))
+            outfit_id = created.json()["id"]
+
+            response = client.patch(f"/api/v1/recommend/outfits/{outfit_id}/title", json={"title": "   "})
+
+        assert response.status_code == 422
+
+    def test_404_for_nonexistent_or_foreign_outfit(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            response = client.patch(f"/api/v1/recommend/outfits/{uuid.uuid4()}/title", json={"title": "New title"})
+        assert response.status_code == 404
+
+
+class TestLogOutfitWorn:
+    def test_writes_outfit_and_item_wears_once_per_day(self, ready_closet: dict[str, str]) -> None:
+        item_ids = [ready_closet["top"], ready_closet["bottom"]]
+        with _client_as(USER_READY) as client:
+            created = client.post("/api/v1/recommend/outfits", json=TestSaveOutfit()._save_body(item_ids))
+            outfit_id = created.json()["id"]
+
+            first = client.post(f"/api/v1/recommend/outfits/{outfit_id}/wear")
+            second = client.post(f"/api/v1/recommend/outfits/{outfit_id}/wear")
+
+        assert first.status_code == 204
+        assert second.status_code == 204
+
+        with get_engine().begin() as conn:
+            outfit_wear_count = conn.execute(
+                text("SELECT count(*) FROM outfit_wears WHERE outfit_id = :id"), {"id": outfit_id}
+            ).scalar_one()
+            item_wear_count = conn.execute(
+                text("SELECT count(*) FROM item_wears WHERE item_id = ANY(:ids)"), {"ids": item_ids}
+            ).scalar_one()
+        assert outfit_wear_count == 1
+        assert item_wear_count == 2
+
+        with get_engine().begin() as conn:
+            conn.execute(text("DELETE FROM outfit_wears WHERE outfit_id = :id"), {"id": outfit_id})
+            conn.execute(text("DELETE FROM item_wears WHERE item_id = ANY(:ids)"), {"ids": item_ids})
+
+    def test_skips_an_item_no_longer_owned(self, ready_closet: dict[str, str]) -> None:
+        removable = _insert_item(USER_READY, "belt", name="Removable belt")
+        with _client_as(USER_READY) as client:
+            created = client.post(
+                "/api/v1/recommend/outfits",
+                json=TestSaveOutfit()._save_body([ready_closet["top"], removable]),
+            )
+            outfit_id = created.json()["id"]
+
+            with get_engine().begin() as conn:
+                conn.execute(text("DELETE FROM wardrobe_items WHERE id = :id"), {"id": removable})
+
+            response = client.post(f"/api/v1/recommend/outfits/{outfit_id}/wear")
+
+        assert response.status_code == 204
+        with get_engine().begin() as conn:
+            outfit_wear_count = conn.execute(
+                text("SELECT count(*) FROM outfit_wears WHERE outfit_id = :id"), {"id": outfit_id}
+            ).scalar_one()
+            conn.execute(text("DELETE FROM outfit_wears WHERE outfit_id = :id"), {"id": outfit_id})
+        assert outfit_wear_count == 1
+
+    def test_404_for_nonexistent_or_foreign_outfit(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            response = client.post(f"/api/v1/recommend/outfits/{uuid.uuid4()}/wear")
+        assert response.status_code == 404
+
+
+class TestDeleteOutfit:
+    def test_happy_path_deletes_and_cascades_wears(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            created = client.post("/api/v1/recommend/outfits", json=TestSaveOutfit()._save_body([ready_closet["top"]]))
+            outfit_id = created.json()["id"]
+            client.post(f"/api/v1/recommend/outfits/{outfit_id}/wear")
+
+            response = client.delete(f"/api/v1/recommend/outfits/{outfit_id}")
+
+        assert response.status_code == 204
+        with get_engine().begin() as conn:
+            outfit_row = conn.execute(text("SELECT id FROM outfits WHERE id = :id"), {"id": outfit_id}).fetchone()
+            wear_row = conn.execute(
+                text("SELECT id FROM outfit_wears WHERE outfit_id = :id"), {"id": outfit_id}
+            ).fetchone()
+        assert outfit_row is None
+        assert wear_row is None  # cascaded
+
+    def test_404_for_nonexistent_or_foreign_outfit(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            response = client.delete(f"/api/v1/recommend/outfits/{uuid.uuid4()}")
+        assert response.status_code == 404
+
+
 class TestToggleOutfitFavorite:
     def test_flips_favorite_and_does_not_delete(self, ready_closet: dict[str, str]) -> None:
         with _client_as(USER_READY) as client:
