@@ -10,32 +10,53 @@
 .calendarContextRow {
   display: flex;
   justify-content: center;
-  padding: var(--space-sm) var(--space-lg);
 }
 
-/* design-system.md § Screen anatomy → Recommend, item 6: "Pinned bottom:
-   pill-shaped input bar" — sticky (not fixed) so it keeps the same
-   horizontal position as the rest of the (centered, max-width-capped at
-   tablet/desktop) column, and only actually sticks once there's enough
-   content to scroll — a short conversation doesn't get an artificial gap
-   above it. Cleared above the mobile bottom tab bar + safe area; the
-   tablet/desktop rail/sidebar doesn't eat vertical space, so no clearance
-   is needed there. */
-.composerSticky {
-  position: sticky;
-  /* The offset itself (not internal padding) has to clear the fixed bottom
-     tab bar — both this and TabBar stick to the viewport's bottom edge, so
-     leaving bottom:0 here made the two overlap instead of stacking. */
-  bottom: calc(56px + env(safe-area-inset-bottom, 22px));
+/* design-system.md § Screen anatomy → Recommend, items 4-6: the calendar-
+   context line, "Start styling", and the pinned composer form one compact
+   footer group, genuinely fixed to the bottom of the viewport (not merely
+   pushed there by flex, and not sticky-only-once-content-overflows) so the
+   composer is always reachable regardless of conversation length — the
+   behavior of every mainstream chat UI, and what "should be down" plainly
+   means. `left`/`max-width`/`margin-inline` mirror .screen's own
+   breakpoints exactly, since a fixed element doesn't inherit its normal-flow
+   parent's centering. `bottom` (not internal padding) clears the fixed
+   mobile tab bar so the two stack instead of overlapping — both stick to
+   the viewport edge otherwise. The mobile bottom bar's own Create action is
+   a 56px FAB translated up -18px above the bar's regular items (TabBar.
+   module.css .barCreate) — measured in a real browser, its top edge sits
+   ~74px above the viewport bottom, not the bar's own ~56px, so clearance
+   has to account for the FAB's poke-up too or the footer covers it. The
+   scrollable message list gets a matching `padding-bottom` set from this
+   element's measured height (RecommendChat.tsx, ResizeObserver) so the last
+   message is never hidden behind it. */
+.footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(56px + 18px + var(--space-sm) + env(safe-area-inset-bottom, 22px));
   z-index: var(--z-sticky);
   background-color: var(--color-background);
-  padding: var(--space-sm) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg) var(--space-md);
 }
 
 @media (min-width: 768px) {
-  .composerSticky {
+  .footer {
+    left: 76px;
     bottom: 0;
-    padding-bottom: var(--space-md);
+    max-width: 480px;
+    margin-inline: auto;
+    padding-bottom: var(--space-lg);
+  }
+}
+
+@media (min-width: 1024px) {
+  .footer {
+    left: 240px;
+    max-width: 560px;
   }
 }
 

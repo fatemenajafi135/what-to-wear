@@ -17,3 +17,14 @@ if (typeof window !== "undefined" && !window.matchMedia) {
       dispatchEvent: () => false,
     }) as MediaQueryList;
 }
+
+// jsdom has no ResizeObserver either (RecommendChat measures its fixed
+// footer's height to pad the scrollable message list below it) — a no-op
+// stand-in is enough for tests, which don't assert on measured layout.
+if (typeof window !== "undefined" && !window.ResizeObserver) {
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}

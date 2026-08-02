@@ -1,6 +1,7 @@
 .wrap {
-  padding: 0 var(--space-lg);
-  margin-bottom: var(--space-md);
+  /* Horizontal/bottom spacing now comes from the shared .footer container
+     in RecommendChat.module.css — this class stays only so the component
+     keeps a stable outer element to attach to. */
 }
 
 .caption {
