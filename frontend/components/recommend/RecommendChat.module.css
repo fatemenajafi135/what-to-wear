@@ -1,12 +1,16 @@
 .screen {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 120px);
 }
 
 .scroll {
-  flex: 1;
   overflow-y: auto;
+}
+
+.calendarContextRow {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-sm) var(--space-lg);
 }
 
 .loadingSkeleton {

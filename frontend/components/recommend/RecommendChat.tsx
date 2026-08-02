@@ -134,7 +134,9 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
             </Button>
           </div>
         )}
+      </div>
 
+      <div className={styles.calendarContextRow}>
         <RecommendCalendarContext />
       </div>
 
