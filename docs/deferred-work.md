@@ -31,6 +31,7 @@ Same purpose as `ios-verification-backlog.md`, which says it best: this file exi
 | 8 | **No account deletion, no data export, no password change** — `known-gaps.md` calls these "near-mandatory before shipping" given the app stores photos and body data. | `known-gaps.md` §0.6 | Not in any slice. Should become one before any real launch. |
 | 9 | **Full RTL** — logical properties are already used throughout, but mirroring is unverified and numerals/typeface choices are unresolved. | `known-gaps.md` §0.5 | Deferred by design, with the groundwork deliberately laid. |
 | 10 | **iOS behaviour is built blind** — 24 items awaiting a physical iPhone. | `ios-verification-backlog.md` | Blocked on hardware, not on a decision. |
+| 11 | **`Button.tsx` href-mode renders a default anchor underline** — the same artifact 011 fixed on History rows, still present on the shared component. | Flagged in 011's browser-verification pass, 2026-08-03 | Correctly left out of 011: a cross-cutting change to a widely-used component doesn't belong in a feature branch. Wherever it lands, check every `href`-mode Button, not just the one that surfaced it. |
 
 ---
 
