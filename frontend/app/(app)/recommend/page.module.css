@@ -3,3 +3,14 @@
   align-items: center;
   gap: 6px;
 }
+
+/* Brief loading state while "Continue conversation" resumes a session's
+   prior turns (feature 011) before RecommendChat mounts with them. */
+.resumeLoading {
+  padding: var(--space-lg);
+}
+
+.resumeSkeleton {
+  height: 80px;
+  border-radius: var(--radius-md);
+}

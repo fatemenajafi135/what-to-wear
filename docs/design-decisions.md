@@ -2064,4 +2064,142 @@ outfits *up* is the only shape where "favorite" still means something once "save
 |---|---|
 | **(a) chosen** — `favorite` defaults to `false`; independent of the now-unconditional save | — |
 | Keep `favorite` defaulting to `true` (the version this section replaces) | Directly contradicted by the correction that prompted this section — conflates "the app decided to keep this" with "the user likes this," which are no longer the same event once every recommendation is saved regardless of merit. |
+
+## 44. Feature 011 (Chat history) — what a "session" is, and what writes one
+
+**Status: decided.** This is the handoff's own §3.1 gap: no `sessions` table exists, `thread_id`
+is minted by the pipeline (§25) but nothing durable survives a page reload, and "New chat"
+currently only resets local state because — per §28, echoed in the 011 handoff — "there was
+nothing to archive into."
+
+### The gap
+
+Design-system.md says New chat "archives the current thread as a Chat history session." The
+handoff frames the central question as *when* that archive happens: on "New chat" (archive-on-
+demand) or continuously from the first message (written-on-start), and names the crash-safety
+difference between them. But the handoff's own §7 definition of done is the sharper signal, not
+just the framing: *"I have a conversation, reload the page, and find it in Chat history"* — with
+no archive step mentioned at all. A model where nothing is durable until "New chat" is tapped
+cannot satisfy that line: a user who sends one message, gets a reply, and reloads without ever
+touching "New chat" would find nothing.
+
+### Decision: written-on-start, keyed on `thread_id` itself, upserted by the existing route
+
+A `sessions` row is created the moment a thread receives its **first** user message — inside
+`POST /recommend/messages`, in the same transaction that already persists the turn's outfits
+(§42). Every subsequent call for that `thread_id` updates the same row (bumps `updated_at`) and
+appends new `messages` rows; nothing is ever created a second time for one thread.
+
+The session's identity **is** `thread_id` — `sessions.id` is not a second, independently
+generated uuid, it is the pipeline's own thread id, stored as the primary key. `/history/
+:sessionId` therefore takes the same value `POST /recommend/messages` already accepts as
+`thread_id`, with zero translation between "session id" and "thread id" anywhere in the system.
+Rejected: a separate `sessions.id` with a `thread_id` foreign column pointing at it — two ids for
+one concept, with no caller anywhere that ever needs them to differ; every join, lookup, and
+route parameter would carry the extra indirection for no benefit. `thread_id` is already the
+correct primary key by definition (§25: the pipeline mints exactly one per logical conversation).
+
+**Consequence for "New chat": there is nothing left for it to do on the backend.** Once a session
+is written from the first message, "archiving" is not a discrete action — every thread with a
+user turn is, continuously, already a Chat-history session from that point on. `newChat()` stays
+exactly what it is today (`RecommendChat.tsx`'s local `setMessages([]); setPendingTexts([]);
+setThreadId(null)` reset, per design-decisions.md §25) — no new endpoint, no archive call. The
+existing guard — disabled whenever the thread has no user turns — is kept unchanged; it no longer
+prevents "archiving a blank session" (written-on-start means a session with zero user turns was
+never created in the first place, so there is nothing to blank-archive), but it still prevents a
+confusing no-op reset on a thread that already reads as empty, and changing it was never asked
+for.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — written-on-start, upserted inside `POST /recommend/messages`, keyed by `thread_id` | — |
+| (b) Archive-on-demand — a new endpoint "New chat" calls, sending the accumulated client-side transcript to be written in one shot | Fails the handoff's own DoD line: a reload before "New chat" is ever tapped loses everything, which is precisely the crash-safety gap the handoff itself calls out as (b)'s weakness. It also re-sends data the server already produced and could have kept — the client would be round-tripping a transcript the backend generated in the first place, just to get it archived. |
+| (c) Treat the pipeline's own LangGraph checkpointer as the source of truth for history — read its serialized state back per-thread instead of a dedicated `sessions`/`messages` table | The checkpointer's state is opaque, LangGraph-internal serialization, not a shape a "list every session, ordered, with a preview and count" query can be run against. §38 tried exactly this pattern for a narrower problem (recovering one outfit's citations from checkpointed state) and §42 replaced it, in the same document, for being "a real but inherently fragile mechanism" — evictable, thread-matching-dependent, no ownership of its own. Reusing it here would resurrect the exact fragility §42 just removed, for a harder version of the same problem (a full list screen, not one lookup). |
+
+## 45. Feature 011 (Chat history) — outfits linking back to their conversation
+
+**Status: decided.** The handoff's own §3.2 gap: `outfits` has no `thread_id` or session
+reference, but both Chat history's row and Session detail need an outfit count, and `POST
+/recommend/messages` already has `thread_id` in scope at the exact moment it auto-saves each
+outfit (§42).
+
+### Decision: a nullable `outfits.thread_id`, populated only going forward; count is `COUNT(*)`, never stored
+
+`outfits` gains one nullable column, `thread_id uuid references sessions(id) on delete set
+null`. `send_message` sets it on every `outfit_repository.create(...)` call from this feature
+onward — the value is already a local variable in that function (§42's own reasoning for why
+this is cheap: "already sitting in a local variable in the same function, in the same request").
+Existing rows are left untouched: `thread_id` stays `null` on every outfit created before this
+migration, because nothing durable ever recorded which thread produced it, and any attempt to
+infer one (matching by `occasion` text, by timestamp proximity, or any other heuristic) would be
+exactly the "silently defaulted" failure mode the handoff's own trap list names — a guessed link
+is worse than an honest absence of one, because it can be *wrong* in a way "no link" cannot.
+
+The outfit count a session shows — both the Chat-history row's third line and Session detail's
+"View in Outfits" button — is computed live: `SELECT COUNT(*) FROM outfits WHERE thread_id =
+:session_id`. It is never a denormalized counter column on `sessions`. A pre-existing outfit
+(`thread_id IS NULL`) can never satisfy `= :session_id` for any real session id, so it correctly,
+automatically counts toward none of them — no special-cased "is this outfit too old to link"
+branch is needed anywhere in the query or the route; the honest answer falls out of `IS NULL`
+never equalling a uuid. Pre-existing outfits remain fully visible in the (unaffected) Outfits
+gallery; they simply never appear to have come from any particular conversation, which is the
+truth.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — nullable `outfits.thread_id`, set only for outfits created after this migration; count is a live `COUNT(*)`, pre-existing rows naturally excluded via `IS NULL` | — |
+| (b) Backfill pre-existing rows with a best-guess `thread_id`, inferred from `occasion`/`created_at` proximity to some other record | No durable field on any pre-011 row ties it to a specific pipeline thread — the checkpointer state that ran that request is not reliably still present, and even if it were, matching it up after the fact is a guess dressed as data. This is the exact shape of defect the handoff's §8 warns has "shipped four times" on this project: a value silently defaulted or inferred rather than honestly absent. |
+| (c) A denormalized `outfit_count` column on `sessions`, incremented at outfit-create time | Same objection design-decisions.md §41 already settled for outfit-gallery's own "most worn" sort: a counter can drift from reality (a failed or partial write leaves it wrong with no way to detect the drift), where a live `COUNT(*)` against the real rows cannot ever be wrong by construction. At this feature's scale (personal-app row counts), the query cost of counting live is not a real tradeoff against that correctness guarantee. |
+
+## 46. Feature 011 (Chat history) — what "citation Badges" in the archived view actually renders
+
+**Status: decided.** Not one of the handoff's two named decisions, but a real gap found while
+reading the handoff closely against already-settled design-decisions — the same shape of gap
+§33 and §36 each found in earlier features, so recorded with the same rigor.
+
+### The gap
+
+Handoff §4.3 asks for Session detail to show "the same user/assistant bubble treatment as
+Recommend, including citation Badges." But §33 and §35 (both already decided, before this
+feature) establish that **no live chat surface shows citation Badges at all, anywhere, as of
+today**: § Badge and § Outfit suggestion pager both say the tone is "used only in Outfit detail's
+description, never in the chat outfit card," and §35 went further — removing the older
+bubble-plus-inline-`[n]`-badges rendering path outright once every outfit-bearing reply started
+going through the (citation-free) pager, "no remaining surface, at any outfit count." Taken
+literally, the handoff is asking this feature to archive a rendering treatment that does not
+exist in the thing it's supposedly a read-only copy of.
+
+### Resolution
+
+"Same bubble treatment as Recommend" is read as the visual chassis (the rounded user/assistant
+bubble shapes and alignment `ChatMessageList` already renders), not as "reproduce today's live
+content-rendering path" — because that path, for an outfit-bearing reply, is the pager, and the
+handoff explicitly forbids reproducing the pager's own thumbnails/rule-list in the archived view
+one clause later. The citation Badges the handoff asks for are sourced from data that already
+exists precisely because of this: each outfit's own `rationale_with_citations`/`citations`
+(captured server-side at save time, §38, unaffected by §42/§43). A `styling_reply` message row
+(§ data-model.md) carries the ids of the outfits that turn produced; Session detail resolves each
+one and renders **its** `rationale_with_citations` — through the same `renderWithCitations`
+token-splitting helper `RationaleWithCitations.tsx` already uses for Outfit detail — as the
+assistant's bubble content for that turn, with the item-thumbnail grid and the numbered rule-list
+rows Outfit detail also shows for that same text deliberately omitted (the handoff's own stated
+asymmetry, §4.3, kept intact). A reply that produced no outfits shows its plain `reply_text`
+(the honest empty-citation copy the rest of the product already uses) with no citation Badge at
+all, matching Constitution IV's "empty citation list rather than fabricate one."
+
+This introduces no new citation surface and no new data: it is Outfit detail's own already-
+grounded text, rendered a second time in a different chrome, for a screen the design system
+explicitly asks to show it.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — archived `styling_reply` bubbles render each linked outfit's own `rationale_with_citations`, citation-badged, without thumbnails/rule list | — |
+| (b) Take the handoff's wording literally and resurrect the pre-§35 bubble-plus-inline-badge rendering path, live-only, just for this screen | Reintroduces a rendering treatment §35 deliberately and explicitly removed as having "no remaining surface, at any outfit count" — resurrecting it for one screen contradicts that decision rather than building on it, and there is no data left to feed it: `SendMessageResponse.citations` and the `[n]`-marker splice were removed outright, not deprecated. |
+| (c) Render outfit-bearing turns with no citations at all, treating the handoff's line as stale/superseded and dropping it | Closest to "do nothing," but the data to satisfy it honestly already exists (§38's per-outfit citation columns) and costs nothing new to surface — dropping a design requirement outright when a grounded, no-new-surface way to satisfy it is available isn't the smaller change, just a less complete one. |
 | Add a third state (e.g. `null`/"undecided") distinct from both `true` and `false` | Would need a schema change (nullable boolean or a new enum) for a distinction the product doesn't currently use anywhere — no screen renders an "undecided" heart state, only filled/outline (§ Outfit suggestion pager, § Outfits gallery). Boolean `false` already *is* "undecided, leaning not-yet-expressed" for every practical purpose this app has today; a third state would be speculative. |

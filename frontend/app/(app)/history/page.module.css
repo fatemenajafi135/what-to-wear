@@ -1,0 +1,47 @@
+/* design/design-system.md §5 two-pane master-detail, ≥1024px only: the
+   list becomes the wide pane (~1.6fr) beside a capped, centered detail
+   pane. Below 1024px, the detail pane is not rendered visually — sessions
+   are reached by push navigation to /history/:sessionId instead. Mirrors
+   ../outfits/page.module.css exactly — the outer grid mechanism is
+   identical; only the list's own inner content gets a narrower 640px cap
+   (design-system.md §5: "Calendar events / Chat history cap at 640px on
+   both tiers, plain lists, no grid"), applied in HistoryList.module.css
+   rather than here. */
+.twoPane {
+  display: block;
+}
+
+.detailPane {
+  display: none;
+}
+
+/* Mirror of .detailPane, for /history/[sessionId]: the list pane is hidden
+   below 1024px (push-navigation takes over instead) and shown beside the
+   detail content at 1024px+. */
+.gridPane {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .twoPane {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    align-items: start;
+  }
+
+  .gridPane {
+    display: block;
+  }
+
+  .detailPane {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    max-width: 680px;
+    margin-inline: auto;
+    min-height: 60vh;
+    padding: var(--space-3xl);
+    color: var(--color-text-secondary);
+  }
+}

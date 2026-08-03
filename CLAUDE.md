@@ -32,7 +32,8 @@ shares no history with `main`. Spec Kit will extend this file in Phase 4.
 - `frontend/` — Next.js App Router + TypeScript.
 - `backend/` — FastAPI + `uv`. Internal layout is **not settled** — it is decided in the
   Phase 4 constitution. Do not assume a structure before then.
-- `docs/` — durable project documentation.
+- `docs/` — durable project documentation. `docs/deferred-work.md` is the register of
+  decided-but-parked work; a slice that defers something adds a row there.
 - `notes/` — local-only scratch. Never staged, committed, or referenced from tracked files.
 
 ## Conventions

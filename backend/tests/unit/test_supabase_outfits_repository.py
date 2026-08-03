@@ -74,6 +74,29 @@ class TestCreate:
         assert params["rationale_with_citations"] == ""
         assert json.loads(params["citations"]) == []
         assert json.loads(params["dimension_scores"]) == []
+        assert params["thread_id"] is None
+
+    def test_persists_thread_id(self, patch_session_scope) -> None:
+        set_config_result = MagicMock()
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = _FakeRow({"id": "outfit-1"})
+        session = _fake_session([set_config_result, insert_result])
+        patch_session_scope(session)
+
+        repo = SupabaseOutfitRepository()
+        repo.create(
+            user_id="user-a",
+            occasion="Dinner",
+            meta_line="Dinner · Business casual",
+            rationale_text="A cohesive look.",
+            match_label="good",
+            item_ids=["item-1"],
+            title="Dinner",
+            thread_id="thread-1",
+        )
+
+        params = session.execute.call_args_list[1].args[1]
+        assert params["thread_id"] == "thread-1"
 
     def test_round_trips_citations_and_dimension_scores(self, patch_session_scope) -> None:
         set_config_result = MagicMock()

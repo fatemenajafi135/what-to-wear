@@ -74,6 +74,8 @@ def ready_closet() -> Iterator[dict[str, str]]:
     with get_engine().begin() as conn:
         conn.execute(text("DELETE FROM wardrobe_items WHERE user_id = :u"), {"u": USER_READY})
         conn.execute(text("DELETE FROM outfits WHERE user_id = :u"), {"u": USER_READY})
+        conn.execute(text("DELETE FROM messages WHERE user_id = :u"), {"u": USER_READY})
+        conn.execute(text("DELETE FROM sessions WHERE user_id = :u"), {"u": USER_READY})
 
 
 @pytest.fixture
@@ -140,7 +142,7 @@ def _outfit_row(outfit_id: str) -> dict:
             conn.execute(
                 text(
                     "SELECT user_id, occasion, meta_line, rationale_text, match_label, item_ids, favorite, "
-                    "title, rationale_with_citations, citations, dimension_scores "
+                    "title, rationale_with_citations, citations, dimension_scores, thread_id "
                     "FROM outfits WHERE id = :id"
                 ),
                 {"id": outfit_id},
@@ -375,6 +377,267 @@ class TestSendMessage:
         assert {item["id"] for item in outfit_body["items"]} == {ready_closet["top"]}
         row = _outfit_row(outfit_body["id"])
         assert {str(item_id) for item_id in row["item_ids"]} == {ready_closet["top"]}
+
+    def test_first_message_creates_a_session_and_a_user_message_row(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §44: a session is written on the thread's
+        first message — no separate archive step. Session id IS the
+        thread_id, not a second generated one."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post("/api/v1/recommend/messages", json={"message": "Rainy commute"})
+
+        thread_id = response.json()["thread_id"]
+        with get_engine().begin() as conn:
+            session_row = conn.execute(text("SELECT id, user_id FROM sessions WHERE id = :id"), {"id": thread_id}).one()
+            message_rows = conn.execute(
+                text("SELECT kind, text FROM messages WHERE session_id = :id ORDER BY created_at"),
+                {"id": thread_id},
+            ).all()
+
+        assert str(session_row.user_id) == USER_READY
+        assert [(row.kind, row.text) for row in message_rows] == [
+            ("user_message", "Rainy commute"),
+            ("styling_reply", "Nothing to show."),
+        ]
+
+    def test_second_message_reuses_the_same_session_and_appends_messages(self, ready_closet: dict[str, str]) -> None:
+        """No second session row is created on a follow-up — the same
+        thread_id upserts (design-decisions.md §44)."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                first = client.post("/api/v1/recommend/messages", json={"message": "Rainy commute"})
+                thread_id = first.json()["thread_id"]
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "something warmer", "thread_id": thread_id},
+                )
+
+        with get_engine().begin() as conn:
+            session_count = conn.execute(
+                text("SELECT count(*) FROM sessions WHERE id = :id"), {"id": thread_id}
+            ).scalar_one()
+            message_count = conn.execute(
+                text("SELECT count(*) FROM messages WHERE session_id = :id"), {"id": thread_id}
+            ).scalar_one()
+
+        assert session_count == 1
+        assert message_count == 4  # 2 user_message + 2 styling_reply
+
+    def test_persisted_outfits_link_back_to_the_producing_thread(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §45: outfits.thread_id is set from the
+        request's own thread_id, and the styling_reply message's
+        outfit_ids matches what was actually persisted."""
+        outfit = _scored_outfit([ready_closet["top"]], rank_score=0.85, cites=[])
+        result = SuggestResult(outfits=[outfit], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": None}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post("/api/v1/recommend/messages", json={"message": "smart casual"})
+
+        body = response.json()
+        thread_id = body["thread_id"]
+        outfit_id = body["outfits"][0]["id"]
+
+        row = _outfit_row(outfit_id)
+        assert str(row["thread_id"]) == thread_id
+
+        with get_engine().begin() as conn:
+            styling_reply = conn.execute(
+                text("SELECT outfit_ids FROM messages WHERE session_id = :id AND kind = 'styling_reply'"),
+                {"id": thread_id},
+            ).one()
+        assert [str(oid) for oid in styling_reply.outfit_ids] == [outfit_id]
+
+
+class TestListSessions:
+    """specs/011-chat-history/contracts/recommend.md — Chat history's list."""
+
+    def test_returns_only_the_callers_sessions_most_recently_active_first(self, ready_closet: dict[str, str]) -> None:
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                older = client.post("/api/v1/recommend/messages", json={"message": "Older conversation"})
+                client.post("/api/v1/recommend/messages", json={"message": "Newer conversation"})
+
+        older_thread_id = older.json()["thread_id"]
+
+        with _client_as(USER_READY) as client:
+            response = client.get("/api/v1/recommend/sessions")
+
+        assert response.status_code == 200
+        sessions = response.json()["sessions"]
+        assert len(sessions) == 2
+        assert sessions[0]["preview"] == "Newer conversation"  # most recently active first
+        assert sessions[1]["id"] == older_thread_id
+        assert sessions[0]["message_count"] == 2  # one user_message + one styling_reply
+        assert sessions[0]["outfit_count"] == 0
+
+    def test_outfit_count_reflects_only_outfits_linked_to_that_thread(self, ready_closet: dict[str, str]) -> None:
+        outfit = _scored_outfit([ready_closet["top"]], rank_score=0.85, cites=[])
+        result = SuggestResult(outfits=[outfit], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": None}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post("/api/v1/recommend/messages", json={"message": "smart casual"})
+
+        with _client_as(USER_READY) as client:
+            sessions = client.get("/api/v1/recommend/sessions").json()["sessions"]
+
+        assert sessions[0]["id"] == response.json()["thread_id"]
+        assert sessions[0]["outfit_count"] == 1
+
+    def test_a_pre_existing_outfit_with_no_thread_link_counts_toward_no_session(
+        self, ready_closet: dict[str, str]
+    ) -> None:
+        """FR-009/SC-004: an outfit that predates this feature's linking
+        column (thread_id IS NULL) must never be attributed to any
+        session, even one that happens to share the same user/occasion."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post("/api/v1/recommend/messages", json={"message": "Rainy commute"})
+
+        # Simulate an old-style, pre-011 outfit row: same user/occasion,
+        # no thread_id — inserted directly, bypassing the route.
+        with get_engine().begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO outfits (user_id, occasion, meta_line, rationale_text, match_label, item_ids, "
+                    "title) VALUES (:user_id, 'Rainy commute', 'meta', 'rationale', 'great', '{}', 'Rainy commute')"
+                ),
+                {"user_id": USER_READY},
+            )
+
+        with _client_as(USER_READY) as client:
+            sessions = client.get("/api/v1/recommend/sessions").json()["sessions"]
+
+        assert sessions[0]["id"] == response.json()["thread_id"]
+        assert sessions[0]["outfit_count"] == 0
+
+    def test_empty_list_for_a_user_with_no_sessions(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            response = client.get("/api/v1/recommend/sessions")
+        assert response.status_code == 200
+        assert response.json()["sessions"] == []
+
+    def test_does_not_return_another_users_sessions(self, ready_closet: dict[str, str], blocked_closet: None) -> None:
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                client.post("/api/v1/recommend/messages", json={"message": "Rainy commute"})
+
+        with _client_as(USER_BLOCKED) as client:
+            response = client.get("/api/v1/recommend/sessions")
+
+        assert response.status_code == 200
+        assert response.json()["sessions"] == []
+
+
+class TestGetSession:
+    """specs/011-chat-history/contracts/recommend.md — Session detail, the
+    full read-only transcript."""
+
+    def test_happy_path_returns_ordered_messages_with_roles(self, ready_closet: dict[str, str]) -> None:
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                first = client.post("/api/v1/recommend/messages", json={"message": "Rainy commute"})
+                thread_id = first.json()["thread_id"]
+
+        with _client_as(USER_READY) as client:
+            response = client.get(f"/api/v1/recommend/sessions/{thread_id}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["id"] == thread_id
+        assert body["outfit_count"] == 0
+        assert [(m["kind"], m["role"], m["text"]) for m in body["messages"]] == [
+            ("user_message", "user", "Rainy commute"),
+            ("styling_reply", "assistant", "Nothing to show."),
+        ]
+        assert body["messages"][1]["outfits"] == []
+
+    def test_styling_reply_resolves_its_outfits_with_citations_no_thumbnails(
+        self, ready_closet: dict[str, str]
+    ) -> None:
+        """design-decisions.md §46: the archived bubble's citation badges
+        come from the outfit's own rationale_with_citations/citations —
+        never an items/thumbnail field."""
+        with _client_as(USER_READY) as client:
+            outfit_body = _generate_outfit(
+                client,
+                [ready_closet["top"]],
+                occasion="Client dinner",
+                cites=["rule-1"],
+                sources=[
+                    CitedSource(rule_id="rule-1", source="Pair casual denim with a relaxed top.", url="", layer="L3")
+                ],
+            )
+            thread_id = client.get("/api/v1/recommend/sessions").json()["sessions"][0]["id"]
+            response = client.get(f"/api/v1/recommend/sessions/{thread_id}")
+
+        assert response.status_code == 200
+        styling_reply = response.json()["messages"][-1]
+        assert styling_reply["kind"] == "styling_reply"
+        assert len(styling_reply["outfits"]) == 1
+        resolved_outfit = styling_reply["outfits"][0]
+        assert resolved_outfit["id"] == outfit_body["id"]
+        assert "[1]" in resolved_outfit["rationale_with_citations"]
+        assert resolved_outfit["citations"] == [{"number": 1, "text": "Pair casual denim with a relaxed top."}]
+        assert "items" not in resolved_outfit
+        assert set(resolved_outfit.keys()) == {"id", "title", "rationale_with_citations", "citations"}
+
+    def test_404_for_malformed_missing_or_foreign_session(
+        self, ready_closet: dict[str, str], blocked_closet: None
+    ) -> None:
+        with _client_as(USER_READY) as client:
+            malformed = client.get("/api/v1/recommend/sessions/not-a-uuid")
+            missing = client.get(f"/api/v1/recommend/sessions/{uuid.uuid4()}")
+        assert malformed.status_code == 404
+        assert missing.status_code == 404
+
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                thread_id = client.post("/api/v1/recommend/messages", json={"message": "Rainy commute"}).json()[
+                    "thread_id"
+                ]
+
+        with _client_as(USER_BLOCKED) as client:
+            foreign = client.get(f"/api/v1/recommend/sessions/{thread_id}")
+        assert foreign.status_code == 404
+
+    def test_requires_authentication(self, ready_closet: dict[str, str]) -> None:
+        app.dependency_overrides.clear()
+        with TestClient(app) as client:
+            response = client.get(f"/api/v1/recommend/sessions/{uuid.uuid4()}")
+        assert response.status_code == 401
 
 
 class TestListOutfits:
