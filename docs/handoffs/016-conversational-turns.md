@@ -2,13 +2,12 @@
 
 **From:** tech lead · **Status:** blocked on one item (§3) · **Branch:**
 `feat/016-conversational-turns`, cut from `rebuild` · **Migration number: none expected** ·
-**`design-decisions.md` sections start at `## 38`**
+**`design-decisions.md` sections start at `## 47`**
 
-**Sequencing: after 009 merges, and before 011.** 009 rewrites `SendMessageResponse` and every
-`components/recommend/*` file this slice touches — building in parallel guarantees a conflict.
-011 (chat history) persists the transcript, and this slice changes what a transcript *is*
-(assistant turns become real, server-produced messages), so 011 must be built against the final
-shape.
+**Sequencing: unblocked.** 009 and 011 have both shipped. 011 deliberately built its message
+model to accept this slice — `messages.kind` is a discriminator whose check constraint currently
+allows `user_message` and `styling_reply` only (§44, migration `0011`). This slice **adds
+`conversational_turn` and `wrap_up` to that constraint**; it does not reshape the table.
 
 ---
 
@@ -89,7 +88,7 @@ pipeline stay untouched, so `docs/eval-baselines/` cannot move. If your diff tou
 and re-read §37.
 
 Where accumulated slots live is yours to decide: the checkpointer already persists thread state,
-which is the obvious candidate and needs no migration. Record the choice — §33.
+which is the obvious candidate and needs no migration. Record the choice — §47.
 
 ### 4.3 The chat surface
 
@@ -156,6 +155,8 @@ anything sent there vanishes while looking like personalisation · outfits galle
       outfits.**
 - [ ] The turn cap is enforced and configurable.
 - [ ] A conversational-call failure degrades to a usable state; Start styling still works.
+- [ ] `messages.kind`'s check constraint gains the two new values; existing rows are untouched
+      and no table is reshaped (§44, migration `0011`).
 - [ ] `pipeline/`, `scoring/`, `retrieval/` untouched; eval baselines unchanged.
 - [ ] Golden-set entry exists for the new path and runs without a live call in CI.
 - [ ] Backend test count has not dropped (**644** on `rebuild` today, plus whatever 009 adds).
@@ -168,7 +169,7 @@ anything sent there vanishes while looking like personalisation · outfits galle
 
 ## 8. If you hit a gap
 
-Start new `design-decisions.md` sections at **`## 38`**. §37 holds this slice's core decision;
+Start new `design-decisions.md` sections at **`## 47`**. §37 holds this slice's core decision;
 §21 holds two deferred calendar items.
 
 Named decisions still open: where accumulated slots live (§4.2), what the turn cap should be,
