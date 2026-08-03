@@ -554,6 +554,92 @@ class TestListSessions:
         assert response.json()["sessions"] == []
 
 
+class TestGetSession:
+    """specs/011-chat-history/contracts/recommend.md — Session detail, the
+    full read-only transcript."""
+
+    def test_happy_path_returns_ordered_messages_with_roles(self, ready_closet: dict[str, str]) -> None:
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                first = client.post("/api/v1/recommend/messages", json={"message": "Rainy commute"})
+                thread_id = first.json()["thread_id"]
+
+        with _client_as(USER_READY) as client:
+            response = client.get(f"/api/v1/recommend/sessions/{thread_id}")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["id"] == thread_id
+        assert body["outfit_count"] == 0
+        assert [(m["kind"], m["role"], m["text"]) for m in body["messages"]] == [
+            ("user_message", "user", "Rainy commute"),
+            ("styling_reply", "assistant", "Nothing to show."),
+        ]
+        assert body["messages"][1]["outfits"] == []
+
+    def test_styling_reply_resolves_its_outfits_with_citations_no_thumbnails(
+        self, ready_closet: dict[str, str]
+    ) -> None:
+        """design-decisions.md §46: the archived bubble's citation badges
+        come from the outfit's own rationale_with_citations/citations —
+        never an items/thumbnail field."""
+        with _client_as(USER_READY) as client:
+            outfit_body = _generate_outfit(
+                client,
+                [ready_closet["top"]],
+                occasion="Client dinner",
+                cites=["rule-1"],
+                sources=[
+                    CitedSource(rule_id="rule-1", source="Pair casual denim with a relaxed top.", url="", layer="L3")
+                ],
+            )
+            thread_id = client.get("/api/v1/recommend/sessions").json()["sessions"][0]["id"]
+            response = client.get(f"/api/v1/recommend/sessions/{thread_id}")
+
+        assert response.status_code == 200
+        styling_reply = response.json()["messages"][-1]
+        assert styling_reply["kind"] == "styling_reply"
+        assert len(styling_reply["outfits"]) == 1
+        resolved_outfit = styling_reply["outfits"][0]
+        assert resolved_outfit["id"] == outfit_body["id"]
+        assert "[1]" in resolved_outfit["rationale_with_citations"]
+        assert resolved_outfit["citations"] == [{"number": 1, "text": "Pair casual denim with a relaxed top."}]
+        assert "items" not in resolved_outfit
+        assert set(resolved_outfit.keys()) == {"id", "title", "rationale_with_citations", "citations"}
+
+    def test_404_for_malformed_missing_or_foreign_session(
+        self, ready_closet: dict[str, str], blocked_closet: None
+    ) -> None:
+        with _client_as(USER_READY) as client:
+            malformed = client.get("/api/v1/recommend/sessions/not-a-uuid")
+            missing = client.get(f"/api/v1/recommend/sessions/{uuid.uuid4()}")
+        assert malformed.status_code == 404
+        assert missing.status_code == 404
+
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                thread_id = client.post("/api/v1/recommend/messages", json={"message": "Rainy commute"}).json()[
+                    "thread_id"
+                ]
+
+        with _client_as(USER_BLOCKED) as client:
+            foreign = client.get(f"/api/v1/recommend/sessions/{thread_id}")
+        assert foreign.status_code == 404
+
+    def test_requires_authentication(self, ready_closet: dict[str, str]) -> None:
+        app.dependency_overrides.clear()
+        with TestClient(app) as client:
+            response = client.get(f"/api/v1/recommend/sessions/{uuid.uuid4()}")
+        assert response.status_code == 401
+
+
 class TestListOutfits:
     """specs/010-outfits/contracts/recommend-outfits.md — the Outfits
     gallery."""
