@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { Badge } from "@/components/ui/Badge/Badge";
 import type { components } from "@/lib/api/schema";
 import chatStyles from "@/components/recommend/ChatMessageList.module.css";
+import styles from "./SessionMessages.module.css";
 
 type SessionMessageView = components["schemas"]["SessionMessageView"];
 
@@ -59,11 +60,13 @@ export function SessionMessages({ messages }: SessionMessagesProps) {
         ) : (
           <div key={message.id} className={chatStyles.assistantGroup}>
             {message.outfits.length > 0 ? (
-              message.outfits.map((outfit) => (
-                <div key={outfit.id} className={chatStyles.assistantBubble}>
-                  <p className="textBody">{renderWithCitations(outfit.rationale_with_citations)}</p>
-                </div>
-              ))
+              <div className={styles.outfitGroup}>
+                {message.outfits.map((outfit) => (
+                  <div key={outfit.id} className={chatStyles.assistantBubble}>
+                    <p className="textBody">{renderWithCitations(outfit.rationale_with_citations)}</p>
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className={chatStyles.assistantBubble}>
                 <p className="textBody">{message.text}</p>
