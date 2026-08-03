@@ -237,3 +237,7 @@ Outfits.
   writes it, and how outfits link back to their conversation, including what a pre-existing
   outfit shows — are resolved during planning and recorded in `docs/design-decisions.md`
   starting at §44, not guessed silently in code.
+- "Message count" on a session row counts every turn in the conversation (both the user's own
+  messages and the assistant's replies), not user turns alone — the most literal reading of
+  the design system's "message-count text" and consistent with a session's Message entity
+  covering both roles.
