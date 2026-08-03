@@ -109,7 +109,10 @@ thread is durably recorded; the list is queryable.
       backed by `session_repository.list_sessions` — depends on T004, T008
 - [ ] T011 [US1] `backend/tests/unit/test_recommend_routes.py` (or a new
       `test_recommend_sessions_routes.py`): unit-test `GET /recommend/sessions` shape, ordering,
-      and the `outfit_count = 0` / no-third-line case for a session with none
+      the `outfit_count = 0` / no-third-line case for a session with none, **and** — FR-009/
+      SC-004 — a session whose only associated `outfits` row has `thread_id IS NULL` (an
+      old-style, pre-migration row that happens to share the session's `user_id`/`occasion`)
+      shows `outfit_count = 0`, never a guessed/backfilled count
 
 **Checkpoint**: A conversation is durable and listable via the API. Verifiable with `curl`/pytest
 alone — no frontend required yet (spec.md's own Independent Test for this story).
@@ -133,12 +136,14 @@ citation badges render with no thumbnail grid or rule list.
       carrying plain text
 - [ ] T013 [P] [US2] `frontend/app/(app)/history/HistoryList.test.tsx`: loading skeleton, empty
       state (`chat_history.empty.body`), error state + retry (`chat_history.error.body`/`.cta`),
-      row rendering (preview/date/message-count/optional outfit-count line), mocking
-      `apiClient.GET` per `OutfitsGrid.test.tsx`'s own convention
+      **offline state suppresses the screen's own error** (mock `useOnlineStatus` to `false`,
+      matching `OutfitsGrid.test.tsx`'s own convention — FR-012), row rendering (preview/date/
+      message-count/optional outfit-count line), mocking `apiClient.GET`
 - [ ] T014 [P] [US2] `frontend/app/(app)/history/[sessionId]/SessionDetail.test.tsx`: renders
       user/assistant bubbles in order, renders citation badges for a `styling_reply` message with
       outfits, asserts no item-thumbnail row and no rule list render anywhere on the screen,
-      renders plain text for a zero-outfit `styling_reply`
+      renders plain text for a zero-outfit `styling_reply`, **offline state suppresses the
+      screen's own error** (FR-012)
 
 ### Implementation for User Story 2
 
@@ -154,7 +159,9 @@ citation badges render with no thumbnail grid or rule list.
       cap design-system.md §5 specifies for Chat history specifically (not the 1.6fr grid's own
       wider cap)
 - [ ] T018 [US2] `frontend/app/(app)/history/HistoryList.tsx`: fetch/loading/empty/error/offline
-      states, row list per design-system.md § Chat history row anatomy — depends on T016
+      states — `useOnlineStatus()` gates the screen's own error exactly like `OutfitsGrid.tsx`
+      (`showError = error && isOnline`) — row list per design-system.md § Chat history row
+      anatomy — depends on T016
 - [ ] T019 [US2] `frontend/app/(app)/history/page.tsx`: `TopHeader` (title "Chat history", back
       arrow, right slot = `pill` "New chat"), two-pane shell wrapping `HistoryList` +
       `"Select a conversation to view it."` placeholder pane (desktop only) — depends on T017,
@@ -167,7 +174,8 @@ citation badges render with no thumbnail grid or rule list.
       "Conversation", subtitle = session date, back arrow, no right slot), read-only bubble list
       (user text bubbles; `styling_reply` bubbles render each linked outfit's citation-badged
       `rationale_with_citations` via T020, explicitly no thumbnail grid / rule list; zero-outfit
-      replies render plain `text`) — depends on T016, T020
+      replies render plain `text`), loading/error/offline states matching `[outfitId]/page.tsx`'s
+      own `useOnlineStatus()`-gated pattern (FR-012) — depends on T016, T020
 - [ ] T022 [US2] Wire the Recommend header's `history` `IconButton` in
       `frontend/app/(app)/recommend/page.tsx` to link to `/history` (currently hardcoded
       `disabled`/inert) — depends on T019
