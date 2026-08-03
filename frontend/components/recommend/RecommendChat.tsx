@@ -26,6 +26,14 @@ export interface RecommendChatProps {
   /** Lets the page's TopHeader disable "New chat" on an empty thread
    * (design-system.md anatomy item 1 — visible but disabled, not hidden). */
   onHasUserMessageChange?: (hasUserMessage: boolean) => void;
+  /** "Continue conversation" (feature 011) resumes into this same
+   * thread_id — the next `POST /recommend/messages` call must carry it,
+   * not a freshly minted one (docs/design-decisions.md §44/§45). */
+  initialThreadId?: string | null;
+  /** The resumed thread's own prior turns, already fetched by the page via
+   * `GET /recommend/sessions/{id}` — reused here only for continuity
+   * (`hasUserMessage` starts correctly `true`), never re-fetched. */
+  initialMessages?: ChatMessage[];
 }
 
 /**
@@ -35,12 +43,12 @@ export interface RecommendChatProps {
  * in memory only, never persisted, echoed on every subsequent call).
  */
 export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>(function RecommendChat(
-  { onHasUserMessageChange },
+  { onHasUserMessageChange, initialThreadId = null, initialMessages = [] },
   ref,
 ) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [pendingTexts, setPendingTexts] = useState<string[]>([]);
-  const [threadId, setThreadId] = useState<string | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(initialThreadId);
   const [status, setStatus] = useState<Status>("idle");
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);

@@ -219,4 +219,31 @@ describe("RecommendChat", () => {
       body: { message: "something warmer", thread_id: "thread-1" },
     });
   });
+
+  it("011 US3: a message sent after resuming carries the resumed thread_id, verified at the request level", async () => {
+    vi.mocked(apiClient.POST).mockResolvedValueOnce({
+      data: { thread_id: "resumed-thread", reply_text: null, outfits: [mockOutfit] },
+      error: undefined,
+      response: new Response(),
+    } as never);
+
+    render(
+      <RecommendChat
+        initialThreadId="resumed-thread"
+        initialMessages={[{ id: "m1", role: "user", text: "Rainy commute" }]}
+      />,
+    );
+
+    // Resuming shows the prior turn immediately (chat state, not the hero) —
+    // "New chat" correctness depends on this, not asserted by reading a reply.
+    expect(await screen.findByText("Rainy commute")).toBeInTheDocument();
+
+    await userEvent.type(await screen.findByLabelText("Message"), "something warmer{Enter}");
+    await userEvent.click(screen.getByText("Start styling"));
+
+    await waitFor(() => expect(apiClient.POST).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(apiClient.POST).mock.calls[0]?.[1]).toMatchObject({
+      body: { message: "something warmer", thread_id: "resumed-thread" },
+    });
+  });
 });

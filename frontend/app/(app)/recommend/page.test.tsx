@@ -18,6 +18,7 @@ vi.mock("@/lib/supabase/client", () => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 import { apiClient } from "@/lib/api/client";
@@ -74,9 +75,9 @@ describe("RecommendPage", () => {
     expect(screen.getByLabelText("New chat")).toBeDisabled();
   });
 
-  it("Chat history is present but inert (no /history route exists yet)", async () => {
+  it("Chat history links to /history", async () => {
     render(<RecommendPage />);
     await screen.findByLabelText("Message");
-    expect(screen.getByLabelText("Chat history")).toBeDisabled();
+    expect(screen.getByLabelText("Chat history").closest("a")).toHaveAttribute("href", "/history");
   });
 });
