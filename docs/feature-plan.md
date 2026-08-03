@@ -1,5 +1,8 @@
 # Feature plan
 
+Work that fell out of a slice with a "later" attached to it lives in
+`docs/deferred-work.md`, not here.
+
 The slice breakdown for the rebuild. **This file is the plan of record.** Any earlier
 eight-feature list is superseded.
 
