@@ -9,6 +9,7 @@ import type { components } from "@/lib/api/schema";
 import { HistoryList } from "../HistoryList";
 import { formatSessionDate } from "../formatSessionDate";
 import { SessionMessages } from "./SessionMessages";
+import { SessionActions } from "./SessionActions";
 import twoPaneStyles from "../page.module.css";
 import styles from "./page.module.css";
 
@@ -105,16 +106,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ sessio
         {!loading && !notFound && !error && session && (
           <div className={styles.wrapper}>
             <SessionMessages messages={session.messages} />
-            <div className={styles.actions}>
-              <Button href={`/recommend?thread_id=${session.id}`} width="full">
-                Continue conversation
-              </Button>
-              {session.outfit_count > 0 && (
-                <Button href="/outfits" variant="secondary" width="full">
-                  {session.outfit_count} → View in Outfits
-                </Button>
-              )}
-            </div>
+            <SessionActions sessionId={session.id} outfitCount={session.outfit_count} />
           </div>
         )}
       </div>
