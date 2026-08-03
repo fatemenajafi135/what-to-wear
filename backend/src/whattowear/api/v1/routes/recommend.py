@@ -43,6 +43,7 @@ from whattowear.pipeline.graph import get_compiled_graph
 from whattowear.readiness import ReadinessResult, evaluate_wardrobe_readiness
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
 from whattowear.repositories.supabase_outfits import Sort, SupabaseOutfitRepository
+from whattowear.repositories.supabase_sessions import SupabaseSessionRepository
 from whattowear.schema import CitedSource, Context, ScoredOutfit, WardrobeItem
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,10 @@ def _get_repository() -> SupabaseClosetRepository:
 
 def _get_outfit_repository() -> SupabaseOutfitRepository:
     return SupabaseOutfitRepository()
+
+
+def _get_session_repository() -> SupabaseSessionRepository:
+    return SupabaseSessionRepository()
 
 
 def _parse_outfit_id(outfit_id: str) -> None:
@@ -228,6 +233,24 @@ class OutfitDetailResponse(BaseModel):
     created_at: datetime
 
 
+class SessionSummary(BaseModel):
+    """One row of Chat history's list (design-system.md § Chat history —
+    feature 011). `outfit_count` is always present and `>= 0`; the
+    frontend renders the third preview line only when it is `> 0`
+    (design-decisions.md §45 — never a fabricated count for a session with
+    none)."""
+
+    id: str
+    preview: str | None
+    message_count: int
+    outfit_count: int
+    updated_at: datetime
+
+
+class SessionSummaryListResponse(BaseModel):
+    sessions: list[SessionSummary]
+
+
 class RenameOutfitRequest(BaseModel):
     title: str
 
@@ -323,6 +346,7 @@ def send_message(
     access_token: str = Depends(get_current_access_token),  # noqa: B008
     repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
     outfit_repository: SupabaseOutfitRepository = Depends(_get_outfit_repository),  # noqa: B008
+    session_repository: SupabaseSessionRepository = Depends(_get_session_repository),  # noqa: B008
 ) -> SendMessageResponse:
     settings = get_settings()
     items = repository.list_wardrobe_items(user_id)
@@ -339,6 +363,15 @@ def send_message(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "message must not be empty")
 
     thread_id = body.thread_id or str(uuid.uuid4())
+
+    # Written-on-start (design-decisions.md §44): the first call for this
+    # thread_id creates the session row; every later call just bumps
+    # updated_at. Never a second, independently generated id — the session
+    # IS this thread_id. "New chat" needs no call of its own as a result:
+    # by the time a thread could be archived, it already has been.
+    session_repository.upsert_session(user_id, thread_id)
+    session_repository.insert_message(user_id, thread_id, "user_message", body.message)
+
     graph = get_compiled_graph(repository)
 
     def _invoke() -> dict:
@@ -403,6 +436,10 @@ def send_message(
             rationale_with_citations=rationale_with_citations,
             citations=citations,
             dimension_scores=dimension_scores,
+            # design-decisions.md §45: nullable, populated only going
+            # forward — already a local variable in this same request, no
+            # extra lookup needed.
+            thread_id=thread_id,
         )
         outfits.append(
             StylingOutfit(
@@ -442,10 +479,47 @@ def send_message(
             "I couldn't put an outfit together from that — try loosening a constraint or adding a few more pieces."
         )
 
+    # data-model.md: text is the honesty-fallback copy when this turn
+    # produced nothing surfaceable, '' when it produced outfits — that
+    # turn's archived content is the linked outfits themselves (§46), not a
+    # second copy of their text on this row.
+    session_repository.insert_message(
+        user_id,
+        thread_id,
+        "styling_reply",
+        text_=reply_text or "",
+        outfit_ids=[outfit.id for outfit in outfits],
+    )
+
     return SendMessageResponse(
         thread_id=thread_id,
         reply_text=reply_text,
         outfits=outfits,
+    )
+
+
+@router.get("/recommend/sessions")
+def list_sessions(
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    session_repository: SupabaseSessionRepository = Depends(_get_session_repository),  # noqa: B008
+) -> SessionSummaryListResponse:
+    """Chat history's own list (design-system.md § Chat history) — feature
+    011. Always `200`, `sessions: []` for the true empty case, matching
+    every other list route's own empty-is-still-200 convention. No
+    pagination (research.md §7) — same personal-app scale as
+    `GET /recommend/outfits`."""
+    rows = session_repository.list_sessions(user_id)
+    return SessionSummaryListResponse(
+        sessions=[
+            SessionSummary(
+                id=str(row.id),
+                preview=row.preview,
+                message_count=row.message_count,
+                outfit_count=row.outfit_count,
+                updated_at=row.updated_at,
+            )
+            for row in rows
+        ]
     )
 
 

@@ -64,6 +64,7 @@ class SupabaseOutfitRepository:
         rationale_with_citations: str = "",
         citations: list[dict[str, Any]] | None = None,
         dimension_scores: list[dict[str, Any]] | None = None,
+        thread_id: str | None = None,
     ) -> str:
         """`title`, `rationale_with_citations`, `citations`, and
         `dimension_scores` are feature 010 additions (design-decisions.md
@@ -72,16 +73,19 @@ class SupabaseOutfitRepository:
         this, or passing the empty/seeded defaults when that state isn't
         available. `citations`/`dimension_scores` default to `None` rather
         than `[]` as a mutable-default-argument safeguard; treated as empty
-        either way."""
+        either way. `thread_id` is a feature 011 addition (design-decisions.md
+        §45) — the caller already has it in scope at the moment it saves
+        each outfit; `None` only for call sites that predate this feature,
+        which none of this codebase's own callers are anymore."""
         with _session_scope() as session:
             _set_jwt_claim(session, user_id)
             row = session.execute(
                 text(
                     "INSERT INTO outfits (user_id, occasion, meta_line, rationale_text, match_label, item_ids, "
-                    "title, rationale_with_citations, citations, dimension_scores) "
+                    "title, rationale_with_citations, citations, dimension_scores, thread_id) "
                     "VALUES (:user_id, :occasion, :meta_line, :rationale_text, :match_label, :item_ids, "
                     ":title, :rationale_with_citations, CAST(:citations AS jsonb), "
-                    "CAST(:dimension_scores AS jsonb)) "
+                    "CAST(:dimension_scores AS jsonb), :thread_id) "
                     "RETURNING id"
                 ),
                 {
@@ -95,6 +99,7 @@ class SupabaseOutfitRepository:
                     "rationale_with_citations": rationale_with_citations,
                     "citations": json.dumps(citations or []),
                     "dimension_scores": json.dumps(dimension_scores or []),
+                    "thread_id": thread_id,
                 },
             ).fetchone()
             session.commit()
