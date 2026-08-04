@@ -1,0 +1,52 @@
+# Golden test set for feature 016's conversational-turn LLM call — evaluated in TWO separate
+# halves (docs/handoffs/016-conversational-turns.md §4.4, research.md §10):
+#
+#   expected_slots  - checkable deterministically: does extraction match, given prior_slots as
+#                      what the turn is told is already known.
+#   voice_check      - a loose/judge check (eval/conversational_harness.py, live gateway only,
+#                      never run in CI): does the reply hold the stylist voice described here.
+#
+# Do not assert exact reply_text anywhere against these cases — voice is judged, never diffed.
+
+cases:
+  - id: c01
+    utterance: "something for a wedding"
+    prior_slots: {}
+    expected_slots: {occasion: wedding}
+    voice_check: "Acknowledges the occasion; asks at most one follow-up (formality or weather), never both."
+
+  - id: c02
+    utterance: "it's a pretty formal one, black tie actually"
+    prior_slots: {occasion: wedding}
+    expected_slots: {formality: black_tie}
+    voice_check: "Does not re-ask about the occasion, which is already known."
+
+  - id: c03
+    utterance: "it'll be outdoors, probably around 15 degrees"
+    prior_slots: {occasion: wedding, formality: black_tie}
+    expected_slots: {temp_c: 15}
+    voice_check: "Acknowledges the weather detail; may suggest the user is ready to tap Start styling since occasion, formality and weather are all known."
+
+  - id: c04
+    utterance: "I'm feeling relaxed today, something easy for brunch"
+    prior_slots: {}
+    expected_slots: {occasion: brunch, mood: relaxed}
+    voice_check: "Extracts both occasion and mood from one message without asking a redundant question about either."
+
+  - id: c05
+    utterance: "we're meeting downtown, near the river"
+    prior_slots: {occasion: "dinner with friends"}
+    expected_slots: {location: downtown}
+    voice_check: "Treats the location as new information; does not fabricate a temperature or formality it wasn't given."
+
+  - id: c06
+    utterance: "haha nice, so what do you think?"
+    prior_slots: {occasion: "job interview", formality: business_casual}
+    expected_slots: {}
+    voice_check: "A plausible in-voice reply that extracts nothing new and does not invent a slot value from small talk."
+
+  - id: c07
+    utterance: "actually, let's make it more casual than that"
+    prior_slots: {occasion: "client dinner", formality: formal}
+    expected_slots: {formality: smart_casual}
+    voice_check: "Treats this as an update to formality, not a brand-new unrelated request."
