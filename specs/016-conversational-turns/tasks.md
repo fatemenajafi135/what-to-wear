@@ -168,6 +168,12 @@ values are in the `graph.invoke(...)` input (quickstart.md Scenario 2).
 - [ ] T029 [US2] `backend/tests/integration/test_recommend_routes.py`: a case with zero slots ever
       extracted — `/recommend/messages`'s invoke `occasion` falls back to `body.message`, matching
       008's original behavior exactly.
+- [ ] T029a [US2] `backend/tests/integration/test_recommend_routes.py`: overwrite case (FR-004) —
+      two `/recommend/turns` calls on one thread that each extract a *different* value for the
+      **same** slot (e.g. formality "casual" then "business_casual"); assert the later value, not
+      the earlier one, is what reaches the `/recommend/messages` invoke input. Distinct from T026
+      (which proves two *different* slots both arrive) — this is the one test that actually exercises
+      the checkpointer's per-key overwrite semantics §47 relies on.
 
 **Checkpoint**: the conversation demonstrably changes pipeline input. Combined with Phase 3, this is
 the feature's core value delivered.
@@ -192,6 +198,10 @@ data-model.md's degrade case).
 - [ ] T032 [US3] `backend/tests/integration/test_recommend_routes.py`: `/recommend/messages`
       response includes `wrap_up_text`, and a `wrap_up`-kind message row exists afterward
       (`GET /recommend/sessions/{id}` shows it in order, alongside the existing `styling_reply`).
+      Same test also asserts a `conversational_turn` row from an earlier `/recommend/turns` call in
+      the same thread comes back from `GET /recommend/sessions/{id}` with `role="assistant"` — the
+      one place the two new `messages.kind` values actually reach an existing (011) read path, which
+      nothing else in this phase otherwise exercises.
 - [ ] T033 [P] [US3] Update `RecommendChat.test.tsx`: wrap-up bubble renders above the outfit pager
       within one `handleStartStyling` response.
 
