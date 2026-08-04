@@ -658,8 +658,11 @@ def send_message(
 
     # feature 016 (design-decisions.md §49): a Python-templated summary, not a second LLM call —
     # rendered on every "Start styling" tap, first or refinement, since `result.context` is
-    # populated identically on both paths.
-    wrap_up = turn_copy.wrap_up_text(occasion, result.context.formality if result.context is not None else None)
+    # populated identically on both paths. Reuses `_meta_line`'s own humanized labels (found live:
+    # the raw `Formality` literal, e.g. "black_tie", reads as a bug in user-visible copy) rather
+    # than the raw enum value.
+    wrap_up_formality = _FORMALITY_LABELS[result.context.formality] if result.context is not None else None
+    wrap_up = turn_copy.wrap_up_text(occasion, wrap_up_formality)
     session_repository.insert_message(user_id, thread_id, "wrap_up", wrap_up)
 
     return SendMessageResponse(

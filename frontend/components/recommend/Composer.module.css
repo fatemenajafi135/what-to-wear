@@ -51,3 +51,23 @@
     background-color: var(--color-primary-hover);
   }
 }
+
+/*
+ * design-system.md "Chat input behavior", Intended (production): swap the
+ * arrow glyph for a small spinner while sending, so the disabled state
+ * reads as "in progress," not "broken." Reduced-motion fallback is the
+ * static icon, same convention globals.css's .skeleton uses.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .spinner {
+    animation: spin 800ms linear infinite;
+  }
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

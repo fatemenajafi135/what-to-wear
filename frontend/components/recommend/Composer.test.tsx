@@ -39,9 +39,18 @@ describe("Composer", () => {
     expect(screen.getByLabelText("Send")).toBeDisabled();
   });
 
-  it("disables input and send button while a request is in flight", () => {
+  it("disables input and send button while a request is in flight, with a distinct affordance", () => {
     render(<Composer onSend={vi.fn()} inFlight={true} />);
     expect(screen.getByLabelText("Message")).toBeDisabled();
-    expect(screen.getByLabelText("Send")).toBeDisabled();
+    // design-system.md "Chat input behavior", Intended (production): the send button shows a
+    // visible sending affordance (swapped label/icon), not just a disabled arrow.
+    expect(screen.getByLabelText("Sending")).toBeDisabled();
+    expect(screen.queryByLabelText("Send")).not.toBeInTheDocument();
+  });
+
+  it("shows the plain send affordance again once no longer in flight", () => {
+    render(<Composer onSend={vi.fn()} inFlight={false} />);
+    expect(screen.getByLabelText("Send")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Sending")).not.toBeInTheDocument();
   });
 });

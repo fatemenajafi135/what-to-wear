@@ -21,13 +21,20 @@ from langsmith import traceable
 
 from .adapters.llm_gateway import get_chat_model
 from .prompts import load_prompt
-from .schema import ConversationalTurnResult
+from .schema import FORMALITY_ORDER, ConversationalTurnResult
 
 # Hand-written nullable-required schema — same reason `vision.py::_EXTRACTION_SCHEMA` gives:
 # the gateway's structured-output mode rejects a Pydantic-derived schema for a model with
 # optional fields (it expects every property in `required`, optionality expressed as a nullable
 # type). `reply_text` is genuinely required (never null); every slot is nullable but still listed
 # in `required`, matching the gateway's own expectation.
+#
+# `formality` carries an explicit `enum` (found live: without one, the model reliably
+# understands a phrase like "black tie" well enough to reply in-voice about it, but does not
+# reliably map it onto the exact literal the pipeline's `Formality` type expects — a real
+# extraction-quality gap, not the schema's optionality itself. Constitution Principle VI: the
+# pipeline consumes only these six values, so constraining the model's *output* to them (rather
+# than free text ConversationalTurnResult's own validator then has to police) is the fix.
 _TURN_SCHEMA = {
     "title": "ConversationalTurnResult",
     "type": "object",
@@ -35,7 +42,7 @@ _TURN_SCHEMA = {
         "reply_text": {"type": "string"},
         "occasion": {"type": ["string", "null"]},
         "mood": {"type": ["string", "null"]},
-        "formality": {"type": ["string", "null"]},
+        "formality": {"type": ["string", "null"], "enum": [*FORMALITY_ORDER, None]},
         "location": {"type": ["string", "null"]},
         "temp_c": {"type": ["number", "null"]},
     },
