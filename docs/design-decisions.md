@@ -2203,3 +2203,185 @@ explicitly asks to show it.
 | (b) Take the handoff's wording literally and resurrect the pre-§35 bubble-plus-inline-badge rendering path, live-only, just for this screen | Reintroduces a rendering treatment §35 deliberately and explicitly removed as having "no remaining surface, at any outfit count" — resurrecting it for one screen contradicts that decision rather than building on it, and there is no data left to feed it: `SendMessageResponse.citations` and the `[n]`-marker splice were removed outright, not deprecated. |
 | (c) Render outfit-bearing turns with no citations at all, treating the handoff's line as stale/superseded and dropping it | Closest to "do nothing," but the data to satisfy it honestly already exists (§38's per-outfit citation columns) and costs nothing new to surface — dropping a design requirement outright when a grounded, no-new-surface way to satisfy it is available isn't the smaller change, just a less complete one. |
 | Add a third state (e.g. `null`/"undecided") distinct from both `true` and `false` | Would need a schema change (nullable boolean or a new enum) for a distinction the product doesn't currently use anywhere — no screen renders an "undecided" heart state, only filled/outline (§ Outfit suggestion pager, § Outfits gallery). Boolean `false` already *is* "undecided, leaning not-yet-expressed" for every practical purpose this app has today; a third state would be speculative. |
+
+## 47. Feature 016 (Conversational turns) — where accumulated slots live
+
+**Status: decided.** The handoff's own §4.2/§8 open question. §37 names the checkpointer as
+"the obvious candidate" and asks for the choice to be recorded with alternatives — this is that
+record.
+
+### Decision: the pipeline's own LangGraph checkpointer, read/written directly via `CompiledStateGraph.get_state`/`update_state`, never via `.invoke`
+
+`pipeline.graph.get_compiled_graph(repo)` already compiles with `checkpointer=memory.get_checkpointer()`
+(`graph.py::compile_graph`) — the same Postgres-or-in-memory-backed store `original_context` and
+`refinement_deltas` already rely on for durability across turns on one `thread_id` (`GraphState`'s own
+docstring: "persisted across invokes on the same thread_id by the checkpointer"). `CompiledStateGraph`
+exposes `get_state(config)`/`update_state(config, values)` as first-class LangGraph API for reading and
+patching a thread's checkpointed state **without running any node** — no `START` edge fires, no
+`gather_context`/`wardrobe_retrieval`/`generate_outfits` node executes. That is what makes this
+satisfy the handoff's "no retrieval, no wardrobe load, no pipeline invocation" constraint literally:
+"invocation" means running the graph, not touching its checkpoint.
+
+The conversational-turn call therefore does exactly this each turn:
+
+1. `values = graph.get_state(config).values` — read whatever slots a prior turn already wrote (`{}` on
+   a thread with no checkpoint yet, not an error).
+2. Extract new slots from the user's message via the LLM (§ new `conversation.py` module).
+3. `graph.update_state(config, {k: v for k, v in extracted.items() if v is not None})` — write only the
+   keys this turn actually produced a value for.
+
+Slot keys are `GraphState`'s own field names (`occasion`, `mood`, `formality`, `location`, `temp_c`) —
+per the handoff's explicit instruction ("slot names match `GraphState`'s existing fields exactly") —
+written into the exact same state object those fields already occupy for a real pipeline run. Because
+`GraphState` has no custom reducer on any of these keys, LangGraph's default per-key overwrite
+semantics on `update_state` **already implement the accumulation rule for free**: a later turn's
+`update_state({"formality": "casual"})` overwrites only `formality`, leaving `occasion`/`mood`/whatever
+else untouched — this is the same last-write-wins behavior `parse_request`/`gather_context` already
+depend on for refinement turns, not a new persistence idiom invented for this slice.
+
+**"Start styling" still composes its request explicitly**, not by relying on this merge to flow through
+automatically: `send_message` reads `graph.get_state(config).values` itself and builds the full
+`graph.invoke(...)` input dict by hand (occasion/mood/formality/location/temp_c pulled out one by one),
+even though — because both read from and write to the same checkpoint — omitting fields from the
+`invoke()` call would technically let them merge in anyway. The explicit build exists because the
+handoff's own definition of done requires proving "what gets passed to the graph on the Start-styling
+call... by inspecting the invoke input" — an implicit merge is not inspectable at the call site; an
+explicit dict is.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — checkpointer, via `get_state`/`update_state`, never `.invoke` | — |
+| (b) A new `sessions.slots jsonb` column, upserted by the conversational-turn route | Requires a migration the handoff's own header flags as unexpected ("Migration number: none expected"), for a durability guarantee the checkpointer already provides for the identical `thread_id` key with zero schema change. The only argument for it — slots living next to `sessions` where they're easy to inspect in the DB — is outweighed by adding a second per-thread persistence mechanism alongside the one the pipeline already has, for the same data shape, when nothing about a JSONB column does something the checkpointer can't. |
+| (c) `memory/store.py`'s existing `InMemoryStore` (`remember_interaction`/`recent_interactions`) | Explicitly in-process, non-durable — dies on a server restart or (on Railway, multi-instance) on landing on a different instance than the one that handled a prior turn. Feature 011's own "reload the page, find it in Chat history" guarantee already proves messages must survive a reload; losing every accumulated slot on that same reload while the messages that produced them are still visible would silently degrade the very outcome §37 exists to fix (a formality mentioned in turn 2 would vanish and "Start styling" would fall back to raw text) — precisely the "value accepted with a 2xx and then silently dropped" failure the handoff's §8 names as having shipped four times already. |
+| (d) Reconstruct slots on demand from the persisted `messages` transcript (re-run extraction, or store each turn's raw delta and replay) | Either re-runs a non-deterministic LLM extraction a second time (the exact turn's original extraction is not guaranteed reproducible) or requires storing per-message deltas somewhere anyway — at which point that storage location is the real answer and this option has just relocated the question, with replay complexity added on top for no benefit. |
+
+## 48. Feature 016 (Conversational turns) — the turn cap value and what counts as a "turn"
+
+**Status: decided.** The handoff's own §4.4/§8 open question: "what the turn cap should be."
+
+### Decision: `wtw_conversation_turn_cap: int = 6`, in `Settings` beside `wtw_wardrobe_min_items`; counts `user_message` rows per thread, lifetime (not reset by a "Start styling" tap)
+
+A "turn" is one user-authored message accepted by the new conversational endpoint — counted by
+querying existing `kind = 'user_message'` rows for the thread (`SupabaseSessionRepository`'s own
+append-only table, already the single source of truth for what a user has sent; no second counter to
+drift). On the call where that count would exceed 6, the endpoint skips the LLM call entirely and
+returns the fixed "turn cap reached" copy (§8's draft table) instead of a generated reply — every call
+after that does the same, so cost is bounded linearly in the worst case a user keeps typing past the
+cap, not just at the boundary.
+
+6 is chosen as enough room for the realistic slot set (occasion, formality, weather/temp, mood — four
+questions) plus at least one correction or follow-up, while still being a small, single-digit number a
+user notices as "the assistant is steering me along," matching FR-009's intent. It is a config default,
+not a researched number — `wtw_wardrobe_min_items`/`wtw_wardrobe_sparse_threshold` (design-decisions.md
+§11) were likewise picked as reasonable small integers rather than derived from measurement, and this
+follows the same precedent.
+
+The cap is **lifetime per thread**, not reset when "Start styling" is tapped: counting resets only in
+the sense that a *brand new* thread (`thread_id = None`) starts its own count at zero.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — 6, lifetime per thread, counted from `messages` | — |
+| (b) Reset the count every time "Start styling" is tapped, so each "round" of conversation gets its own 6 turns | Adds a second notion of "round" boundary nothing else in this slice needs (a thread's `messages` rows have no round marker), and undermines the cap's own purpose — a thread could accumulate unbounded LLM calls in total by tapping Start styling repeatedly, just never more than 6 between taps. FR-009 caps a conversation, not a round. |
+| (c) A fixed constant in code, not a `Settings` field | Directly contradicts the handoff's explicit instruction ("Config, not a constant"). |
+| (d) Count LLM calls actually made (excluding cap-reached short-circuits) rather than `user_message` rows | Same number in practice until the cap is first reached, but requires a new counter instead of reusing `messages`, for no behavioral difference — once capped, no further LLM calls happen either way, so nothing this option tracks is checkable at the persistence layer that the message count doesn't already show. |
+
+## 49. Feature 016 (Conversational turns) — accumulated slots after a "Start styling" tap: handed off to the pipeline's own existing refinement mechanism, not reused for a second round of composition
+
+**Status: decided.** The handoff's own §8 named-open question: "does the next turn start fresh, or
+keep refining?"
+
+### The situation
+
+A thread can receive more composer sends *after* "Start styling" has already produced outfits once —
+the composer stays visible, and 008/009 already support a second "Start styling" tap on the same
+`thread_id` as a **refinement** turn: `parse_request` detects `original_context is not None` (set once,
+on the first real invoke) and keyword-parses whatever `occasion` text arrives on that later invoke into
+`refinement_deltas` via `_parse_refinement_intent` — unmodified, existing, evaluated pipeline behavior
+this slice is constitutionally forbidden from touching (Principle I, handoff §6 trap #1).
+
+Under 016, every one of those later composer sends *also* hits the new conversational endpoint first
+(§37's core decision: "every composer send calls a new, separate conversational endpoint"), which by
+default would keep extracting/accumulating slots the same way it does before the first tap. The
+question is what "Start styling" should do with those slots on a *second* tap: recompose a full request
+from them again (as if from scratch), or something else.
+
+### Decision: slot composition applies only to a thread's first real pipeline invoke; every later invoke on that thread uses the pre-016 raw-text refinement path, unchanged
+
+`send_message` checks the same signal `parse_request` itself uses — `graph.get_state(config).values.get("original_context") is None` — *before* building the invoke input:
+
+- **`original_context is None` (first invoke on this thread)**: compose from accumulated slots, per §47
+  — this is the new behavior.
+- **`original_context is not None` (a later, refinement invoke)**: build the invoke input exactly as
+  008 always has — `{"occasion": body.message, "thread_id": ..., "user_id": ..., "approach": "grounded"}`,
+  where `body.message` is the frontend's own accumulated raw text since the last tap (unchanged
+  `pendingTexts.join(" ")`, §28's mechanism, still alive for this one purpose). No slot dict is
+  consulted on this path at all.
+
+Conversational turns that happen *after* the first tap still get real, in-voice replies from the new
+endpoint (the mission's promise — "every composer send" — doesn't stop applying once outfits exist),
+and they still write whatever they extract into the checkpoint via `update_state` exactly as before.
+That write is simply never read again by `send_message`, because every later invoke on that thread has
+already committed to the raw-text refinement path. The slots are not deleted or reset — there is
+nothing to reset — they are just no longer the input this particular request composes from.
+
+**Why not keep composing from slots on every tap**: `_parse_refinement_intent` is deterministic,
+keyword-driven, and reads the literal `occasion` string handed to a *refinement* invoke, looking for
+phrases like "warmer" or "less formal" (`graph.py`'s own `_WARMER_KEYWORDS`/`_LESS_FORMAL_KEYWORDS`).
+If `send_message` instead re-passed the *original* composed occasion (unchanged since slots don't
+re-derive a new "what changed" summary), that string would almost never contain a refinement keyword,
+silently starving the pipeline's own refinement path of the signal it's designed to consume — a second,
+competing "what should change" mechanism would exist alongside the first, and only one of them would
+actually reach `_parse_refinement_intent`. Handing off to the existing mechanism unmodified is the
+Principle-I-compliant choice: reuse the evaluated refinement path exactly as built, rather than
+inventing a second one that would need its own evaluation to trust.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — slots compose only the first invoke; every later invoke uses the unmodified raw-text refinement path, selected via the same `original_context` signal `parse_request` already uses | — |
+| (b) Recompose the full request from accumulated slots on every "Start styling" tap, first or later | Silently defeats `_parse_refinement_intent` as reasoned above — a "warmer" follow-up would very likely produce an *identical* invoke input to the previous tap, since nothing in a slot dict encodes "compared to what changed." Outfits would appear not to respond to a refinement request, which is a worse, harder-to-diagnose failure than "slots are only used once." |
+| (c) Explicitly clear/reset the checkpointed slot keys once the first invoke completes | Unnecessary extra write (an `update_state` call whose only purpose is deletion) for a value that's already correctly ignored by the read-path decision in (a) — nothing ever reads stale slots after the first invoke, so clearing them defends against a bug that can't occur given how `send_message` already branches. Simplicity over abstraction (Quality Bar) favors not adding the write. |
+| (d) Track a separate "has this thread ever been styled" boolean instead of reusing `original_context is None` | Would duplicate a signal `parse_request` already computes from the exact same checkpointed state, for the exact same thread, one node earlier in the same request — a second flag that could only ever drift from the first, never add information (the same reasoning §44 gave for not storing `role` as its own column). |
+
+## 50. Feature 016 (Conversational turns) — `POST /recommend/messages` stops inserting its own `user_message` row
+
+**Status: decided.** Not one of the handoff's named open questions, but a real defect the mission
+creates without naming: §37's "every composer send calls a new, separate conversational endpoint" means
+every user-authored turn is now recorded once, immediately, by that endpoint — before "Start styling"
+is ever tappable (`StartStylingButton`'s existing `visible={hasUserMessage}` guard). `send_message`
+(`recommend.py`) has, since 008, *also* unconditionally inserted `body.message` as a fresh
+`kind='user_message'` row on every call. Left unchanged, a first "Start styling" tap under 016 would
+write the user's own words into `messages` twice — once already, per individual send, via the new
+endpoint; once more, joined, via this pre-existing line — a duplicated transcript entry Session detail
+(011) would render as the user having said everything twice.
+
+### Decision: the new conversational endpoint owns every `user_message` insert; `send_message` drops its own
+
+Because *every* composer send now reaches the new conversational endpoint first — before or after a
+first "Start styling" tap, per §49 above — there is no longer a code path, reachable from the real UI,
+where `send_message` is called with text that endpoint hasn't already recorded. The insert is removed
+outright, not made conditional on "does a row already exist" — a conditional would only be needed if
+some caller could still reach `send_message` with genuinely new, never-recorded text, and under the
+architecture this slice ships, none can.
+
+This does change tested behavior from 008/009: their existing integration tests call
+`POST /recommend/messages` directly, without a prior conversational-endpoint call, and (where they
+assert on it) expect a `user_message` row to exist afterward. Those tests are updated in this slice to
+either call the conversational endpoint first (matching the real flow) or to assert the now-correct
+absence of a route-level insert — not deleted, so the handoff's "test count has not dropped" bar still
+holds, and the coverage they provided (that a user's turn is durably recorded before a styling reply)
+still exists, just attributed to the endpoint that now actually does the recording.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — remove the insert from `send_message`; the conversational endpoint is the only writer of `user_message` rows | — |
+| (b) Keep both inserts, deduplicate in the read path (e.g. `Session detail` collapses consecutive identical `user_message` texts) | Papers over a real double-write with a display-layer heuristic — the underlying duplicate row still exists, still counts toward `message_count` (§44), and "collapse consecutive identical text" is itself a guess that could wrongly hide a user who genuinely repeated themselves. Fixing the write is strictly simpler than adding a lossy read-time filter to compensate for it. |
+| (c) Make the insert conditional on `count_user_messages(thread_id) == 0` (only insert if this is the very first message this thread has ever seen) | Silently reintroduces the duplicate for every *refinement* tap after the first, since those threads already have prior `user_message` rows from earlier conversational turns — the condition only guards the fresh-thread case, not the (more common, post-016) continuing-thread case, so it fixes the bug only partway while looking like a complete fix. |
