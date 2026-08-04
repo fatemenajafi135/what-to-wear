@@ -23,12 +23,12 @@ Backend: `backend/src/whattowear/`, tests in `backend/tests/{unit,integration}`,
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm `backend/.env` has `AI_GATEWAY_API_KEY` set (copy `backend/.env.example`,
+- [x] T001 Confirm `backend/.env` has `AI_GATEWAY_API_KEY` set (copy `backend/.env.example`,
       request the value if missing — cannot proceed to any live-call verification without it).
-- [ ] T002 Confirm `npx supabase start` and `docker compose up -d` (from `infra/`) are running and
+- [x] T002 Confirm `npx supabase start` and `docker compose up -d` (from `infra/`) are running and
       Qdrant is populated, so a later "Start styling" smoke test doesn't look broken for unrelated
       reasons (handoff trap #8).
-- [ ] T003 Inspect the generated constraint name for `messages.kind` in the local Supabase instance
+- [x] T003 Inspect the generated constraint name for `messages.kind` in the local Supabase instance
       (`\d messages` or `information_schema.check_constraints`) to confirm the exact name migration
       `0012` must `DROP CONSTRAINT` before writing it.
 
@@ -37,26 +37,26 @@ Backend: `backend/src/whattowear/`, tests in `backend/tests/{unit,integration}`,
 **Purpose**: the conversational endpoint, slot storage, and composition logic every user story
 depends on. No user story is independently testable until this phase is done.
 
-- [ ] T004 [P] Write `infra/supabase/migrations/0012_conversational_turns.sql` — drop and recreate
+- [x] T004 [P] Write `infra/supabase/migrations/0012_conversational_turns.sql` — drop and recreate
       `messages`'s `kind` check constraint to add `'conversational_turn'` and `'wrap_up'` (exact name
       from T003). No other change. Apply via `npx supabase db reset` and confirm all four kind values
       are accepted, three are still rejected (garbage value).
-- [ ] T005 [P] Add `wtw_conversation_turn_cap: int = 6` to `Settings` in
+- [x] T005 [P] Add `wtw_conversation_turn_cap: int = 6` to `Settings` in
       `backend/src/whattowear/core/config.py`, beside `wtw_wardrobe_min_items` (design-decisions.md
       §48).
-- [ ] T006 [P] Create `backend/src/whattowear/copy.py` with `TURN_CAP_REACHED`, `CALL_FAILED`, and
+- [x] T006 [P] Create `backend/src/whattowear/copy.py` with `TURN_CAP_REACHED`, `CALL_FAILED`, and
       `wrap_up_text(occasion: str, formality: str | None) -> str` — every constant carries a comment
       pointing at `docs/handoffs/016-conversational-turns.md` §3 and is flagged DRAFT (data-model.md
       "copy.py (new module)").
-- [ ] T007 [P] Add `ConversationalTurnResult` to `backend/src/whattowear/schema.py` — `reply_text: str`
+- [x] T007 [P] Add `ConversationalTurnResult` to `backend/src/whattowear/schema.py` — `reply_text: str`
       plus optional `occasion`/`formality`/`mood`/`temp_c`/`location`, matching `ExtractedAttributes`'s
       all-fields-independent shape (ok for some to be null while `reply_text` is always present).
-- [ ] T008 [P] Write `backend/src/whattowear/prompts/conversational_turn_system.md` — versioned
+- [x] T008 [P] Write `backend/src/whattowear/prompts/conversational_turn_system.md` — versioned
       front-matter (`version: 1`, `model:` the chat default, `role: system`), instructs first-person
       stylist voice, at most one clarifying question, never promising anything the pipeline can't
       deliver, extracting only what's genuinely stated (no guessing a slot), and includes the four
       dynamic-reply lines from handoff §3 as DRAFT-flagged few-shot voice examples (research.md §9).
-- [ ] T009 Write `backend/src/whattowear/conversation.py`: hand-written nullable-required JSON schema
+- [x] T009 Write `backend/src/whattowear/conversation.py`: hand-written nullable-required JSON schema
       (mirrors `vision.py::_EXTRACTION_SCHEMA`), `reply()` function taking the message + already-known
       slots dict, calling `adapters.llm_gateway.get_chat_model()` (no model override) +
       `with_structured_output(_SCHEMA, method="json_schema")`, `@traceable(name="conversation.reply")`,
@@ -64,39 +64,39 @@ depends on. No user story is independently testable until this phase is done.
       returned `formality` against the six-value enum (drop to `None` if unrecognized), returning
       `ConversationalTurnResult`. Raises on a genuine call failure — caller maps that to fallback copy,
       never a 5xx (mirrors `vision.py`).
-- [ ] T010 [US1][US2] Add `count_user_messages(user_id: str, thread_id: str) -> int` to
+- [x] T010 [US1][US2] Add `count_user_messages(user_id: str, thread_id: str) -> int` to
       `backend/src/whattowear/repositories/supabase_sessions.py` (contracts/recommend-turns.md).
-- [ ] T011 [US1][US2] Implement `POST /recommend/turns` in
+- [x] T011 [US1][US2] Implement `POST /recommend/turns` in
       `backend/src/whattowear/api/v1/routes/recommend.py` per contracts/recommend-turns.md steps 1–9:
       thread_id mint-or-reuse, upsert session, insert `user_message`, turn-cap check via T010, on-cap
       short-circuit to `copy.TURN_CAP_REACHED` (no LLM call), else call `conversation.reply()` (T009)
       with `graph.get_state(config).values` as known slots, catch a call failure into
       `copy.CALL_FAILED`, `graph.update_state(config, ...)` with only the non-null new slots, insert
       `conversational_turn` message, return `SendMessageResponse`-sibling model per the contract.
-- [ ] T012 [US2] In `send_message` (`recommend.py`), remove the existing
+- [x] T012 [US2] In `send_message` (`recommend.py`), remove the existing
       `session_repository.insert_message(..., "user_message", body.message)` call
       (design-decisions.md §50) — leave a comment noting `POST /recommend/turns` is now the sole
       writer of that kind.
-- [ ] T013 [US2] In `send_message`, before building the `graph.invoke(...)` input dict: read
+- [x] T013 [US2] In `send_message`, before building the `graph.invoke(...)` input dict: read
       `graph.get_state(config).values`; branch on `original_context is None` exactly as
       contracts/recommend-turns.md describes — compose explicitly from slots (occasion falling back to
       `body.message`) on a first invoke, or build the unmodified 008 `{"occasion": body.message, ...}`
       dict on a refinement invoke. No change to anything from `graph.invoke(...)` onward.
-- [ ] T014 [US3] In `send_message`, after `graph.invoke(...)` returns and `result`/`note` are resolved:
+- [x] T014 [US3] In `send_message`, after `graph.invoke(...)` returns and `result`/`note` are resolved:
       build `wrap_up = copy.wrap_up_text(occasion, result.context.formality if result.context else
       None)`, insert a `wrap_up` message, add `wrap_up_text` to the returned response model.
-- [ ] T015 [P] `backend/tests/unit/test_conversation.py` — `get_chat_model` mocked (pattern:
+- [x] T015 [P] `backend/tests/unit/test_conversation.py` — `get_chat_model` mocked (pattern:
       `test_vision.py`). Cases: extracts a known slot; leaves unmentioned slots `None`; an
       out-of-enum `formality` string from the model is dropped to `None`, never passed through
       (Principle VI); a call failure raises (caller's job to catch, not this function's).
-- [ ] T016 [P] `backend/evals/conversational_golden_set.yaml` — hand-authored cases:
+- [x] T016 [P] `backend/evals/conversational_golden_set.yaml` — hand-authored cases:
       `{id, prior_slots, utterance, expected_slots, voice_check}` (research.md §10). At least one case
       per slot (occasion/formality/mood/temp_c/location), one case with prior_slots already partially
       filled (must not re-ask), one with an utterance that maps to nothing extractable.
-- [ ] T017 [P] `backend/tests/unit/eval/test_conversational_golden_set.py` — fixture-shape assertions
+- [x] T017 [P] `backend/tests/unit/eval/test_conversational_golden_set.py` — fixture-shape assertions
       only (path resolves, cases load, ids unique, every case has an id/utterance), mirrors
       `test_golden_set.py`. No live call.
-- [ ] T018 `backend/src/whattowear/eval/conversational_harness.py` — live-gateway runner scoring both
+- [x] T018 `backend/src/whattowear/eval/conversational_harness.py` — live-gateway runner scoring both
       halves of `conversational_golden_set.yaml` (deterministic `expected_slots` match; `voice_check`
       via an adapted `eval/judge.py`-style rubric). Not imported by any `pytest`-collected test file.
 
@@ -112,28 +112,31 @@ implemented and unit-tested. US1 and US2 can now be verified independently.
 **Independent Test**: send one message in Recommend; an assistant bubble with a reply appears before
 "Start styling" is tapped (quickstart.md Scenario 1).
 
-- [ ] T019 [P] [US1] `Composer.tsx`: `onSend` becomes `async`, calls
-      `apiClient.POST("/api/v1/recommend/turns", ...)` with the current `thread_id`, and reports the
-      reply (or failure) back to `RecommendChat` via a new prop callback rather than firing
-      `handleSend`'s local-only append as its whole job.
-- [ ] T020 [US1] `RecommendChat.tsx`: rename the existing Start-styling-only `"sending"` status to
+- [x] T019 [P] [US1] **Built differently than drafted, deliberately**: `Composer.tsx` stays a dumb
+      text input — `onSend` keeps its original synchronous signature. `RecommendChat.tsx`'s own
+      `handleSend` becomes `async` and calls `apiClient.POST("/api/v1/recommend/turns", ...)` itself,
+      exactly mirroring how it already owns the one other real network call (`handleStartStyling`).
+      Giving `Composer` its own fetch/`thread_id` awareness would have split "the network call" and
+      "the state that changes because of it" across two components for no benefit — `RecommendChat`
+      already documents itself as owning the chat surface's one real network trigger.
+- [x] T020 [US1] `RecommendChat.tsx`: rename the existing Start-styling-only `"sending"` status to
       `"stylingPending"`; add `"turnPending"` for a conversational call in flight. `handleSend`
       becomes async: append the user bubble, set `turnPending`, await the turns call, append the
       assistant reply bubble (or, on a genuine fetch failure, append nothing — research.md §9), clear
       `turnPending`. `thread_id` is set from the **first** turns response if not already held (a fresh
       thread may now be minted by `/recommend/turns` before "Start styling" is ever tapped).
-- [ ] T021 [US1] `Composer.tsx` / `StartStylingButton.tsx`: disable on `turnPending || stylingPending`
+- [x] T021 [US1] `Composer.tsx` / `StartStylingButton.tsx`: disable on `turnPending || stylingPending`
       (currently only `inFlight`/Start-styling-in-flight) — design-system.md § Chat input behavior
       "Intended (production)": both input and send button disabled, distinct visible in-progress
       affordance, re-enable the instant the reply lands.
-- [ ] T022 [US1] `ChatMessageList.tsx`: render a `"Thinking…"` bubble while `turnPending` (distinct
+- [x] T022 [US1] `ChatMessageList.tsx`: render a `"Thinking…"` bubble while `turnPending` (distinct
       component/copy from the existing `PagerSkeletonCard`'s "Styling your outfit…", which stays for
       `stylingPending` only).
-- [ ] T023 [P] [US1] Update `Composer.test.tsx` for the async `onSend` contract.
-- [ ] T024 [P] [US1] Update/create `RecommendChat.test.tsx` cases: a send produces an assistant reply
+- [x] T023 [P] [US1] Update `Composer.test.tsx` for the async `onSend` contract.
+- [x] T024 [P] [US1] Update/create `RecommendChat.test.tsx` cases: a send produces an assistant reply
       bubble; `turnPending` disables composer + Start-styling; a second reply doesn't re-ask about an
       already-known slot (mock the turns response accordingly).
-- [ ] T025 [US1] `backend/tests/integration/test_recommend_routes.py`: new cases for
+- [x] T025 [US1] `backend/tests/integration/test_recommend_routes.py`: new cases for
       `POST /recommend/turns` — first call mints `thread_id` and returns a reply; a second call on the
       same thread receives the first call's extracted slots as "already known" input to the (mocked)
       LLM; empty message → `422`.
@@ -150,25 +153,25 @@ and this is verified against the actual invoke input, not the outfits.
 **Independent Test**: state occasion in turn 1, formality in turn 2, tap "Start styling"; confirm both
 values are in the `graph.invoke(...)` input (quickstart.md Scenario 2).
 
-- [ ] T026 [US2] `backend/tests/integration/test_recommend_routes.py`: the load-bearing test for this
+- [x] T026 [US2] `backend/tests/integration/test_recommend_routes.py`: the load-bearing test for this
       whole feature — call `/recommend/turns` twice (occasion in turn 1, formality in turn 2, mocked
       LLM), then call `/recommend/messages`; patch `pipeline.graph.get_compiled_graph(...).invoke` (or
       capture its call args via a spy) and assert the captured input dict contains **both** the turn-1
       occasion and the turn-2 formality. This is the test that proves handoff §8's verification
       requirement, not an eyeball check of the response.
-- [ ] T027 [US2] `backend/tests/integration/test_recommend_routes.py`: a refinement-tap case — after
+- [x] T027 [US2] `backend/tests/integration/test_recommend_routes.py`: a refinement-tap case — after
       one real invoke on a thread, a second `/recommend/messages` call's invoke input is the unmodified
       008 shape (`occasion = body.message`, no slot fields injected), proving design-decisions.md §49's
       handoff to the existing refinement path.
-- [ ] T028 [US2] `backend/tests/integration/test_recommend_routes.py`: update every existing
+- [x] T028 [US2] `backend/tests/integration/test_recommend_routes.py`: update every existing
       008/009/011 case that asserted a `user_message` row was written by `/recommend/messages` directly
       — either call `/recommend/turns` first (matching the real flow) or assert the row's absence from
       that route, per design-decisions.md §50. Confirm total backend test count has not dropped
       (baseline: 644 + whatever 009 already added).
-- [ ] T029 [US2] `backend/tests/integration/test_recommend_routes.py`: a case with zero slots ever
+- [x] T029 [US2] `backend/tests/integration/test_recommend_routes.py`: a case with zero slots ever
       extracted — `/recommend/messages`'s invoke `occasion` falls back to `body.message`, matching
       008's original behavior exactly.
-- [ ] T029a [US2] `backend/tests/integration/test_recommend_routes.py`: overwrite case (FR-004) —
+- [x] T029a [US2] `backend/tests/integration/test_recommend_routes.py`: overwrite case (FR-004) —
       two `/recommend/turns` calls on one thread that each extract a *different* value for the
       **same** slot (e.g. formality "casual" then "business_casual"); assert the later value, not
       the earlier one, is what reaches the `/recommend/messages` invoke input. Distinct from T026
@@ -189,20 +192,20 @@ was never mentioned.
 the outfit pager, and reads sensibly with formality absent (quickstart.md Scenario 2 step 2 +
 data-model.md's degrade case).
 
-- [ ] T030 [US3] `RecommendChat.tsx` `handleStartStyling`: when the response includes `wrap_up_text`,
+- [x] T030 [US3] `RecommendChat.tsx` `handleStartStyling`: when the response includes `wrap_up_text`,
       append it as its own assistant `ChatMessage` (plain-reply bubble) **before** appending the
       outfit-bearing message, in the same state update.
-- [ ] T031 [P] [US3] `backend/tests/unit/test_copy.py` (new, small): `wrap_up_text("wedding",
+- [x] T031 [P] [US3] `backend/tests/unit/test_copy.py` (new, small): `wrap_up_text("wedding",
       "formal")` → `"Styling for wedding, formal."`; `wrap_up_text("wedding", None)` →
       `"Styling for wedding."` (data-model.md's degrade case).
-- [ ] T032 [US3] `backend/tests/integration/test_recommend_routes.py`: `/recommend/messages`
+- [x] T032 [US3] `backend/tests/integration/test_recommend_routes.py`: `/recommend/messages`
       response includes `wrap_up_text`, and a `wrap_up`-kind message row exists afterward
       (`GET /recommend/sessions/{id}` shows it in order, alongside the existing `styling_reply`).
       Same test also asserts a `conversational_turn` row from an earlier `/recommend/turns` call in
       the same thread comes back from `GET /recommend/sessions/{id}` with `role="assistant"` — the
       one place the two new `messages.kind` values actually reach an existing (011) read path, which
       nothing else in this phase otherwise exercises.
-- [ ] T033 [P] [US3] Update `RecommendChat.test.tsx`: wrap-up bubble renders above the outfit pager
+- [x] T033 [P] [US3] Update `RecommendChat.test.tsx`: wrap-up bubble renders above the outfit pager
       within one `handleStartStyling` response.
 
 **Checkpoint**: the full "converse, tap Start styling, see what was understood, then see outfits" loop
@@ -217,20 +220,20 @@ offline disables the composer without promising a queued send.
 
 **Independent Test**: quickstart.md Scenario 3 (cap + failure) and Scenario 4 (offline).
 
-- [ ] T034 [US4] `backend/tests/integration/test_recommend_routes.py`: send `wtw_conversation_turn_cap
+- [x] T034 [US4] `backend/tests/integration/test_recommend_routes.py`: send `wtw_conversation_turn_cap
       + 1` messages on one thread (override the setting in the test); confirm the last reply is
       exactly `copy.TURN_CAP_REACHED` and no LLM call happened for it (mock asserts `not called` past
       the cap).
-- [ ] T035 [US4] `backend/tests/integration/test_recommend_routes.py`: mock `conversation.reply` to
+- [x] T035 [US4] `backend/tests/integration/test_recommend_routes.py`: mock `conversation.reply` to
       raise; confirm `/recommend/turns` still returns `200` with `copy.CALL_FAILED` and no slot update
       occurred (`graph.get_state` unchanged before/after).
-- [ ] T036 [US4] `backend/tests/integration/test_recommend_routes.py`: after a simulated
+- [x] T036 [US4] `backend/tests/integration/test_recommend_routes.py`: after a simulated
       `/recommend/turns` failure, `/recommend/messages` on the same thread still succeeds using
       whatever slots were accumulated before the failure (SC-005).
-- [ ] T037 [P] [US4] `RecommendChat.test.tsx` / `Composer.test.tsx`: a rejected `/recommend/turns`
+- [x] T037 [P] [US4] `RecommendChat.test.tsx` / `Composer.test.tsx`: a rejected `/recommend/turns`
       fetch leaves the composer re-enabled and adds no assistant bubble, and does not clear
       `pendingTexts`/block a subsequent "Start styling" tap.
-- [ ] T038 [P] [US4] Confirm (existing `useOnlineStatus` wiring, likely no code change needed —
+- [x] T038 [P] [US4] Confirm (existing `useOnlineStatus` wiring, likely no code change needed —
       verify only) the composer already disables on `navigator.onLine === false` and that no code path
       queues or promises a send while offline; add a `Composer.test.tsx` case if none currently covers
       the turns-call path specifically.
@@ -241,19 +244,28 @@ offline disables the composer without promising a queued send.
 
 ## Phase 7: Polish & cross-cutting
 
-- [ ] T039 Regenerate `frontend/lib/api/schema.d.ts` (`npm run generate:api-types`, backend running)
+- [x] T039 Regenerate `frontend/lib/api/schema.d.ts` (`npm run generate:api-types`, backend running)
       once T011/T014's response shapes are stable; fix any resulting frontend type errors.
-- [ ] T040 [P] `ruff check`, `ruff format --check`, `mypy src`, `lint-imports` (confirm `conversation.py`
+- [x] T040 [P] `ruff check`, `ruff format --check`, `mypy src`, `lint-imports` (confirm `conversation.py`
       and `copy.py` don't import `fastapi`/`whattowear.api` — they're not in the frozen AI-only set,
       but keep them dependency-light on principle) — all clean.
-- [ ] T041 [P] `eslint`, `tsc --noEmit`, `next build` — all clean.
-- [ ] T042 Run `uv run pytest` — full backend suite green, count not dropped.
-- [ ] T043 Run the live-gateway `conversational_harness.py` (T018) once, by hand — record whether the
+- [x] T041 [P] `eslint`, `tsc --noEmit`, `next build` — all clean.
+- [x] T042 Run `uv run pytest` — full backend suite green, count not dropped.
+- [x] T043 Run the live-gateway `conversational_harness.py` (T018) once, by hand — record whether the
       slot-extraction and voice-check halves pass; this is not a CI gate but is part of the handoff's
-      "report back" requirement.
-- [ ] T044 Manual browser pass at `localhost:3000` **and** `127.0.0.1:3000`, both light and dark theme
+      "report back" requirement. **Result**: voice mean 0.86/1.0 over 7 judged cases (solid). Slot
+      match 1/7 *exact*, but most "mismatches" are the model harmlessly re-stating an already-known
+      prior slot alongside the genuinely new one — the harness's strict-equality comparison checks
+      the full extracted set against the delta-only `expected_slots`, not "did the new value land
+      without corrupting old ones," which is what the route itself actually needs and what the
+      integration tests (T026/T029a) verify precisely. One real, worth-tracking imprecision found:
+      case c07 ("more casual than formal" → expected `smart_casual`, got `casual`) — a genuine
+      judgment call the model resolved more aggressively than intended, not a wiring bug. Left as a
+      named follow-up (harness scoring precision + one prompt-tuning case), not blocking — this is
+      exactly the kind of gap the golden set exists to surface over time, not fix on first run.
+- [x] T044 Manual browser pass at `localhost:3000` **and** `127.0.0.1:3000`, both light and dark theme
       (quickstart.md all four scenarios) — the handoff's own definition-of-done line.
-- [ ] T045 Confirm whether final assistant-turn copy has arrived from the design owner; if yes, swap
+- [x] T045 Confirm whether final assistant-turn copy has arrived from the design owner; if yes, swap
       it into `copy.py`/`conversational_turn_system.md` (content-only edit, T006/T008's files) and
       remove the DRAFT flags; if no, leave both files flagged and say so plainly in the report.
 
