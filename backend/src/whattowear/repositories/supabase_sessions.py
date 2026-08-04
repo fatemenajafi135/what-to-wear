@@ -26,7 +26,7 @@ from ..core.db import get_session
 
 _session_scope = contextmanager(get_session)
 
-MessageKind = Literal["user_message", "styling_reply"]
+MessageKind = Literal["user_message", "styling_reply", "conversational_turn", "wrap_up"]
 
 
 def _set_jwt_claim(session: Session, user_id: str) -> None:
@@ -91,6 +91,21 @@ class SupabaseSessionRepository:
             session.commit()
             assert row is not None
             return str(row._mapping["id"])
+
+    def count_user_messages(self, user_id: str, thread_id: str) -> int:
+        """The turn-cap check's own source of truth (feature 016, design-decisions.md §48) — no
+        separate counter, the `messages` table itself is what's counted, lifetime per thread."""
+        with _session_scope() as session:
+            _set_jwt_claim(session, user_id)
+            row = session.execute(
+                text(
+                    "SELECT COUNT(*) AS n FROM messages "
+                    "WHERE session_id = :session_id AND user_id = :user_id AND kind = 'user_message'"
+                ),
+                {"session_id": thread_id, "user_id": user_id},
+            ).fetchone()
+            assert row is not None
+            return int(row._mapping["n"])
 
     def list_sessions(self, user_id: str) -> list[Row[Any]]:
         """Chat history's own list — most recently active first

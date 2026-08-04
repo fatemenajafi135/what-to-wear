@@ -114,6 +114,11 @@ class Settings(BaseSettings):
     # — bounds a genuinely stuck request, not ordinary multi-second latency.
     wtw_styling_request_timeout_seconds: int = 120
 
+    # --- Conversational turns (feature 016) --------------------------------------
+    # Lifetime per thread, not reset by a "Start styling" tap (design-decisions.md
+    # §48) — counted from existing `messages` rows, not a separate counter.
+    wtw_conversation_turn_cap: int = 6
+
     @property
     def judge_model(self) -> str:
         return self.wtw_judge_model or self.wtw_chat_model

@@ -32,8 +32,11 @@ from datetime import datetime
 from typing import Literal, NamedTuple
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
 
+from whattowear import conversation
+from whattowear import copy as turn_copy
 from whattowear.adapters import storage
 from whattowear.auth import get_current_access_token, get_current_user_id
 from whattowear.categories import CategoryGroup, group_of
@@ -44,7 +47,7 @@ from whattowear.readiness import ReadinessResult, evaluate_wardrobe_readiness
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
 from whattowear.repositories.supabase_outfits import Sort, SupabaseOutfitRepository
 from whattowear.repositories.supabase_sessions import SupabaseSessionRepository
-from whattowear.schema import CitedSource, Context, ScoredOutfit, WardrobeItem
+from whattowear.schema import CitedSource, Context, ConversationalTurnResult, ScoredOutfit, WardrobeItem
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +131,25 @@ class SendMessageRequest(BaseModel):
     thread_id: str | None = None
 
 
+class SendTurnRequest(BaseModel):
+    message: str
+    thread_id: str | None = None
+
+
+class SendTurnResponse(BaseModel):
+    """feature 016, contracts/recommend-turns.md — this turn's own extraction only, not the
+    accumulated set (that lives server-side in the pipeline's checkpointer, design-decisions.md
+    §47, and is never round-tripped to the client)."""
+
+    thread_id: str
+    reply_text: str
+    occasion: str | None
+    formality: str | None
+    mood: str | None
+    temp_c: float | None
+    location: str | None
+
+
 class RecommendItemView(BaseModel):
     """A route-local view of `WardrobeItem`, deliberately not imported from
     `closet.py` — every route in this codebase defines its own response
@@ -182,6 +204,9 @@ class StylingOutfit(BaseModel):
 class SendMessageResponse(BaseModel):
     thread_id: str
     reply_text: str | None
+    # feature 016 — the Python-templated summary of what was understood (design-decisions.md
+    # §49), rendered by the frontend as its own assistant bubble before the outfits.
+    wrap_up_text: str
     outfits: list[StylingOutfit]
 
 
@@ -392,6 +417,71 @@ def get_readiness(
     return ReadinessResponse.from_result(result)
 
 
+@router.post("/recommend/turns")
+def send_turn(
+    body: SendTurnRequest,
+    user_id: str = Depends(get_current_user_id),  # noqa: B008
+    repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
+    session_repository: SupabaseSessionRepository = Depends(_get_session_repository),  # noqa: B008
+) -> SendTurnResponse:
+    """feature 016, contracts/recommend-turns.md. Separate from `/recommend/messages`: no
+    readiness gate (a conversational reply never touches wardrobe, research.md §1), no retrieval,
+    no wardrobe load, no pipeline invocation — `graph.get_state`/`update_state` read and patch the
+    pipeline's own per-thread checkpoint without ever calling `graph.invoke` (design-decisions.md
+    §47). Sole writer of `user_message` rows from this feature on (§50)."""
+    settings = get_settings()
+    if not body.message.strip():
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "message must not be empty")
+
+    thread_id = body.thread_id or str(uuid.uuid4())
+    session_repository.upsert_session(user_id, thread_id)
+    session_repository.insert_message(user_id, thread_id, "user_message", body.message)
+
+    turn_number = session_repository.count_user_messages(user_id, thread_id)
+    graph = get_compiled_graph(repository)
+    config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+
+    if turn_number > settings.wtw_conversation_turn_cap:
+        # Deterministic, Python-owned steer — no LLM call at all past the cap (design-decisions.md
+        # §48), so cost stays bounded no matter how long a user keeps typing.
+        result = ConversationalTurnResult(reply_text=turn_copy.TURN_CAP_REACHED)
+    else:
+        known_slots = graph.get_state(config).values
+        try:
+            result = conversation.reply(body.message, known_slots)
+        except Exception:
+            # Never a 5xx for an LLM-call failure (mirrors vision.py's own philosophy) — the user's
+            # message is already recorded above, so the conversation stays usable (FR-010).
+            logger.exception("Conversational reply failed for thread_id=%r", thread_id)
+            result = ConversationalTurnResult(reply_text=turn_copy.CALL_FAILED)
+        else:
+            updates = {
+                key: value
+                for key, value in (
+                    ("occasion", result.occasion),
+                    ("mood", result.mood),
+                    ("formality", result.formality),
+                    ("location", result.location),
+                    ("temp_c", result.temp_c),
+                )
+                if value is not None
+            }
+            if updates:
+                graph.update_state(config, updates)
+
+    session_repository.insert_message(user_id, thread_id, "conversational_turn", result.reply_text)
+
+    return SendTurnResponse(
+        thread_id=thread_id,
+        reply_text=result.reply_text,
+        occasion=result.occasion,
+        formality=result.formality,
+        mood=result.mood,
+        temp_c=result.temp_c,
+        location=result.location,
+    )
+
+
 @router.post("/recommend/messages")
 def send_message(
     body: SendMessageRequest,
@@ -422,21 +512,43 @@ def send_message(
     # updated_at. Never a second, independently generated id — the session
     # IS this thread_id. "New chat" needs no call of its own as a result:
     # by the time a thread could be archived, it already has been.
+    #
+    # No `user_message` insert here (design-decisions.md §50, reversing 008's original
+    # behaviour): every composer send now reaches `POST /recommend/turns` first, which already
+    # recorded this exact text — inserting it again here would duplicate the transcript.
     session_repository.upsert_session(user_id, thread_id)
-    session_repository.insert_message(user_id, thread_id, "user_message", body.message)
 
     graph = get_compiled_graph(repository)
+    config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+    known_state = graph.get_state(config).values
+
+    if known_state.get("original_context") is None:
+        # First real invoke on this thread — compose explicitly from accumulated slots
+        # (design-decisions.md §47/§49), so what reaches the graph is inspectable as one literal
+        # dict rather than relying on the checkpointer's own merge to fill in omitted keys.
+        invoke_input: dict = {
+            "occasion": known_state.get("occasion") or body.message,
+            "thread_id": thread_id,
+            "user_id": user_id,
+            "approach": "grounded",
+        }
+        for key in ("mood", "formality", "location", "temp_c"):
+            value = known_state.get(key)
+            if value is not None:
+                invoke_input[key] = value
+    else:
+        # A later, refinement invoke on this thread — unmodified 008 behaviour (§49): raw
+        # accumulated text, never slot-recomposed, so `_parse_refinement_intent` keeps getting
+        # exactly the signal it was built to consume.
+        invoke_input = {
+            "occasion": body.message,
+            "thread_id": thread_id,
+            "user_id": user_id,
+            "approach": "grounded",
+        }
 
     def _invoke() -> dict:
-        return graph.invoke(
-            {
-                "occasion": body.message,
-                "thread_id": thread_id,
-                "user_id": user_id,
-                "approach": "grounded",
-            },
-            config={"configurable": {"thread_id": thread_id}},
-        )
+        return graph.invoke(invoke_input, config=config)
 
     future = _EXECUTOR.submit(_invoke)
     try:
@@ -544,9 +656,16 @@ def send_message(
         outfit_ids=[outfit.id for outfit in outfits],
     )
 
+    # feature 016 (design-decisions.md §49): a Python-templated summary, not a second LLM call —
+    # rendered on every "Start styling" tap, first or refinement, since `result.context` is
+    # populated identically on both paths.
+    wrap_up = turn_copy.wrap_up_text(occasion, result.context.formality if result.context is not None else None)
+    session_repository.insert_message(user_id, thread_id, "wrap_up", wrap_up)
+
     return SendMessageResponse(
         thread_id=thread_id,
         reply_text=reply_text,
+        wrap_up_text=wrap_up,
         outfits=outfits,
     )
 
