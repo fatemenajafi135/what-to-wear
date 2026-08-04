@@ -29,7 +29,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from whattowear import copy as turn_copy
 from whattowear.auth import get_current_access_token, get_current_user_id
+from whattowear.core.config import get_settings
 from whattowear.core.db import get_engine
 from whattowear.main import app
 from whattowear.schema import (
@@ -217,6 +219,107 @@ class TestReadiness:
         with TestClient(app) as client:
             response = client.get("/api/v1/recommend/readiness")
         assert response.status_code == 401
+
+
+class TestSendTurn:
+    """feature 016, contracts/recommend-turns.md — the new conversational endpoint."""
+
+    def test_first_call_mints_a_thread_id_and_returns_a_reply(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            turn = _send_turn(
+                client, "something for a wedding", reply_text="Got it — what's the occasion?", occasion="wedding"
+            )
+
+        assert turn["thread_id"]
+        assert turn["reply_text"] == "Got it — what's the occasion?"
+        assert turn["occasion"] == "wedding"
+        assert turn["formality"] is None
+
+    def test_second_call_on_same_thread_is_told_the_already_known_slots(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "something for a wedding", occasion="wedding")
+            thread_id = first["thread_id"]
+
+            fake_result = ConversationalTurnResult(reply_text="Got it.", formality="formal")
+            with patch("whattowear.api.v1.routes.recommend.conversation.reply", return_value=fake_result) as mock_reply:
+                response = client.post(
+                    "/api/v1/recommend/turns",
+                    json={"message": "pretty formal", "thread_id": thread_id},
+                )
+
+        assert response.status_code == 200
+        known_slots_arg = mock_reply.call_args.args[1]
+        assert known_slots_arg.get("occasion") == "wedding"
+
+    def test_empty_message_is_rejected(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            response = client.post("/api/v1/recommend/turns", json={"message": "   "})
+        assert response.status_code == 422
+
+    def test_turn_cap_is_enforced_without_an_llm_call(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §48 — once the cap is exceeded, no further LLM call happens at
+        all, not just a differently-worded one."""
+        cap = get_settings().wtw_conversation_turn_cap
+
+        with _client_as(USER_READY) as client:
+            thread_id = None
+            for i in range(cap):
+                turn = _send_turn(client, f"message {i}", thread_id=thread_id, reply_text=f"reply {i}")
+                thread_id = turn["thread_id"]
+
+            with patch("whattowear.api.v1.routes.recommend.conversation.reply") as mock_reply:
+                response = client.post(
+                    "/api/v1/recommend/turns",
+                    json={"message": "one more", "thread_id": thread_id},
+                )
+
+        assert response.status_code == 200
+        assert response.json()["reply_text"] == turn_copy.TURN_CAP_REACHED
+        mock_reply.assert_not_called()
+
+    def test_llm_call_failure_returns_fixed_copy_not_a_5xx(self, ready_closet: dict[str, str]) -> None:
+        """FR-010 — a genuine call failure degrades to the fixed CALL_FAILED reply, never a
+        5xx (mirrors vision.py's own call-failure philosophy)."""
+        with patch("whattowear.api.v1.routes.recommend.conversation.reply", side_effect=RuntimeError("gateway down")):
+            with _client_as(USER_READY) as client:
+                response = client.post("/api/v1/recommend/turns", json={"message": "hello"})
+
+        assert response.status_code == 200
+        assert response.json()["reply_text"] == turn_copy.CALL_FAILED
+
+    def test_a_failed_turn_does_not_block_start_styling(self, ready_closet: dict[str, str]) -> None:
+        """SC-005 — whatever slots were accumulated before the failure are still used."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "something for a wedding", occasion="wedding")
+            thread_id = first["thread_id"]
+
+            with patch(
+                "whattowear.api.v1.routes.recommend.conversation.reply", side_effect=RuntimeError("gateway down")
+            ):
+                failed = client.post(
+                    "/api/v1/recommend/turns",
+                    json={"message": "keep going", "thread_id": thread_id},
+                )
+            assert failed.status_code == 200
+            assert failed.json()["reply_text"] == turn_copy.CALL_FAILED
+
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                styling = client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "keep going", "thread_id": thread_id},
+                )
+
+        assert styling.status_code == 200
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input["occasion"] == "wedding"
 
 
 class TestSendMessage:
@@ -529,6 +632,143 @@ class TestSendMessage:
                 {"id": thread_id},
             ).one()
         assert [str(oid) for oid in styling_reply.outfit_ids] == [outfit_id]
+
+    def test_wrap_up_text_is_returned_and_persisted(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §49 — a Python-templated summary, not a second LLM call, shown
+        as its own assistant message before the outfits."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.get_state.return_value.values = {}
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post("/api/v1/recommend/messages", json={"message": "smart casual"})
+
+        body = response.json()
+        assert body["wrap_up_text"] == "Styling for smart casual."
+        thread_id = body["thread_id"]
+        with get_engine().begin() as conn:
+            wrap_up = conn.execute(
+                text("SELECT text FROM messages WHERE session_id = :id AND kind = 'wrap_up'"),
+                {"id": thread_id},
+            ).one()
+        assert wrap_up.text == "Styling for smart casual."
+
+    def test_first_invoke_composes_from_accumulated_slots_across_turns(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §47/§49 — the load-bearing check: a formality mentioned in a
+        LATER conversational turn than the occasion must both be present in what's actually
+        passed to graph.invoke, verified by inspecting the invoke call's own arguments — not
+        by looking at the outfits (handoff §8)."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "something for a wedding", occasion="wedding")
+            thread_id = first["thread_id"]
+            _send_turn(client, "keep it black tie", thread_id=thread_id, formality="black_tie")
+
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "keep it black tie", "thread_id": thread_id},
+                )
+
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input["occasion"] == "wedding"
+        assert invoke_input["formality"] == "black_tie"
+
+    def test_same_slot_overwritten_by_a_later_turn_wins(self, ready_closet: dict[str, str]) -> None:
+        """FR-004 — distinct from the test above, which proves two DIFFERENT slots both
+        arrive: this exercises the checkpointer's per-key overwrite semantics §47 relies on
+        for the SAME slot stated twice, differently."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "office wear please", occasion="office", formality="business_casual")
+            thread_id = first["thread_id"]
+            _send_turn(client, "actually more relaxed", thread_id=thread_id, formality="casual")
+
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "actually more relaxed", "thread_id": thread_id},
+                )
+
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input["formality"] == "casual"
+
+    def test_no_slots_extracted_falls_back_to_the_raw_message_text(self, ready_closet: dict[str, str]) -> None:
+        """The handoff's own fallback rule: when nothing was ever extracted, the accumulated
+        raw user text is what `occasion` becomes — exactly 008's original behaviour."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "hi there")  # extracts nothing
+            thread_id = first["thread_id"]
+
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "hi there", "thread_id": thread_id},
+                )
+
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input["occasion"] == "hi there"
+        assert "formality" not in invoke_input
+
+    def test_refinement_tap_uses_unmodified_raw_text_not_slots(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §49: once a thread has had one real invoke (original_context is
+        set), a later tap must use 008's unmodified raw-text refinement behaviour — never
+        recompose from slots, which would starve `_parse_refinement_intent` of the keyword
+        signal it needs."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "something for a wedding", occasion="wedding", formality="black_tie")
+            thread_id = first["thread_id"]
+
+            config = {"configurable": {"thread_id": thread_id}}
+            # Simulate a completed first invoke — gather_context is the only place
+            # original_context is normally set, so it's seeded directly here.
+            mock_graph.update_state(config, {"original_context": Context(occasion="wedding", formality="black_tie")})
+
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "actually, warmer please", "thread_id": thread_id},
+                )
+
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input == {
+            "occasion": "actually, warmer please",
+            "thread_id": thread_id,
+            "user_id": USER_READY,
+            "approach": "grounded",
+        }
 
 
 class TestListSessions:
