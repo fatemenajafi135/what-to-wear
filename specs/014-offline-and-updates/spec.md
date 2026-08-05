@@ -8,6 +8,13 @@
 
 **Input**: User description: "Offline, caching and the update prompt (feature 014). Full brief: docs/handoffs/014-offline-and-updates.md. Mission: the app keeps working when the network doesn't, and tells the user when a new version is ready. Today there is no service worker at all in frontend/ — Serwist is not installed, every asset and request goes to the network every time. This slice must: (1) wire Serwist into the Next build with a deliberate cache strategy per route class, with authenticated/user-scoped responses purged on sign-out, and signed photo URLs handled so an expired cached response never renders a broken image; (2) precache the app shell so a cold start with the network off renders the app's own chrome rather than the browser's offline error page; (3) detect a waiting/updated service worker and show an update-prompt toast that reloads into the new version on accept. Out of scope: offline queueing/Background Sync, beforeinstallprompt/iOS install card/permission primers/splash (feature 015), push notifications, any backend change, any change to pipeline/scoring/retrieval. Do not rebuild feature 001's manifest, theme-color, safe-area, or offline-banner work — only extend it."
 
+## Clarifications
+
+### Session 2026-08-05
+
+- Q: How should the app detect that a new version is available while a client is already open, without the user closing and reopening it? → A: Reload-triggered only — detection happens on the client's next natural full navigation/reload (browser back-navigation, opening the installed app again, an explicit refresh), not via foreground polling or a visibility-change listener. No JS-side interval or `visibilitychange` check is added.
+- Q: If the user dismisses the update toast without accepting, should it reappear later, or stay dismissed? → A: Stays dismissed until the next reload/relaunch. Consistent with reload-triggered detection — there is no other event during the same page session that would justify re-showing it, since in-app (client-side) navigation never re-checks the service worker.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Opening the app with no network shows the app, not a browser error (Priority: P1)
@@ -63,13 +70,13 @@ The team ships a fix or a new feature. A user who already has the app open, or h
 
 **Why this priority**: The brief calls this "the single highest-risk thing in the slice" — a stuck service worker is sticky and can outlive the fix meant to replace it, which is a shipping-safety concern, not just a UX nicety. Equal priority to the P1 stories above.
 
-**Independent Test**: Ship a change (a new build), keep an already-open/installed client running, and confirm a toast appears offering the update; tapping it reloads the client onto the new version, verifiable by a visible marker of the new build being present afterward.
+**Independent Test**: Ship a change (a new build), then perform a full reload/relaunch of an already-installed client (not just in-app navigation) and confirm a toast appears offering the update; tapping it reloads the client onto the new version, verifiable by a visible marker of the new build being present afterward.
 
 **Acceptance Scenarios**:
 
-1. **Given** a client has the app open with an older version active, **When** a new version is deployed and the client's periodic/lifecycle check notices it, **Then** an update-available toast appears without the user having to do anything.
+1. **Given** a client has the app open with an older version active, **When** the user performs their next full page reload or relaunch (browser back-navigation to a fresh document load, reopening the installed app, an explicit refresh — not an in-app client-side route change) and a new version has been deployed, **Then** the browser's own service-worker update check runs on that reload, the new worker installs and enters the waiting state, and an update-available toast appears without any further action from the user.
 2. **Given** the update toast is visible, **When** the user taps its accept action, **Then** the app reloads and the new version's code is what actually runs afterward (not just a page refresh that re-serves the stale cached version).
-3. **Given** the update toast is visible, **When** the user dismisses it or ignores it, **Then** the app keeps working normally on the current version, and does not force the reload.
+3. **Given** the update toast is visible, **When** the user dismisses it or ignores it, **Then** the app keeps working normally on the current version for the rest of that session, and does not force the reload or re-show the toast until the next reload/relaunch.
 4. **Given** `prefers-reduced-motion` is set, **When** the toast appears or is dismissed, **Then** it does so without the slide/fade motion, per the app's existing reduced-motion convention.
 
 ---
@@ -91,8 +98,8 @@ The team ships a fix or a new feature. A user who already has the app open, or h
 - **FR-003**: The app MUST NOT cache or automatically retry the billed styling-chat request under any circumstance (offline, failure, or otherwise).
 - **FR-004**: The app MUST purge every cache that could contain authenticated, user-scoped data at sign-out, before the next sign-in can populate the cache with a different user's data.
 - **FR-005**: The app MUST ensure a photo reference whose signed URL has expired, and which cannot be re-signed (e.g. because the client is offline), renders the app's existing no-photo/placeholder treatment rather than a broken-image icon.
-- **FR-006**: The app MUST detect when a new version of the service worker/app is available to an already-open or already-installed client, without requiring the user to manually close and reopen the app.
-- **FR-007**: The app MUST show a visible, dismissible prompt when a new version is available, and MUST apply the new version only after the user explicitly accepts — it must never force a reload the user didn't ask for.
+- **FR-006**: The app MUST detect when a new version of the service worker/app is available on the client's next full page reload or relaunch (a real network navigation to the document), relying on the browser's own service-worker update check rather than an app-added foreground poll or visibility-change listener — an already-open tab that is never reloaded is not required to detect an update mid-session.
+- **FR-007**: The app MUST show a visible, dismissible prompt when a new version is available, and MUST apply the new version only after the user explicitly accepts — it must never force a reload the user didn't ask for. Once dismissed, the prompt MUST NOT reappear until the next reload/relaunch.
 - **FR-008**: Accepting the update prompt MUST result in the new version's code actually running afterward, not merely a page refresh that re-serves the previous cached version.
 - **FR-009**: The update prompt's visual placement, stacking, and motion MUST follow the existing design-system conventions for toasts (positioned clear of the tab bar and safe-area insets, at the app's reserved toast layer, sliding/fading in and out) and MUST respect `prefers-reduced-motion`.
 - **FR-010**: The update prompt's copy MUST come from a single, clearly-flagged source that the design owner can review and approve, not be invented ad hoc in component code (per the project's design-system-is-source-of-truth rule) — see the Assumptions section for how this is handled pending that review.
