@@ -44,60 +44,144 @@ const mockOutfit = {
   meta_line: "business casual · Business casual",
 };
 
+const defaultTurnResponse = {
+  data: {
+    thread_id: "thread-1",
+    reply_text: "Got it — what's the occasion?",
+    occasion: null,
+    formality: null,
+    mood: null,
+    temp_c: null,
+    location: null,
+  },
+  error: undefined,
+  response: new Response(),
+};
+
+const defaultStylingResponse = {
+  data: { thread_id: "thread-1", reply_text: null, wrap_up_text: "Styling for business casual.", outfits: [mockOutfit] },
+  error: undefined,
+  response: new Response(),
+};
+
+/**
+ * Every composer send now fires `POST /recommend/turns` in addition to
+ * whatever "Start styling" fires (`POST /recommend/messages`) — this
+ * dispatches by URL, mirroring `mockGetByUrl` above, rather than relying on
+ * call order (feature 016 changed how many POST calls one interaction makes).
+ */
+function mockPostByUrl(overrides: { turns?: unknown; messages?: unknown } = {}) {
+  return vi.fn((url: string) => {
+    if (url === "/api/v1/recommend/turns") {
+      return Promise.resolve(overrides.turns ?? defaultTurnResponse);
+    }
+    if (url === "/api/v1/recommend/messages") {
+      return Promise.resolve(overrides.messages ?? defaultStylingResponse);
+    }
+    throw new Error(`unmocked POST ${url}`);
+  });
+}
+
 describe("RecommendChat", () => {
   beforeEach(() => {
-    vi.mocked(apiClient.POST).mockReset();
+    vi.mocked(apiClient.POST).mockReset().mockImplementation(mockPostByUrl() as never);
     vi.mocked(apiClient.GET).mockReset().mockImplementation(mockGetByUrl as never);
     Object.defineProperty(window.navigator, "onLine", { value: true, configurable: true });
   });
 
-  it("full happy path: hero -> compose -> Start styling -> pager reply with thumbnails", async () => {
-    let resolvePost!: (value: unknown) => void;
-    vi.mocked(apiClient.POST).mockReturnValue(new Promise((resolve) => (resolvePost = resolve)) as never);
-
+  it("full happy path: hero -> compose gets a reply -> Start styling -> wrap-up then pager", async () => {
     render(<RecommendChat />);
     await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument();
+    });
 
     const startButton = screen.getByText("Start styling");
     expect(startButton).toBeEnabled();
     await userEvent.click(startButton);
 
-    expect(screen.getByRole("status", { name: "Styling your outfit…" })).toBeInTheDocument();
-
-    resolvePost({
-      data: { thread_id: "thread-1", reply_text: null, outfits: [mockOutfit] },
-      error: undefined,
-      response: new Response(),
-    });
-
     await waitFor(() => {
+      expect(screen.getByText("Styling for business casual.")).toBeInTheDocument();
       expect(screen.getByText(/A relaxed pairing that works well here\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/\[\d+]/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Navy tee" })).toHaveAttribute("href", "/closet/item-1");
 
     expect(apiClient.POST).toHaveBeenCalledWith(
-      "/api/v1/recommend/messages",
+      "/api/v1/recommend/turns",
       expect.objectContaining({ body: { message: "business casual", thread_id: null } }),
+    );
+    expect(apiClient.POST).toHaveBeenCalledWith(
+      "/api/v1/recommend/messages",
+      expect.objectContaining({ body: { message: "business casual", thread_id: "thread-1" } }),
     );
   });
 
-  it("zero-outfit reply renders reply_text with no thumbnails or pager", async () => {
-    vi.mocked(apiClient.POST).mockResolvedValue({
-      data: {
-        thread_id: "thread-1",
-        reply_text: "Your closet doesn't have enough items to assemble an outfit for this request.",
-        outfits: [],
-      },
-      error: undefined,
-      response: new Response(),
-    } as never);
+  it("disables the composer and shows Thinking… while a turn is in flight, re-enabling on reply", async () => {
+    let resolveTurn!: (value: unknown) => void;
+    vi.mocked(apiClient.POST).mockImplementation(
+      mockPostByUrl({ turns: new Promise((resolve) => (resolveTurn = resolve)) }) as never,
+    );
+
+    render(<RecommendChat />);
+    const input = await screen.findByLabelText("Message");
+    await userEvent.type(input, "business casual{Enter}");
+
+    expect(input).toBeDisabled();
+    expect(screen.getByLabelText("Sending")).toBeDisabled();
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+
+    resolveTurn(defaultTurnResponse);
+
+    await waitFor(() => {
+      expect(input).not.toBeDisabled();
+    });
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument();
+  });
+
+  it("a failed conversational turn leaves the composer usable and does not add a bubble", async () => {
+    vi.mocked(apiClient.POST).mockImplementation(
+      mockPostByUrl({ turns: { data: undefined, error: { detail: "boom" }, response: new Response(null, { status: 500 }) } }) as never,
+    );
+
+    render(<RecommendChat />);
+    const input = await screen.findByLabelText("Message");
+    await userEvent.type(input, "business casual{Enter}");
+
+    await waitFor(() => {
+      expect(input).not.toBeDisabled();
+    });
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    // "Start styling" still works from what was already gathered (SC-005) —
+    // it becomes reachable because a user message still exists.
+    expect(screen.getByText("Start styling")).toBeEnabled();
+  });
+
+  it("zero-outfit reply renders the wrap-up, reply_text, and an Add-item link, with no thumbnails", async () => {
+    vi.mocked(apiClient.POST).mockImplementation(
+      mockPostByUrl({
+        messages: {
+          data: {
+            thread_id: "thread-1",
+            reply_text: "Your closet doesn't have enough items to assemble an outfit for this request.",
+            wrap_up_text: "Styling for black tie gala.",
+            outfits: [],
+          },
+          error: undefined,
+          response: new Response(),
+        },
+      }) as never,
+    );
 
     render(<RecommendChat />);
     await userEvent.type(await screen.findByLabelText("Message"), "black tie gala{Enter}");
+    await waitFor(() => expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument());
     await userEvent.click(screen.getByText("Start styling"));
 
     await waitFor(() => {
+      expect(screen.getByText("Styling for black tie gala.")).toBeInTheDocument();
       expect(
         screen.getByText("Your closet doesn't have enough items to assemble an outfit for this request."),
       ).toBeInTheDocument();
@@ -106,36 +190,32 @@ describe("RecommendChat", () => {
     expect(screen.getByText("Add items to your closet")).toBeInTheDocument();
   });
 
-  it("error path shows retry, and retry re-issues the same request", async () => {
-    vi.mocked(apiClient.POST).mockResolvedValueOnce({
-      data: undefined,
-      error: { detail: "boom" },
-      response: new Response(null, { status: 500 }),
-    } as never);
+  it("Start-styling error path shows retry, and retry re-issues the same request", async () => {
+    vi.mocked(apiClient.POST).mockImplementation(
+      mockPostByUrl({
+        messages: { data: undefined, error: { detail: "boom" }, response: new Response(null, { status: 500 }) },
+      }) as never,
+    );
 
     render(<RecommendChat />);
     await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
+    await waitFor(() => expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument());
     await userEvent.click(screen.getByText("Start styling"));
 
     await waitFor(() => {
       expect(screen.getByText("Something went wrong pulling that together.")).toBeInTheDocument();
     });
 
-    vi.mocked(apiClient.POST).mockResolvedValueOnce({
-      data: { thread_id: "thread-1", reply_text: null, outfits: [mockOutfit] },
-      error: undefined,
-      response: new Response(),
-    } as never);
-
+    vi.mocked(apiClient.POST).mockImplementation(mockPostByUrl() as never);
     await userEvent.click(screen.getByText("Try again"));
 
     await waitFor(() => {
       expect(screen.getByText(/A relaxed pairing that works well here\./)).toBeInTheDocument();
     });
-    expect(apiClient.POST).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(apiClient.POST).mock.calls[1]?.[1]).toMatchObject({
-      body: { message: "business casual", thread_id: null },
-    });
+    // The failed attempt plus the retry — both go through /recommend/messages.
+    expect(
+      vi.mocked(apiClient.POST).mock.calls.filter((call) => call[0] === "/api/v1/recommend/messages"),
+    ).toHaveLength(2);
   });
 
   it("Start styling is hidden in the hero state (0 messages)", async () => {
@@ -190,43 +270,32 @@ describe("RecommendChat", () => {
   });
 
   it("US2: a second Start-styling call echoes the first response's thread_id", async () => {
-    vi.mocked(apiClient.POST).mockResolvedValueOnce({
-      data: { thread_id: "thread-1", reply_text: null, outfits: [mockOutfit] },
-      error: undefined,
-      response: new Response(),
-    } as never);
-
     render(<RecommendChat />);
     await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
+    await waitFor(() => expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument());
     await userEvent.click(screen.getByText("Start styling"));
     await waitFor(() => {
       expect(screen.getByText(/A relaxed pairing that works well here\./)).toBeInTheDocument();
     });
 
-    vi.mocked(apiClient.POST).mockResolvedValueOnce({
-      data: { thread_id: "thread-1", reply_text: null, outfits: [mockOutfit] },
-      error: undefined,
-      response: new Response(),
-    } as never);
-
     await userEvent.type(await screen.findByLabelText("Message"), "something warmer{Enter}");
+    await waitFor(() => expect(apiClient.POST).toHaveBeenCalledWith("/api/v1/recommend/turns", expect.anything()));
     await userEvent.click(screen.getByText("Start styling"));
 
     await waitFor(() => {
-      expect(apiClient.POST).toHaveBeenCalledTimes(2);
+      expect(
+        vi.mocked(apiClient.POST).mock.calls.filter((call) => call[0] === "/api/v1/recommend/messages"),
+      ).toHaveLength(2);
     });
-    expect(vi.mocked(apiClient.POST).mock.calls[1]?.[1]).toMatchObject({
+    const secondStylingCall = vi
+      .mocked(apiClient.POST)
+      .mock.calls.filter((call) => call[0] === "/api/v1/recommend/messages")[1];
+    expect(secondStylingCall?.[1]).toMatchObject({
       body: { message: "something warmer", thread_id: "thread-1" },
     });
   });
 
   it("011 US3: a message sent after resuming carries the resumed thread_id, verified at the request level", async () => {
-    vi.mocked(apiClient.POST).mockResolvedValueOnce({
-      data: { thread_id: "resumed-thread", reply_text: null, outfits: [mockOutfit] },
-      error: undefined,
-      response: new Response(),
-    } as never);
-
     render(
       <RecommendChat
         initialThreadId="resumed-thread"
@@ -239,11 +308,19 @@ describe("RecommendChat", () => {
     expect(await screen.findByText("Rainy commute")).toBeInTheDocument();
 
     await userEvent.type(await screen.findByLabelText("Message"), "something warmer{Enter}");
+    await waitFor(() =>
+      expect(apiClient.POST).toHaveBeenCalledWith(
+        "/api/v1/recommend/turns",
+        expect.objectContaining({ body: { message: "something warmer", thread_id: "resumed-thread" } }),
+      ),
+    );
     await userEvent.click(screen.getByText("Start styling"));
 
-    await waitFor(() => expect(apiClient.POST).toHaveBeenCalledTimes(1));
-    expect(vi.mocked(apiClient.POST).mock.calls[0]?.[1]).toMatchObject({
-      body: { message: "something warmer", thread_id: "resumed-thread" },
-    });
+    await waitFor(() =>
+      expect(apiClient.POST).toHaveBeenCalledWith(
+        "/api/v1/recommend/messages",
+        expect.objectContaining({ body: { message: "something warmer", thread_id: "resumed-thread" } }),
+      ),
+    );
   });
 });

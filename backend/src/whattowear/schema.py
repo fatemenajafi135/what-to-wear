@@ -196,6 +196,33 @@ class PhotoExtractionResponse(BaseModel):
     extraction_ok: bool
 
 
+class ConversationalTurnResult(BaseModel):
+    """One conversational-turn LLM call's output (feature 016, conversation.py) —
+    `reply_text` plus whatever slots it newly extracted, matching `GraphState`'s
+    own field names exactly (docs/design-decisions.md §47). `reply_text` is
+    always present; a call that produces nothing else is still a valid result
+    (most turns after the first extract nothing new)."""
+
+    reply_text: str
+    occasion: str | None = None
+    mood: str | None = None
+    formality: Formality | None = None
+    location: str | None = None
+    temp_c: float | None = None
+
+    @field_validator("formality", mode="before")
+    @classmethod
+    def _formality_must_be_known(cls, v: str | None) -> str | None:
+        """An unrecognized value from the model is dropped, never passed
+        through as a parallel formality scale (constitution Principle VI) —
+        tolerant the same way `_background_color_must_be_hex` above is,
+        because one bad field must not fail the whole turn (`reply_text`
+        and every other slot are still worth keeping)."""
+        if v is None or v in FORMALITY_ORDER:
+            return v
+        return None
+
+
 class CreateWardrobeItemFromUploadRequest(BaseModel):
     """Body of a wardrobe-item-from-upload request — the user-confirmed
     (possibly corrected) attributes.

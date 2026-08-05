@@ -1,23 +1,25 @@
 "use client";
 
 import { useState, type KeyboardEvent } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import styles from "./Composer.module.css";
 
 export interface ComposerProps {
   onSend: (text: string) => void;
-  /** Start-styling request in flight — disables the composer too (design-
-   * system.md "Chat input behavior", intended not observed behavior). */
+  /** A conversational turn OR a Start-styling request is in flight —
+   * disables the composer (design-system.md "Chat input behavior",
+   * "Intended (production)": both `sending` and `styling` disable it). */
   inFlight: boolean;
 }
 
 /**
  * design/design-system.md § Screen anatomy → Recommend, item 6 + "Chat
- * input behavior": single-line `<input>` (never a growing textarea), pill
- * bar, 28px circular send button. Per docs/design-decisions.md §28, this
- * is local-only — it appends to the parent's transcript and never calls the
- * backend itself; "Start styling" is the one real network trigger.
+ * input behavior". Single-line `<input>` (never a growing textarea), pill
+ * bar, 28px circular send button. `onSend` is a synchronous report to the
+ * parent (docs/design-decisions.md §37/§49) — `RecommendChat` is what
+ * actually calls `POST /recommend/turns`, mirroring how it already owns
+ * the one other real network trigger, "Start styling".
  */
 export function Composer({ onSend, inFlight }: ComposerProps) {
   const [value, setValue] = useState("");
@@ -55,9 +57,13 @@ export function Composer({ onSend, inFlight }: ComposerProps) {
         onClick={commit}
         disabled={disabled || !value.trim()}
         className={["control", "hitArea", styles.send].join(" ")}
-        aria-label="Send"
+        aria-label={inFlight ? "Sending" : "Send"}
       >
-        <ArrowUp size={16} strokeWidth={2.1} aria-hidden="true" />
+        {inFlight ? (
+          <Loader2 size={16} strokeWidth={2.1} aria-hidden="true" className={styles.spinner} />
+        ) : (
+          <ArrowUp size={16} strokeWidth={2.1} aria-hidden="true" />
+        )}
       </button>
     </div>
   );

@@ -29,10 +29,20 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from whattowear import copy as turn_copy
 from whattowear.auth import get_current_access_token, get_current_user_id
+from whattowear.core.config import get_settings
 from whattowear.core.db import get_engine
 from whattowear.main import app
-from whattowear.schema import CitedSource, Context, DimensionScore, Rationale, ScoredOutfit, SuggestResult
+from whattowear.schema import (
+    CitedSource,
+    Context,
+    ConversationalTurnResult,
+    DimensionScore,
+    Rationale,
+    ScoredOutfit,
+    SuggestResult,
+)
 
 USER_READY = str(uuid.uuid4())
 USER_BLOCKED = str(uuid.uuid4())
@@ -136,6 +146,39 @@ def _generate_outfit(
     return outfits[0]
 
 
+def _send_turn(
+    client: TestClient,
+    message: str,
+    thread_id: str | None = None,
+    reply_text: str = "Got it.",
+    **slots: object,
+) -> dict:
+    """feature 016 — posts to the new conversational endpoint with the LLM call itself mocked,
+    patched at the route module's own import site (same "patch where it's imported" pattern
+    `_generate_outfit` already established for `get_compiled_graph`). `slots` become the mocked
+    extraction's own fields (e.g. `occasion="wedding"`, `formality="formal"`)."""
+    fake_result = ConversationalTurnResult(reply_text=reply_text, **slots)  # type: ignore[arg-type]
+    with patch("whattowear.api.v1.routes.recommend.conversation.reply", return_value=fake_result):
+        response = client.post(
+            "/api/v1/recommend/turns",
+            json={"message": message, "thread_id": thread_id},
+        )
+    assert response.status_code == 200
+    return response.json()
+
+
+def _real_graph_with_mocked_invoke(result: SuggestResult, note: str | None) -> MagicMock:
+    """Compiles the REAL pipeline graph against a fixture (no-DB) repository, so
+    `get_state`/`update_state` exercise the real checkpointer (design-decisions.md §47) — the
+    thing feature 016's slot accumulation/composition actually depends on. Only `.invoke` itself
+    is replaced (via the caller's own `patch.object`, so it's restored afterward), which is what
+    keeps this from ever calling the real pipeline/LLM."""
+    from whattowear.adapters.closet_fixture import FixtureClosetRepository
+    from whattowear.pipeline.graph import get_compiled_graph as real_get_compiled_graph
+
+    return real_get_compiled_graph(FixtureClosetRepository())
+
+
 def _outfit_row(outfit_id: str) -> dict:
     with get_engine().begin() as conn:
         row = (
@@ -176,6 +219,107 @@ class TestReadiness:
         with TestClient(app) as client:
             response = client.get("/api/v1/recommend/readiness")
         assert response.status_code == 401
+
+
+class TestSendTurn:
+    """feature 016, contracts/recommend-turns.md — the new conversational endpoint."""
+
+    def test_first_call_mints_a_thread_id_and_returns_a_reply(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            turn = _send_turn(
+                client, "something for a wedding", reply_text="Got it — what's the occasion?", occasion="wedding"
+            )
+
+        assert turn["thread_id"]
+        assert turn["reply_text"] == "Got it — what's the occasion?"
+        assert turn["occasion"] == "wedding"
+        assert turn["formality"] is None
+
+    def test_second_call_on_same_thread_is_told_the_already_known_slots(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "something for a wedding", occasion="wedding")
+            thread_id = first["thread_id"]
+
+            fake_result = ConversationalTurnResult(reply_text="Got it.", formality="formal")
+            with patch("whattowear.api.v1.routes.recommend.conversation.reply", return_value=fake_result) as mock_reply:
+                response = client.post(
+                    "/api/v1/recommend/turns",
+                    json={"message": "pretty formal", "thread_id": thread_id},
+                )
+
+        assert response.status_code == 200
+        known_slots_arg = mock_reply.call_args.args[1]
+        assert known_slots_arg.get("occasion") == "wedding"
+
+    def test_empty_message_is_rejected(self, ready_closet: dict[str, str]) -> None:
+        with _client_as(USER_READY) as client:
+            response = client.post("/api/v1/recommend/turns", json={"message": "   "})
+        assert response.status_code == 422
+
+    def test_turn_cap_is_enforced_without_an_llm_call(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §48 — once the cap is exceeded, no further LLM call happens at
+        all, not just a differently-worded one."""
+        cap = get_settings().wtw_conversation_turn_cap
+
+        with _client_as(USER_READY) as client:
+            thread_id = None
+            for i in range(cap):
+                turn = _send_turn(client, f"message {i}", thread_id=thread_id, reply_text=f"reply {i}")
+                thread_id = turn["thread_id"]
+
+            with patch("whattowear.api.v1.routes.recommend.conversation.reply") as mock_reply:
+                response = client.post(
+                    "/api/v1/recommend/turns",
+                    json={"message": "one more", "thread_id": thread_id},
+                )
+
+        assert response.status_code == 200
+        assert response.json()["reply_text"] == turn_copy.TURN_CAP_REACHED
+        mock_reply.assert_not_called()
+
+    def test_llm_call_failure_returns_fixed_copy_not_a_5xx(self, ready_closet: dict[str, str]) -> None:
+        """FR-010 — a genuine call failure degrades to the fixed CALL_FAILED reply, never a
+        5xx (mirrors vision.py's own call-failure philosophy)."""
+        with patch("whattowear.api.v1.routes.recommend.conversation.reply", side_effect=RuntimeError("gateway down")):
+            with _client_as(USER_READY) as client:
+                response = client.post("/api/v1/recommend/turns", json={"message": "hello"})
+
+        assert response.status_code == 200
+        assert response.json()["reply_text"] == turn_copy.CALL_FAILED
+
+    def test_a_failed_turn_does_not_block_start_styling(self, ready_closet: dict[str, str]) -> None:
+        """SC-005 — whatever slots were accumulated before the failure are still used."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "something for a wedding", occasion="wedding")
+            thread_id = first["thread_id"]
+
+            with patch(
+                "whattowear.api.v1.routes.recommend.conversation.reply", side_effect=RuntimeError("gateway down")
+            ):
+                failed = client.post(
+                    "/api/v1/recommend/turns",
+                    json={"message": "keep going", "thread_id": thread_id},
+                )
+            assert failed.status_code == 200
+            assert failed.json()["reply_text"] == turn_copy.CALL_FAILED
+
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                styling = client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "keep going", "thread_id": thread_id},
+                )
+
+        assert styling.status_code == 200
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input["occasion"] == "wedding"
 
 
 class TestSendMessage:
@@ -381,16 +525,13 @@ class TestSendMessage:
     def test_first_message_creates_a_session_and_a_user_message_row(self, ready_closet: dict[str, str]) -> None:
         """design-decisions.md §44: a session is written on the thread's
         first message — no separate archive step. Session id IS the
-        thread_id, not a second generated one."""
-        result = SuggestResult(outfits=[], sources=[])
-        mock_graph = MagicMock()
-        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+        thread_id, not a second generated one. design-decisions.md §50:
+        `POST /recommend/turns` is the sole writer of `user_message` rows
+        from feature 016 on, since every composer send reaches it first."""
+        with _client_as(USER_READY) as client:
+            turn = _send_turn(client, "Rainy commute", reply_text="Got it — what's the occasion?")
 
-        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
-            with _client_as(USER_READY) as client:
-                response = client.post("/api/v1/recommend/messages", json={"message": "Rainy commute"})
-
-        thread_id = response.json()["thread_id"]
+        thread_id = turn["thread_id"]
         with get_engine().begin() as conn:
             session_row = conn.execute(text("SELECT id, user_id FROM sessions WHERE id = :id"), {"id": thread_id}).one()
             message_rows = conn.execute(
@@ -401,8 +542,40 @@ class TestSendMessage:
         assert str(session_row.user_id) == USER_READY
         assert [(row.kind, row.text) for row in message_rows] == [
             ("user_message", "Rainy commute"),
-            ("styling_reply", "Nothing to show."),
+            ("conversational_turn", "Got it — what's the occasion?"),
         ]
+
+    def test_start_styling_no_longer_writes_its_own_user_message_row(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §50: with every composer send already reaching
+        `POST /recommend/turns` first, `POST /recommend/messages` writing a second
+        `user_message` row for the same text would duplicate the transcript — it stops
+        writing one entirely. Two new rows appear instead: `conversational_turn` (from
+        the turns call) and `wrap_up` (feature 016's Start-styling summary, §49)."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            turn = _send_turn(client, "Rainy commute")
+            thread_id = turn["thread_id"]
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}),
+            ):
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "Rainy commute", "thread_id": thread_id},
+                )
+
+        with get_engine().begin() as conn:
+            kinds = [
+                row.kind
+                for row in conn.execute(
+                    text("SELECT kind FROM messages WHERE session_id = :id ORDER BY created_at"),
+                    {"id": thread_id},
+                ).all()
+            ]
+        assert kinds == ["user_message", "conversational_turn", "styling_reply", "wrap_up"]
+        assert kinds.count("user_message") == 1
 
     def test_second_message_reuses_the_same_session_and_appends_messages(self, ready_closet: dict[str, str]) -> None:
         """No second session row is created on a follow-up — the same
@@ -429,7 +602,9 @@ class TestSendMessage:
             ).scalar_one()
 
         assert session_count == 1
-        assert message_count == 4  # 2 user_message + 2 styling_reply
+        # 2 styling_reply + 2 wrap_up — no user_message here since feature 016 (§50):
+        # `POST /recommend/messages` alone never wrote one for either call.
+        assert message_count == 4
 
     def test_persisted_outfits_link_back_to_the_producing_thread(self, ready_closet: dict[str, str]) -> None:
         """design-decisions.md §45: outfits.thread_id is set from the
@@ -458,21 +633,153 @@ class TestSendMessage:
             ).one()
         assert [str(oid) for oid in styling_reply.outfit_ids] == [outfit_id]
 
+    def test_wrap_up_text_is_returned_and_persisted(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §49 — a Python-templated summary, not a second LLM call, shown
+        as its own assistant message before the outfits."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = MagicMock()
+        mock_graph.get_state.return_value.values = {}
+        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+
+        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
+            with _client_as(USER_READY) as client:
+                response = client.post("/api/v1/recommend/messages", json={"message": "smart casual"})
+
+        body = response.json()
+        assert body["wrap_up_text"] == "Styling for smart casual."
+        thread_id = body["thread_id"]
+        with get_engine().begin() as conn:
+            wrap_up = conn.execute(
+                text("SELECT text FROM messages WHERE session_id = :id AND kind = 'wrap_up'"),
+                {"id": thread_id},
+            ).one()
+        assert wrap_up.text == "Styling for smart casual."
+
+    def test_first_invoke_composes_from_accumulated_slots_across_turns(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §47/§49 — the load-bearing check: a formality mentioned in a
+        LATER conversational turn than the occasion must both be present in what's actually
+        passed to graph.invoke, verified by inspecting the invoke call's own arguments — not
+        by looking at the outfits (handoff §8)."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "something for a wedding", occasion="wedding")
+            thread_id = first["thread_id"]
+            _send_turn(client, "keep it black tie", thread_id=thread_id, formality="black_tie")
+
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "keep it black tie", "thread_id": thread_id},
+                )
+
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input["occasion"] == "wedding"
+        assert invoke_input["formality"] == "black_tie"
+
+    def test_same_slot_overwritten_by_a_later_turn_wins(self, ready_closet: dict[str, str]) -> None:
+        """FR-004 — distinct from the test above, which proves two DIFFERENT slots both
+        arrive: this exercises the checkpointer's per-key overwrite semantics §47 relies on
+        for the SAME slot stated twice, differently."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "office wear please", occasion="office", formality="business_casual")
+            thread_id = first["thread_id"]
+            _send_turn(client, "actually more relaxed", thread_id=thread_id, formality="casual")
+
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "actually more relaxed", "thread_id": thread_id},
+                )
+
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input["formality"] == "casual"
+
+    def test_no_slots_extracted_falls_back_to_the_raw_message_text(self, ready_closet: dict[str, str]) -> None:
+        """The handoff's own fallback rule: when nothing was ever extracted, the accumulated
+        raw user text is what `occasion` becomes — exactly 008's original behaviour."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "hi there")  # extracts nothing
+            thread_id = first["thread_id"]
+
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "hi there", "thread_id": thread_id},
+                )
+
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input["occasion"] == "hi there"
+        assert "formality" not in invoke_input
+
+    def test_refinement_tap_uses_unmodified_raw_text_not_slots(self, ready_closet: dict[str, str]) -> None:
+        """design-decisions.md §49: once a thread has had one real invoke (original_context is
+        set), a later tap must use 008's unmodified raw-text refinement behaviour — never
+        recompose from slots, which would starve `_parse_refinement_intent` of the keyword
+        signal it needs."""
+        result = SuggestResult(outfits=[], sources=[])
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+
+        with _client_as(USER_READY) as client:
+            first = _send_turn(client, "something for a wedding", occasion="wedding", formality="black_tie")
+            thread_id = first["thread_id"]
+
+            config = {"configurable": {"thread_id": thread_id}}
+            # Simulate a completed first invoke — gather_context is the only place
+            # original_context is normally set, so it's seeded directly here.
+            mock_graph.update_state(config, {"original_context": Context(occasion="wedding", formality="black_tie")})
+
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "actually, warmer please", "thread_id": thread_id},
+                )
+
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input == {
+            "occasion": "actually, warmer please",
+            "thread_id": thread_id,
+            "user_id": USER_READY,
+            "approach": "grounded",
+        }
+
 
 class TestListSessions:
     """specs/011-chat-history/contracts/recommend.md — Chat history's list."""
 
     def test_returns_only_the_callers_sessions_most_recently_active_first(self, ready_closet: dict[str, str]) -> None:
-        result = SuggestResult(outfits=[], sources=[])
-        mock_graph = MagicMock()
-        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+        with _client_as(USER_READY) as client:
+            older = _send_turn(client, "Older conversation")
+            _send_turn(client, "Newer conversation")
 
-        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
-            with _client_as(USER_READY) as client:
-                older = client.post("/api/v1/recommend/messages", json={"message": "Older conversation"})
-                client.post("/api/v1/recommend/messages", json={"message": "Newer conversation"})
-
-        older_thread_id = older.json()["thread_id"]
+        older_thread_id = older["thread_id"]
 
         with _client_as(USER_READY) as client:
             response = client.get("/api/v1/recommend/sessions")
@@ -482,7 +789,7 @@ class TestListSessions:
         assert len(sessions) == 2
         assert sessions[0]["preview"] == "Newer conversation"  # most recently active first
         assert sessions[1]["id"] == older_thread_id
-        assert sessions[0]["message_count"] == 2  # one user_message + one styling_reply
+        assert sessions[0]["message_count"] == 2  # one user_message + one conversational_turn
         assert sessions[0]["outfit_count"] == 0
 
     def test_outfit_count_reflects_only_outfits_linked_to_that_thread(self, ready_closet: dict[str, str]) -> None:
@@ -560,13 +867,19 @@ class TestGetSession:
 
     def test_happy_path_returns_ordered_messages_with_roles(self, ready_closet: dict[str, str]) -> None:
         result = SuggestResult(outfits=[], sources=[])
-        mock_graph = MagicMock()
-        mock_graph.invoke.return_value = {"result": result, "note": "Nothing to show."}
+        mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
 
-        with patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph):
-            with _client_as(USER_READY) as client:
-                first = client.post("/api/v1/recommend/messages", json={"message": "Rainy commute"})
-                thread_id = first.json()["thread_id"]
+        with _client_as(USER_READY) as client:
+            turn = _send_turn(client, "Rainy commute", reply_text="Got it.")
+            thread_id = turn["thread_id"]
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}),
+            ):
+                client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "Rainy commute", "thread_id": thread_id},
+                )
 
         with _client_as(USER_READY) as client:
             response = client.get(f"/api/v1/recommend/sessions/{thread_id}")
@@ -577,9 +890,11 @@ class TestGetSession:
         assert body["outfit_count"] == 0
         assert [(m["kind"], m["role"], m["text"]) for m in body["messages"]] == [
             ("user_message", "user", "Rainy commute"),
+            ("conversational_turn", "assistant", "Got it."),
             ("styling_reply", "assistant", "Nothing to show."),
+            ("wrap_up", "assistant", "Styling for Rainy commute."),
         ]
-        assert body["messages"][1]["outfits"] == []
+        assert body["messages"][2]["outfits"] == []
 
     def test_styling_reply_resolves_its_outfits_with_citations_no_thumbnails(
         self, ready_closet: dict[str, str]
@@ -601,8 +916,10 @@ class TestGetSession:
             response = client.get(f"/api/v1/recommend/sessions/{thread_id}")
 
         assert response.status_code == 200
-        styling_reply = response.json()["messages"][-1]
-        assert styling_reply["kind"] == "styling_reply"
+        # feature 016 appends a `wrap_up` message after `styling_reply` (design-decisions.md
+        # §49) — looked up by kind rather than assumed to be the transcript's last entry.
+        messages_by_kind = {m["kind"]: m for m in response.json()["messages"]}
+        styling_reply = messages_by_kind["styling_reply"]
         assert len(styling_reply["outfits"]) == 1
         resolved_outfit = styling_reply["outfits"][0]
         assert resolved_outfit["id"] == outfit_body["id"]

@@ -12,7 +12,10 @@ import { InsufficientClosetGate } from "./InsufficientClosetGate";
 import { SparseClosetBanner } from "./SparseClosetBanner";
 import styles from "./RecommendChat.module.css";
 
-type Status = "idle" | "sending" | "error";
+/** Start-styling request status only — a conversational turn's own
+ * in-flight state is tracked separately (`turnPending`) since the two are
+ * distinct states with distinct bubbles (design-decisions.md §37). */
+type StartStylingStatus = "idle" | "pending" | "error";
 type Readiness = { ready: boolean; sparse: boolean; missing: string[] };
 
 export interface RecommendChatHandle {
@@ -49,7 +52,8 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [pendingTexts, setPendingTexts] = useState<string[]>([]);
   const [threadId, setThreadId] = useState<string | null>(initialThreadId);
-  const [status, setStatus] = useState<Status>("idle");
+  const [turnPending, setTurnPending] = useState(false);
+  const [startStyling, setStartStyling] = useState<StartStylingStatus>("idle");
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -93,30 +97,60 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
       setMessages([]);
       setPendingTexts([]);
       setThreadId(null);
-      setStatus("idle");
+      setTurnPending(false);
+      setStartStyling("idle");
     },
   }));
 
-  function handleSend(text: string) {
+  /**
+   * Every composer send now calls the new conversational endpoint
+   * (design-decisions.md §37/§47) — `pendingTexts` is still accumulated
+   * exactly as before, since "Start styling" still needs the raw text as
+   * its fallback/refinement signal (§49); this just also gets a real,
+   * in-voice reply in the meantime.
+   */
+  async function handleSend(text: string) {
     setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text }]);
     setPendingTexts((prev) => [...prev, text]);
+    setTurnPending(true);
+    const { data, error } = await apiClient.POST("/api/v1/recommend/turns", {
+      body: { message: text, thread_id: threadId },
+    });
+    setTurnPending(false);
+
+    if (error || !data) {
+      // FR-010/SC-005: a genuine call/network failure leaves the
+      // conversation usable — no bubble invented for it (research.md §9),
+      // "Start styling" still works from whatever was already gathered.
+      return;
+    }
+
+    if (!threadId) setThreadId(data.thread_id);
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: "assistant", replyText: data.reply_text, plain: true },
+    ]);
   }
 
   async function handleStartStyling() {
     if (pendingTexts.length === 0) return;
-    setStatus("sending");
+    setStartStyling("pending");
     const { data, error } = await apiClient.POST("/api/v1/recommend/messages", {
       body: { message: pendingTexts.join(" "), thread_id: threadId },
     });
 
     if (error || !data) {
-      setStatus("error");
+      setStartStyling("error");
       return;
     }
 
     setThreadId(data.thread_id);
     setMessages((prev) => [
       ...prev,
+      // The wrap-up renders as its own assistant message before the
+      // outfits (design-decisions.md §49) — always present, never a
+      // second LLM call.
+      { id: crypto.randomUUID(), role: "assistant", replyText: data.wrap_up_text, plain: true },
       {
         id: crypto.randomUUID(),
         role: "assistant",
@@ -125,7 +159,7 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
       },
     ]);
     setPendingTexts([]);
-    setStatus("idle");
+    setStartStyling("idle");
   }
 
   if (readiness === null) {
@@ -152,9 +186,15 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
       <div className={styles.scroll} ref={scrollRef}>
         {readiness.sparse && <SparseClosetBanner />}
         {!hasUserMessage && <HeroState onSuggestionTap={handleSend} />}
-        {hasUserMessage && <ChatMessageList messages={messages} inFlight={status === "sending"} />}
+        {hasUserMessage && (
+          <ChatMessageList
+            messages={messages}
+            turnPending={turnPending}
+            stylingPending={startStyling === "pending"}
+          />
+        )}
 
-        {status === "error" && (
+        {startStyling === "error" && (
           <div className={styles.errorCard}>
             <p className="textBody">Something went wrong pulling that together.</p>
             <Button variant="outline" width="intrinsic" onClick={handleStartStyling}>
@@ -172,10 +212,10 @@ export const RecommendChat = forwardRef<RecommendChatHandle, RecommendChatProps>
         <StartStylingButton
           visible={hasUserMessage}
           hasPending={pendingTexts.length > 0}
-          inFlight={status === "sending"}
+          inFlight={turnPending || startStyling === "pending"}
           onClick={handleStartStyling}
         />
-        <Composer onSend={handleSend} inFlight={status === "sending"} />
+        <Composer onSend={handleSend} inFlight={turnPending || startStyling === "pending"} />
       </div>
     </div>
   );
