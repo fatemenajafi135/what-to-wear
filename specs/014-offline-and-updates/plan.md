@@ -162,6 +162,7 @@ frontend/
 │                                                 #   already listed (feature 001 anticipated this)
 ├── playwright.pwa.config.ts                      # NEW — build+start config for SW-dependent e2e
 ├── e2e-pwa/
+│   ├── service-worker-smoke.spec.ts               # NEW — Foundational (registration + 3 cache groups)
 │   ├── offline-cold-start.spec.ts                # NEW — User Story 1
 │   ├── sign-out-purge.spec.ts                    # NEW — User Story 2
 │   ├── expired-photo.spec.ts                     # NEW — User Story 3

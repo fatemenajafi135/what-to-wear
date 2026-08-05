@@ -63,6 +63,14 @@ Runs `playwright.pwa.config.ts` against the built app:
 6. **Both themes, both hosts**: repeat the toast/offline checks at `localhost:3200` and
    `127.0.0.1:3200`, light and dark (`prefers-color-scheme` emulation), per the handoff's §7
    checklist.
+7. **Installed/standalone display mode (FR-013)**: repeat steps 4–5 with DevTools' Rendering panel
+   → "Emulate CSS media feature `display-mode`" set to `standalone` (or an actual install via the
+   browser's install icon). Cache strategy, offline rendering, and the update toast must behave
+   identically to browser-tab mode — this feature adds no display-mode branching, so a difference
+   here would indicate a real regression, not an expected variation.
+8. **Copy audit (FR-011/SC-006)**: read every string this feature renders (the update toast; any
+   offline-related copy touched) and confirm none of it states or implies that an offline action is
+   queued, saved, or will be retried/synced automatically — no such mechanism exists.
 
 ## What this quickstart does not cover
 
