@@ -2488,6 +2488,35 @@ name. `NetworkFirst` for class 1's content-hashed, immutable static assets just 
 `CacheFirst`-style precache already guarantees are correct. One strategy is wrong in two different
 directions at once; the class table is the smaller amount of real complexity.
 
+### Two defects found only by running it, not reading the config
+
+The handoff's own recurring lesson ("check what actually happened, not that the call returned")
+caught two real bugs while writing `e2e-pwa/service-worker-smoke.spec.ts` — neither visible from
+reading `sw.ts` in isolation:
+
+1. **`proxy.ts`'s auth middleware redirected `/sw.js` itself.** Its matcher excluded
+   `_next/static`, `_next/image`, `favicon.ico`, `manifest.webmanifest` and a handful of image
+   extensions, but not `sw.js`/`workbox-*.js`/`swe-worker-*.js`. Registering the service worker
+   from a signed-out route (`/signin` — the SW must work pre-auth too, not just once signed in)
+   hit the "redirect to `/signin`" branch, and browsers refuse to install a service worker whose
+   script response is itself a redirect (`SecurityError`). Fixed by adding those three patterns to
+   the matcher's negative lookahead.
+2. **`CacheFirst` silently never cached photos.** `ItemPhoto`'s `<img>` has no `crossorigin`
+   attribute, so a cross-origin request to Supabase Storage is made `no-cors` — the response the
+   service worker's fetch handler receives is opaque (`status 0`). Serwist's `NetworkFirst`
+   auto-allows this via a plugin its own constructor prepends; `CacheFirst` has no constructor of
+   its own and inherits the base `Strategy`, which without an explicit `cacheWillUpdate` plugin
+   only accepts exactly `status === 200`. Every photo request was returning 200 on the wire while
+   `wtw-photos` stayed permanently empty — no error, no warning surfaced to application code, only
+   visible by asserting real `caches.keys()` contents. Fixed with an explicit
+   `CacheableResponsePlugin({ statuses: [0, 200] })` in class 4's plugin list, ahead of the
+   `ExpirationPlugin`.
+
+Neither would have been caught by a review of `sw.ts`'s config alone, or by unit-testing the route
+table's matcher logic — both required an actual browser, an actual service worker, and an actual
+inspection of `Cache` contents, exactly the "verify what is actually cached" instruction the
+handoff repeats twice.
+
 ### Signed photo URLs: the fix is client-side, not a caching trick
 
 A signed URL doesn't announce its own expiry to an HTTP cache — from the service worker's

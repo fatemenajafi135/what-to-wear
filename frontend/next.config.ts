@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import withSerwistInit from "@serwist/next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -11,4 +12,15 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
 };
 
-export default nextConfig;
+// Serwist is disabled in development on purpose (research.md R9): HMR and an
+// unstable module graph are fundamentally incompatible with a precache
+// manifest. Every service-worker behavior in this feature is only verifiable
+// against a production build (`npm run build && npm run start`), never
+// `next dev` — see specs/014-offline-and-updates/quickstart.md.
+const withSerwist = withSerwistInit({
+  swSrc: "app/sw.ts",
+  swDest: "public/sw.js",
+  disable: process.env.NODE_ENV === "development",
+});
+
+export default withSerwist(nextConfig);

@@ -27,11 +27,15 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Service worker artifacts (Serwist — Phase 6)
-public/sw.js
-public/sw.js.map
-public/swe-worker-*.js
-public/workbox-*.js
+# Service worker artifacts (Serwist — feature 014)
+# Rooted at frontend/, not repo root: a slash-containing pattern in this
+# top-level .gitignore is anchored to THIS file's directory, so an
+# unprefixed "public/sw.js" silently never matched frontend/public/sw.js
+# (found while implementing 014 — `git status` showed it as untracked).
+frontend/public/sw.js
+frontend/public/sw.js.map
+frontend/public/swe-worker-*.js
+frontend/public/workbox-*.js
 
 # Playwright artifacts
 test-results/

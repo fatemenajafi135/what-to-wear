@@ -59,7 +59,7 @@ NetworkFirst is right) or risk caching something that must never be cached (the 
 | 1 | App shell: navigation (HTML/RSC), static build assets, fonts, manifest, icons | Same-origin (the Next app itself) | `defaultCache`'s existing Next-aware rules (precached at build + runtime NetworkFirst/StaleWhileRevalidate per asset type) | Serwist/Workbox defaults | **No** — contains no user data (R1) |
 | 2 | Backend API reads (`GET /closet/*`, `/recommend/outfits*`, `/recommend/sessions*`, `/recommend/readiness`, `/calendar/*`, `/profile`, `/taxonomy/categories`) | Backend API origin, method `GET` | `NetworkFirst`, 4s network timeout, then cache | `wtw-api-data` | **Yes** |
 | 3 | Backend API writes — every non-GET call to the API origin, explicitly including `POST /recommend/messages` | Backend API origin, method `POST`/`PATCH`/`PUT`/`DELETE` | `NetworkOnly` (explicit rule, not just "unmatched passthrough" — see R4) | n/a, nothing stored | n/a — nothing cached |
-| 4 | Signed photo images | Supabase Storage origin (`NEXT_PUBLIC_SUPABASE_URL` + `/storage/v1/object/sign/`) | `CacheFirst` (the signed URL is immutable content for its lifetime — no reason to revalidate), `ExpirationPlugin({ maxEntries: 300, maxAgeSeconds: 3600 })` matching the backend's own `wtw_photo_signed_url_ttl_seconds` | `wtw-photos` | **Yes** |
+| 4 | Signed photo images | Supabase Storage origin (`NEXT_PUBLIC_SUPABASE_URL` + `/storage/v1/object/sign/`) | `CacheFirst` (the signed URL is immutable content for its lifetime — no reason to revalidate), `CacheableResponsePlugin({ statuses: [0, 200] })` + `ExpirationPlugin({ maxEntries: 300, maxAgeSeconds: 3600 })` matching the backend's own `wtw_photo_signed_url_ttl_seconds` | `wtw-photos` | **Yes** |
 | 5 | Reference/taxonomy data (`GET /taxonomy/categories`) | Backend API origin, method `GET`, but not user-scoped | Folded into class 2 today — same strategy, same cache. Not split out as its own class because the data volume is tiny (one small list) and the privacy cost of over-purging it (an extra network round-trip after sign-in) is negligible; a real win only appears at a scale this app isn't at. | `wtw-api-data` | Purged along with class 2 (accepted; see Rejected alternatives) |
 
 **Why not "everything `NetworkFirst`"**: that single rule is actively wrong for class 3 (a repeat
@@ -79,6 +79,19 @@ guarantee are correct, wasting a request on every load for no freshness benefit)
 | (c) `StaleWhileRevalidate` for photos (class 4) instead of `CacheFirst` | A signed URL's query-string token never changes for a given mint — revalidating it fetches the exact same bytes again. `StaleWhileRevalidate` earns its cost when the *same URL* can return different content over time; here a changed photo gets a **new** URL from the JSON response anyway, so the old cache entry is simply superseded, not revalidated. `CacheFirst` is cheaper with no correctness cost. |
 | (d) Cache the API *response envelope* containing the photo URL, but not the image bytes themselves | Solves nothing on its own — the `<img>` tag still fetches the (possibly now-expired) URL from a network request the SW would either intercept (class 4, handled below) or let through and fail nakedly. Bytes still need their own strategy; this option just relocates the problem instead of resolving it. |
 | (e) Split taxonomy into its own non-purged cache class | Correct in principle but not worth a sixth cache name and a second purge-exclusion branch for one small endpoint at this app's current scale — revisit if/when this list grows into something with real caching upside. |
+
+**Found verifying class 4 empirically, not assumed from config** (the handoff's own repeated
+instruction — "check what actually happened, not that the call returned"): `CacheFirst` does not
+cache opaque responses by default. Serwist's `NetworkFirst` constructor auto-prepends a
+`cacheOkAndOpaquePlugin` (allows `status 0` or `200`); `CacheFirst` has no constructor of its own
+and inherits the base `Strategy`, which without an explicit `cacheWillUpdate` plugin only accepts
+`status === 200`. `ItemPhoto`'s `<img>` has no `crossorigin` attribute, so a cross-origin photo
+request is made `no-cors` and the response the service worker sees is opaque (`status 0`) — every
+photo request was succeeding (200 on the wire) while `wtw-photos` silently stayed empty, caught
+only by asserting actual `caches.keys()` contents in `e2e-pwa/service-worker-smoke.spec.ts`, not by
+trusting that the strategy was configured. Fixed with an explicit
+`CacheableResponsePlugin({ statuses: [0, 200] })` ahead of the `ExpirationPlugin` in class 4's
+plugin list (`app/sw.ts`).
 
 ## R4. Why an explicit `NetworkOnly` rule for POST/mutations, not just "let it fall through unmatched"
 

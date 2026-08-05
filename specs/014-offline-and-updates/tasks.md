@@ -31,9 +31,9 @@ Frontend-only feature. All paths are under `frontend/`, plus two durable docs al
 
 **Purpose**: Get Serwist into the build before writing any route logic.
 
-- [ ] T001 Add `serwist` and `@serwist/next` (9.5.12) to `frontend/package.json` dependencies, `npm install`
-- [ ] T002 [P] Create `frontend/lib/serviceWorker/cacheNames.ts` — `API_DATA_CACHE = "wtw-api-data"`, `PHOTOS_CACHE = "wtw-photos"`, `USER_SCOPED_CACHE_NAMES` (data-model.md)
-- [ ] T003 Wrap `frontend/next.config.ts` in `withSerwistInit` (`@serwist/next`) — `swSrc: "app/sw.ts"`, `swDest: "public/sw.js"`, `disable: process.env.NODE_ENV === "development"`
+- [X] T001 Add `serwist` and `@serwist/next` (9.5.12) to `frontend/package.json` dependencies, `npm install`
+- [X] T002 [P] Create `frontend/lib/serviceWorker/cacheNames.ts` — `API_DATA_CACHE = "wtw-api-data"`, `PHOTOS_CACHE = "wtw-photos"`, `USER_SCOPED_CACHE_NAMES` (data-model.md)
+- [X] T003 Wrap `frontend/next.config.ts` in `withSerwistInit` (`@serwist/next`) — `swSrc: "app/sw.ts"`, `swDest: "public/sw.js"`, `disable: process.env.NODE_ENV === "development"`
 
 **Checkpoint**: `npm run build` produces `public/sw.js` (still trivial/empty at this point).
 
@@ -46,12 +46,12 @@ the harness needed to prove any of it works in a real browser.
 
 **⚠️ CRITICAL**: No user story task should start until this phase's checkpoint is reached.
 
-- [ ] T004 Create `frontend/app/sw.ts` — `Serwist` instance wired to `self.__SW_MANIFEST`, `skipWaiting: false`, `clientsClaim: true`, `runtimeCaching` = `defaultCache` (class 1, from `@serwist/next/worker`) with the explicit class-3 `NetworkOnly` rule (all non-`GET` to the API origin, including `POST /recommend/messages`) and class-2 `NetworkFirst` rule (`GET` to the API origin, `wtw-api-data`, 4s timeout, `ExpirationPlugin({maxEntries:200, maxAgeSeconds:86400})`) and class-4 `CacheFirst` rule (Supabase Storage sign URLs, `wtw-photos`, `ExpirationPlugin({maxEntries:300, maxAgeSeconds:3600})`) all **prepended before** `defaultCache` per `contracts/route-caching.md`
-- [ ] T005 [P] Create `frontend/components/shell/ServiceWorkerRegistration.tsx` — client component, registers `app/sw.ts` (via `public/sw.js`) on mount, no UI
-- [ ] T006 Mount `<ServiceWorkerRegistration />` once in `frontend/app/layout.tsx` (root layout, so it covers both the `(auth)` and `(app)` shells)
-- [ ] T007 [P] Create `frontend/playwright.pwa.config.ts` — separate Playwright config, `webServer` runs `npm run build && npm run start -- -p 3200`, `testDir: "./e2e-pwa"`, own `npm run e2e:pwa` script in `package.json`
-- [ ] T008 [P] `frontend/lib/serviceWorker/cacheNames.test.ts` — unit test: `USER_SCOPED_CACHE_NAMES` equals exactly `[API_DATA_CACHE, PHOTOS_CACHE]` (`contracts/route-caching.md` invariant 2)
-- [ ] T009 `frontend/e2e-pwa/service-worker-smoke.spec.ts` — build+start, load once, assert a service worker reaches `activated`; browse a screen with photos; assert exactly three Cache Storage groups exist (`caches.keys()` includes the Serwist precache name, `wtw-api-data`, `wtw-photos`)
+- [X] T004 Create `frontend/app/sw.ts` — `Serwist` instance wired to `self.__SW_MANIFEST`, `skipWaiting: false`, `clientsClaim: true`, `runtimeCaching` = `defaultCache` (class 1, from `@serwist/next/worker`) with the explicit class-3 `NetworkOnly` rule (all non-`GET` to the API origin, including `POST /recommend/messages`) and class-2 `NetworkFirst` rule (`GET` to the API origin, `wtw-api-data`, 4s timeout, `ExpirationPlugin({maxEntries:200, maxAgeSeconds:86400})`) and class-4 `CacheFirst` rule (Supabase Storage sign URLs, `wtw-photos`, `ExpirationPlugin({maxEntries:300, maxAgeSeconds:3600})`) all **prepended before** `defaultCache` per `contracts/route-caching.md`
+- [X] T005 [P] Create `frontend/components/shell/ServiceWorkerRegistration.tsx` — client component, registers `app/sw.ts` (via `public/sw.js`) on mount, no UI
+- [X] T006 Mount `<ServiceWorkerRegistration />` once in `frontend/app/layout.tsx` (root layout, so it covers both the `(auth)` and `(app)` shells)
+- [X] T007 [P] Create `frontend/playwright.pwa.config.ts` — separate Playwright config, `webServer` runs `npm run build && npm run start -- -p 3100` (port 3100, not a fresh one: CORS only whitelists 3000/3100 and a third port is a backend change), `testDir: "./e2e-pwa"`, own `npm run e2e:pwa` script in `package.json`
+- [X] T008 [P] `frontend/lib/serviceWorker/cacheNames.test.ts` — unit test: `USER_SCOPED_CACHE_NAMES` equals exactly `[API_DATA_CACHE, PHOTOS_CACHE]` (`contracts/route-caching.md` invariant 2)
+- [X] T009 `frontend/e2e-pwa/service-worker-smoke.spec.ts` — build+start, load once, assert a service worker reaches `activated`; browse a screen with photos; assert exactly three Cache Storage groups exist (`caches.keys()` includes the Serwist precache name, `wtw-api-data`, `wtw-photos`)
 
 **Checkpoint**: A built app registers a working service worker with the full route table live and
 provably present in Cache Storage. Every user story below builds on this.
@@ -132,7 +132,7 @@ the toast, accept it, confirm the new build's code is what's now running.
 - [ ] T026 [P] Add iOS-only service-worker/cache items to `docs/ios-verification-backlog.md` (installed-PWA cache lifecycle, background/foreground reload behavior, Safari's more aggressive Cache Storage eviction under low disk — no physical iPhone available to verify any of it directly)
 - [ ] T027 Run `npm run lint`, `npm run typecheck`, `npm test` (frontend) and confirm the existing dev-server `npm run e2e` suite is unaffected; fix any regressions
 - [ ] T027a [P] Copy audit (FR-011/SC-006): grep every new/changed user-visible string this feature introduces (`updateToastCopy.ts`, any offline-related copy touched) for queue/retry/sync-promising language ("queued", "retry", "sync", "once you're back online") — zero matches expected; assert the exact toast copy in `update-prompt.spec.ts` (T025) as a regression guard
-- [ ] T028 Run `quickstart.md`'s manual DevTools pass at `localhost:3200` and `127.0.0.1:3200`, both themes, **and** in installed/standalone display mode (FR-013 — `chrome://apps` install or DevTools' "Emulate a focused page" + `display-mode: standalone` media override) — record what was actually observed in Cache Storage (not just that a strategy was configured), per the handoff's explicit instruction
+- [ ] T028 Run `quickstart.md`'s manual DevTools pass at `localhost:3000` and `127.0.0.1:3000`, both themes, **and** in installed/standalone display mode (FR-013 — `chrome://apps` install or DevTools' "Emulate a focused page" + `display-mode: standalone` media override) — record what was actually observed in Cache Storage (not just that a strategy was configured), per the handoff's explicit instruction
 - [ ] T029 Full CI-equivalent check: backend `ruff`, `ruff format --check`, `mypy src`, `pytest`, `lint-imports` (expect unchanged — no backend files touched) and frontend `eslint`, `tsc --noEmit`, `next build`; confirm backend test count ≥753 and frontend test count ≥313 (handoff §7)
 
 ---

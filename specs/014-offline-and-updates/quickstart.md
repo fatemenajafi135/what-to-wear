@@ -10,7 +10,9 @@ that a service worker's actual cache contents must be *observed*, not inferred f
 ```bash
 cd frontend
 npm run build
-npm run start -- -p 3200   # or: npm run e2e:pwa, which does build+start+test together
+npm run start -- -p 3000   # or -p 3100; both are CORS-whitelisted (backend main.py) — a
+                           # third port would be a backend change, out of scope here.
+                           # npm run e2e:pwa does build+start+test together, on 3100.
 ```
 
 Backend must be running too (`cd backend && uv run uvicorn whattowear.main:app --reload`) with a
@@ -60,8 +62,8 @@ Runs `playwright.pwa.config.ts` against the built app:
    offline banner if both are triggered together (toggle Network offline while the toast is
    showing), and respects `prefers-reduced-motion` (DevTools → Rendering → Emulate CSS
    media feature `prefers-reduced-motion: reduce`).
-6. **Both themes, both hosts**: repeat the toast/offline checks at `localhost:3200` and
-   `127.0.0.1:3200`, light and dark (`prefers-color-scheme` emulation), per the handoff's §7
+6. **Both themes, both hosts**: repeat the toast/offline checks at `localhost:3000` and
+   `127.0.0.1:3000`, light and dark (`prefers-color-scheme` emulation), per the handoff's §7
    checklist.
 7. **Installed/standalone display mode (FR-013)**: repeat steps 4–5 with DevTools' Rendering panel
    → "Emulate CSS media feature `display-mode`" set to `standalone` (or an actual install via the
