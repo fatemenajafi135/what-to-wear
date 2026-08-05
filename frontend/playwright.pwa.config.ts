@@ -22,6 +22,13 @@ const PORT = 3100;
 export default defineConfig({
   testDir: "./e2e-pwa",
   fullyParallel: false, // several specs mutate shared Cache Storage / the SW's own lifecycle
+  // Single worker, not just fullyParallel:false: update-prompt.spec.ts
+  // overwrites public/sw.js on disk mid-test to simulate a deploy, which
+  // every OTHER spec file's own service worker also reads from — running
+  // spec files in parallel workers races that file against every other
+  // test's registration. fullyParallel only serializes tests *within* one
+  // file; this is what actually pins the whole suite to one worker.
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",

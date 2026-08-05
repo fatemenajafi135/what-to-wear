@@ -90,6 +90,12 @@ const runtimeCaching: RuntimeCaching[] = [
 
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
+  // Deliberately not overridden to true: a newly-installed worker sits in
+  // `waiting` rather than taking over unasked, which is what makes the
+  // update prompt (lib/pwa/useServiceWorkerUpdate.ts) possible at all — the
+  // single highest-risk item in this feature (handoff §6.1). It only
+  // activates in response to the SKIP_WAITING message below, which only the
+  // user's own "Update now" tap sends.
   skipWaiting: false,
   clientsClaim: true,
   navigationPreload: true,
@@ -97,3 +103,8 @@ const serwist = new Serwist({
 });
 
 serwist.addEventListeners();
+
+// contracts/route-caching.md's update-prompt message contract.
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
