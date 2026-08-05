@@ -82,11 +82,11 @@ device sees none of the first user's data, even offline.
 **Independent Test**: Sign in, browse (populates both caches), sign out, sign in as someone else,
 go offline — nothing of the first user is retrievable (DevTools Cache Storage + UI).
 
-- [ ] T012 [US2] Create `frontend/lib/auth/signOut.ts` — `signOutAndClearCache(supabase)`: calls `supabase.auth.signOut()`, then `caches.delete()` for both `USER_SCOPED_CACHE_NAMES` (guarded by `typeof caches !== "undefined"`)
-- [ ] T013 [P] [US2] `frontend/lib/auth/signOut.test.ts` — unit test with a mocked `caches` global: asserts both cache names are deleted and `signOut()` is called
-- [ ] T014 [US2] Update `frontend/app/(app)/profile/page.tsx`'s `handleSignOut` to call `signOutAndClearCache(supabase)` instead of `supabase.auth.signOut()` directly
-- [ ] T015 [US2] Update `frontend/components/auth/ResetPasswordForm.tsx`'s sign-out call the same way
-- [ ] T016 [US2] `frontend/e2e-pwa/sign-out-purge.spec.ts` — sign in as seeded user A, browse closet/outfits, sign out, assert `page.evaluate(() => caches.keys())` excludes both user-scoped cache names (precache still present); sign in as seeded user B, go offline, assert none of user A's item names/photos render
+- [X] T012 [US2] Create `frontend/lib/auth/signOut.ts` — `signOutAndClearCache(supabase)`: calls `supabase.auth.signOut()`, then `caches.delete()` for both `USER_SCOPED_CACHE_NAMES` (guarded by `typeof caches !== "undefined"`)
+- [X] T013 [P] [US2] `frontend/lib/auth/signOut.test.ts` — unit test with a mocked `caches` global: asserts both cache names are deleted and `signOut()` is called
+- [X] T014 [US2] Update `frontend/app/(app)/profile/page.tsx`'s `handleSignOut` to call `signOutAndClearCache(supabase)` instead of `supabase.auth.signOut()` directly
+- [X] T015 [US2] Update `frontend/components/auth/ResetPasswordForm.tsx`'s sign-out call the same way
+- [X] T016 [US2] `frontend/e2e-pwa/sign-out-purge.spec.ts` — sign in as seeded user A, browse closet/outfits, sign out, assert `page.evaluate(() => caches.keys())` excludes both user-scoped cache names (precache still present); sign in as seeded user B, go offline, assert none of user A's item names/photos render
 
 **Checkpoint**: User Story 2 independently demoable — the privacy-critical purge is provable in DevTools.
 
