@@ -2385,3 +2385,74 @@ still exists, just attributed to the endpoint that now actually does the recordi
 | **(a) chosen** — remove the insert from `send_message`; the conversational endpoint is the only writer of `user_message` rows | — |
 | (b) Keep both inserts, deduplicate in the read path (e.g. `Session detail` collapses consecutive identical `user_message` texts) | Papers over a real double-write with a display-layer heuristic — the underlying duplicate row still exists, still counts toward `message_count` (§44), and "collapse consecutive identical text" is itself a guess that could wrongly hide a user who genuinely repeated themselves. Fixing the write is strictly simpler than adding a lossy read-time filter to compensate for it. |
 | (c) Make the insert conditional on `count_user_messages(thread_id) == 0` (only insert if this is the very first message this thread has ever seen) | Silently reintroduces the duplicate for every *refinement* tap after the first, since those threads already have prior `user_message` rows from earlier conversational turns — the condition only guards the fresh-thread case, not the (more common, post-016) continuing-thread case, so it fixes the bug only partway while looking like a complete fix. |
+
+## 51. Feature 016 (Conversational turns) — which lines are written by the model, and which are copy
+
+**Status: decided.** Recorded after the fact, during review: the split below was implemented and
+is defensible, but it was never written down, and it diverges from what the design owner chose
+when asked. Four smaller choices in this same feature got sections; this one is larger than any
+of them.
+
+### What was asked, and what was built
+
+The 016 handoff (§3) named **eight** situations needing copy and stated that the design owner
+would write all eight, because `design-system.md`'s Recommend table has four keys — all error and
+empty states — and Principle VIII forbids inventing UI copy in code. When the question was put
+directly, three options were offered: the design owner writes them, they are drafted for the
+design owner to edit, or the model improvises every line. The third was explicitly labelled the
+least compatible with Principle VIII. **The design owner chose to write them.**
+
+What shipped splits the eight:
+
+| Situation | Source |
+|---|---|
+| Turn cap reached | `copy.py` — fixed string |
+| Conversational call failed | `copy.py` — fixed string |
+| Wrap-up on "Start styling" | `copy.py` — Python template |
+| Acknowledge, nothing to ask | **Model, per turn** |
+| Ask the occasion | **Model, per turn** |
+| Ask formality | **Model, per turn** |
+| Ask about weather | **Model, per turn** |
+| Enough gathered | **Model, per turn** |
+
+The five model-written situations have no fixed copy anywhere. The handoff's drafts for them
+were moved into `prompts/conversational_turn_system.md` as **voice-calibration examples**,
+explicitly marked "NOT final, approved copy and must never be reproduced verbatim; they exist
+only to show the register/length/tone to match."
+
+### Decision: keep the split, and treat the prompt as the copy artifact for those five
+
+The split is correct even though it was not what was asked for, and the reason is specific
+rather than general: **the five model-written situations are all responses to something the user
+just said.** "Acknowledge what was said" cannot be a fixed string without becoming the canned
+acknowledgement §28 already rejected as "demo flavor" — the thing this feature exists to
+replace. A fixed "Got it." fired after every message is precisely the half-conversation §37
+amended §28 to remove.
+
+The three Python-owned lines are the complement, and the boundary is principled rather than
+convenient: each fires in a moment where **there is no model reply to show at all** — the turn
+cap stopped the call, the call failed, or the wrap-up is deliberately not a second LLM call
+(§49). Copy exists exactly where the model is silent.
+
+**Consequence: `prompts/conversational_turn_system.md` is a copy artifact, not just a technical
+prompt.** Its voice section is where "what the assistant sounds like" is actually specified, and
+it is subject to Principle VIII the same way a copy table is — changing it changes user-visible
+language. It should be reviewed by the design owner when the words matter, not only by whoever
+is editing extraction behaviour.
+
+### What this does not license
+
+This is not a precedent for generating UI copy in general. It applies to **conversational turns
+whose content is a response to unpredictable user input**, and nowhere else. Every other string
+in this product — every empty state, every error, every button label, including the three in
+`copy.py` — remains fixed copy owned by the design system. A model writing a button label would
+still be a Principle VIII violation.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — five model-written, three fixed, prompt treated as a copy artifact | — |
+| (b) Fixed copy for all eight, as the handoff originally asked | Makes the acknowledge/ask lines canned, which is the behaviour §37 exists to remove. A stylist that answers every message with one of five stock sentences is the prototype's simulation with an LLM bill attached. |
+| (c) Model writes all eight, including the turn cap, failure and wrap-up lines | Two of those three fire when the model is unavailable or has just failed, so there is nothing to generate them with; the wrap-up would become a second LLM call, which §49 rejected on its own merits. |
+| (d) Keep the split but leave it unrecorded, as shipped | What this section fixes. The five drafts sit in a prompt file marked "not final" with no record of who decided they would never become final — a reader would reasonably conclude the copy was still outstanding. |
