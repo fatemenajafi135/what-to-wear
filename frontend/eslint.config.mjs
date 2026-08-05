@@ -23,6 +23,11 @@ const eslintConfig = [
       "next-env.d.ts",
       "playwright-report/**",
       "test-results/**",
+      // Serwist build output (feature 014) — generated, minified, gitignored.
+      "public/sw.js",
+      "public/sw.js.map",
+      "public/swe-worker-*.js",
+      "public/workbox-*.js",
     ],
   },
   ...tseslint.configs.recommended,

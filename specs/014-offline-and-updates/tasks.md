@@ -100,9 +100,9 @@ falls back to the existing `NoPhoto` placeholder — never a native broken-image
 **Independent Test**: Force an image load failure on a previously-seen photo (offline, past TTL, or
 mocked 400) — placeholder renders, not a broken-image glyph.
 
-- [ ] T017 [US3] Add an `onError` handler + `hasError` state to `frontend/components/ui/ItemPhoto/ItemPhoto.tsx` — on the `<img>` load failure, render `NoPhoto` the same way the `!src` branch already does
-- [ ] T018 [P] [US3] `frontend/components/ui/ItemPhoto/ItemPhoto.test.tsx` — unit test: render with a `src`, fire the image's `error` event, assert `NoPhoto`'s markup is now present and the broken `<img>` is gone
-- [ ] T019 [US3] `frontend/e2e-pwa/expired-photo.spec.ts` — load a screen with a photo whose signed URL is mocked to fail (400), assert the placeholder renders in the DOM; confirm no failure surfaces as a native broken-image render
+- [X] T017 [US3] Add an `onError` handler + `hasError` state to `frontend/components/ui/ItemPhoto/ItemPhoto.tsx` — on the `<img>` load failure, render `NoPhoto` the same way the `!src` branch already does
+- [X] T018 [P] [US3] `frontend/components/ui/ItemPhoto/ItemPhoto.test.tsx` — unit test: render with a `src`, fire the image's `error` event, assert `NoPhoto`'s markup is now present and the broken `<img>` is gone
+- [X] T019 [US3] `frontend/e2e-pwa/expired-photo.spec.ts` — load a screen with a photo whose signed URL is mocked to fail (400), assert the placeholder renders in the DOM; confirm no failure surfaces as a native broken-image render
 
 **Checkpoint**: User Story 3 independently demoable.
 
