@@ -67,8 +67,8 @@ state, never a raw browser network error.
 **Independent Test**: Load once online, go offline, force a full reload at any route — app shell
 renders, not the browser's offline interstitial.
 
-- [ ] T010 [US1] In `frontend/app/sw.ts`, confirm/extend the class-1 navigation strategy so a full offline reload resolves to the precached shell rather than falling through to the browser's own offline page (tune `defaultCache`'s document handling or add an explicit `fallbacks.entries` document fallback if `defaultCache` doesn't already cover a zero-network navigation)
-- [ ] T011 [US1] `frontend/e2e-pwa/offline-cold-start.spec.ts` — three cases per spec.md Acceptance Scenarios: (1) load online once, go offline, reload → shell renders; (2) visit a data screen online, go offline, revisit it → last-known data + offline banner, no blank/error; (3) go offline, visit a screen never fetched this session → the screen's own empty/error affordance, not a raw network error, and no copy implying auto-recovery
+- [X] T010 [US1] In `frontend/app/sw.ts`, confirm/extend the class-1 navigation strategy so a full offline reload resolves to the precached shell rather than falling through to the browser's own offline page (tune `defaultCache`'s document handling or add an explicit `fallbacks.entries` document fallback if `defaultCache` doesn't already cover a zero-network navigation) — verified: `defaultCache`'s existing Next-aware rules already cover it, no explicit fallback needed
+- [X] T011 [US1] `frontend/e2e-pwa/offline-cold-start.spec.ts` — three cases per spec.md Acceptance Scenarios: (1) load online once, go offline, reload → shell renders; (2) visit a data screen online, go offline, revisit it → last-known data + offline banner, no blank/error; (3) go offline, visit a screen never fetched this session → the screen's own empty/error affordance, not a raw network error, and no copy implying auto-recovery
 
 **Checkpoint**: User Story 1 independently demoable — offline cold start works end to end.
 

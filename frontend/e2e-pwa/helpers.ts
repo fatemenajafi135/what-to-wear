@@ -14,6 +14,27 @@ export const API_ORIGIN = "http://localhost:8000";
 export const STORAGE_ORIGIN = "http://127.0.0.1:54321";
 
 /**
+ * `context.setOffline(true)` reliably fails real network requests (what the
+ * cache-fallback assertions in this suite depend on) but does not reliably
+ * flip `navigator.onLine` across a navigation in headless Chromium (found
+ * empirically: `navigator.onLine` read back `true` immediately after a
+ * `page.reload()` performed while the context was still offline, even after
+ * re-calling `setOffline`). The app's pre-existing `useOnlineStatus` hook
+ * (feature 004, `lib/useOnlineStatus.ts` — unmodified by this feature) reads
+ * exactly that property, so a test exercising the offline banner needs to
+ * force it directly. Standard, documented Playwright workaround: override
+ * the getter and fire the `offline` event before any page script runs.
+ * Must be called before `page.goto`/`page.reload` to take effect on that
+ * navigation (`addInitScript` only affects future navigations).
+ */
+export async function forceNavigatorOffline(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    Object.defineProperty(window.navigator, "onLine", { get: () => false, configurable: true });
+    window.addEventListener("load", () => window.dispatchEvent(new Event("offline")));
+  });
+}
+
+/**
  * Signs up a brand-new user inline, same pattern as the existing dev-server
  * suite's `e2e/closet.spec.ts` and `e2e/auth-flow.spec.ts` — no seeded
  * fixture user exists for either suite, by design (no established seeding

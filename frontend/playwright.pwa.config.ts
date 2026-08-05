@@ -38,8 +38,18 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "pwa-chromium",
-      use: { ...devices["Desktop Chrome"] },
+      // A fixed mobile viewport, not devices["Desktop Chrome"]'s default:
+      // this app's TabBar swaps from a bottom bar to a desktop rail/sidebar
+      // right around 1024px (TabBar.module.css), and Chromium's own desktop
+      // default viewport lands in that zone — found while writing this
+      // suite, when `getByRole("navigation")` reported a real but 0-height
+      // element (the desktop-rail branch mounts but this viewport happened
+      // to size it to nothing). Mobile is also the more central case for a
+      // PWA feature. See e2e/chrome-breakpoints.spec.ts for the existing
+      // dev-server suite's own multi-breakpoint coverage of this component;
+      // that responsive behavior is out of scope here, not being re-tested.
+      name: "pwa-mobile",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 } },
     },
   ],
 });
