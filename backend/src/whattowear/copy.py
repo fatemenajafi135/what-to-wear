@@ -1,37 +1,52 @@
 """Deterministic, Python-owned strings for the conversational-turns surface (feature 016).
 
-Every string below is **DRAFT**, not final copy — `docs/handoffs/016-conversational-turns.md`
-§3: the assistant's turn copy is not in `design-system.md`, and Principle VIII forbids inventing
-UI copy in code. The design owner is writing the final lines; these exist so the feature is
-buildable and demonstrable while that's pending, per the handoff's own instruction ("keep every
-string in one module with a comment pointing at §3"). Swap the literal text in place when final
-copy arrives — nothing that imports this module needs to change.
+These are the only lines on this surface that are NOT written by the model. Everything the
+assistant says during an ordinary turn — acknowledging, asking about the occasion, asking about
+formality — is generated per turn against `prompts/conversational_turn_system.md`, which is
+where that voice is actually specified. The three below exist because each fires in a moment
+where there is no model reply to show: the turn cap has been reached and no call is made, the
+call itself failed, or the wrap-up is composed from accumulated slots in Python rather than by a
+second LLM call (docs/design-decisions.md §49 — "the model extracts; Python composes").
 
-These three strings/one function cover only the situations that are Python-decided, not
-LLM-generated: a fixed turn cap has been reached, the LLM call itself failed, and the
-Start-styling wrap-up (docs/design-decisions.md §49 — "the model extracts; Python composes"
-applies to the wrap-up the same way it applies to the pipeline invoke input, so this is not a
-second LLM call).
+Voice, per design-system.md §9: the assistant speaks in the first person, and error copy names
+the problem and gives a recovery action rather than a bare failure.
+
+§9 also carves out connection and system-state copy as impersonal ("That didn't save."), on the
+grounds that it describes the device or network rather than a styling decision. `CALL_FAILED` is
+deliberately **not** written that way — the design owner chose to keep the stylist's own voice
+here. Recorded so it is not later "corrected" into the impersonal form to match the carve-out.
 """
 
 from __future__ import annotations
 
-# DRAFT (handoff §3, row "Turn cap reached") — replace verbatim when final copy arrives.
-TURN_CAP_REACHED = "Let's put this to work — tap Start styling and I'll pull some looks together."
+# The conversation has hit its per-thread cap, so no further model call is made. Every
+# subsequent send returns this same line, so it has to read sensibly more than once, and it must
+# never blame the user for having said too much — it points forward to the next action instead
+# of naming the limit it just hit.
+TURN_CAP_REACHED = "Let's put this to work. Tap Start styling and I'll put some looks together."
 
-# DRAFT (handoff §3, row "Conversational call failed") — replace verbatim when final copy arrives.
-CALL_FAILED = "I didn't catch that — try again, or tap Start styling with what we have."
+# The conversational call failed (gateway, network, timeout). Offers BOTH recoveries
+# deliberately: retrying is the obvious one, but everything gathered before the failure still
+# works, so "Start styling" remains available — saying so is what stops a failed turn reading as
+# a dead end. First person by design-owner choice; see the module docstring.
+CALL_FAILED = "I didn't catch that. Try again, or tap Start styling with what we have so far."
 
 
 def wrap_up_text(occasion: str, formality: str | None) -> str:
-    """DRAFT template (handoff §3, row "Wrap-up on Start styling") — replace verbatim (keeping
-    the `{occasion}`/`{formality}` substitution points) when final copy arrives.
+    """The summary shown as its own assistant message the moment "Start styling" is tapped,
+    directly above the outfits — what the app understood, in the user's own terms, while the
+    expensive call runs.
 
-    Degrades gracefully when `formality` is unknown (FR-007) rather than rendering a placeholder
-    for it — in practice `formality` is rarely `None` by the time this is called, since
-    `context_assembler.assemble_context` always infers one when absent, but the degrade path
-    exists for honesty regardless.
+    Deliberately short: it sits between the conversation and the results, and anything longer
+    reads as padding in front of the thing actually being waited for.
+
+    `formality` arrives title-cased (`_FORMALITY_LABELS`, shared with the outfit meta line, where
+    it starts a segment and so is capitalised correctly). It is lowered here because mid-sentence
+    "Black tie" renders as a stray capital — found by reading a real wrap-up, not by inspection.
+
+    Degrades to occasion-only when formality is unknown, rather than showing an empty slot or a
+    placeholder (FR-007).
     """
     if formality:
-        return f"Styling for {occasion}, {formality}."
+        return f"Styling for {occasion}, {formality.lower()}."
     return f"Styling for {occasion}."
