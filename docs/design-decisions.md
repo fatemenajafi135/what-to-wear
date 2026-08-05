@@ -2456,3 +2456,124 @@ still be a Principle VIII violation.
 | (b) Fixed copy for all eight, as the handoff originally asked | Makes the acknowledge/ask lines canned, which is the behaviour §37 exists to remove. A stylist that answers every message with one of five stock sentences is the prototype's simulation with an LLM bill attached. |
 | (c) Model writes all eight, including the turn cap, failure and wrap-up lines | Two of those three fire when the model is unavailable or has just failed, so there is nothing to generate them with; the wrap-up would become a second LLM call, which §49 rejected on its own merits. |
 | (d) Keep the split but leave it unrecorded, as shipped | What this section fixes. The five drafts sit in a prompt file marked "not final" with no record of who decided they would never become final — a reader would reasonably conclude the copy was still outstanding. |
+
+## 52. Feature 014 (Offline, caching and the update prompt) — cache strategy per route class, and the sign-out purge
+
+**Status: decided.** The handoff named this the slice's central open question and explicitly
+rejected "everything `NetworkFirst`" as an answer without justification (§3.1). Full reasoning in
+`specs/014-offline-and-updates/research.md` R1–R6; this section is the durable record.
+
+### What the app actually is, first
+
+Every authenticated screen (`app/(app)/**/page.tsx`) is a plain server component with no data
+fetching — all real data comes from `"use client"` components calling the FastAPI backend on its
+own origin (`NEXT_PUBLIC_API_URL`), a separate origin from the Next.js app in production. This
+means the Next app's own HTML/RSC/static output carries **zero user-scoped data** — it is safe to
+precache and cache without any purge concern. Only two request classes carry user data: calls to
+the backend API, and signed photo URLs (a third origin — Supabase Storage).
+
+### The five route classes
+
+| # | Class | Strategy | Cache name | Purged at sign-out |
+|---|---|---|---|---|
+| 1 | App shell (same-origin: navigation, static assets, fonts, manifest) | `@serwist/next/worker`'s `defaultCache` (Next-aware precache + runtime rules) | Serwist/Workbox defaults | No — no user data (see above) |
+| 2 | Backend API reads (`GET` to the API origin) | `NetworkFirst`, 4s timeout | `wtw-api-data` | **Yes** |
+| 3 | Backend API writes, **including `POST /recommend/messages`** | `NetworkOnly`, explicit rule (not left to unmatched-passthrough) | nothing stored | n/a |
+| 4 | Signed photo images (Supabase Storage origin) | `CacheFirst` + `ExpirationPlugin({ maxAgeSeconds: 3600 })` matching `wtw_photo_signed_url_ttl_seconds` | `wtw-photos` | **Yes** |
+| 5 | Reference data (`GET /taxonomy/categories`) | Folded into class 2 — same strategy, same cache, purged along with it | `wtw-api-data` | Yes (accepted cost, not worth a sixth cache name at this data volume) |
+
+**Why not one uniform strategy**: `NetworkFirst` for class 3 would let Workbox serve a *cached
+POST response* on a repeat failure — exactly the double-billing risk the handoff calls out by
+name. `NetworkFirst` for class 1's content-hashed, immutable static assets just re-fetches bytes a
+`CacheFirst`-style precache already guarantees are correct. One strategy is wrong in two different
+directions at once; the class table is the smaller amount of real complexity.
+
+### Signed photo URLs: the fix is client-side, not a caching trick
+
+A signed URL doesn't announce its own expiry to an HTTP cache — from the service worker's
+perspective it's just a URL, indistinguishable from a live one until Storage answers 400. Rather
+than try to detect "expired" inside `sw.ts` (would require decoding Supabase's signed-URL format,
+coupling the worker to a storage implementation detail), `ItemPhoto.tsx` — the single component
+every photo render funnels through (`ClosetGrid`, `OutfitsGrid`, both detail pages,
+`ItemThumbnailRow` — verified, none render a raw `<img>` themselves) — gets an `onError` handler
+that swaps to the existing `NoPhoto` placeholder, the same one already used when `src` is falsy.
+This is correct regardless of *why* the image failed (expired token, Storage briefly down, object
+deleted), which a cache-layer fix can't say.
+
+### Sign-out purge
+
+`caches.delete("wtw-api-data")` and `caches.delete("wtw-photos")` — by name, from the page (the
+`CacheStorage` API is available on `window`, no message-passing to the service worker needed) —
+run before navigating to `/signin`, via one shared `signOutAndClearCache()` helper used at both
+existing sign-out call sites (`app/(app)/profile/page.tsx`, `components/auth/
+ResetPasswordForm.tsx`). Deliberately **not** "delete every cache": that would also wipe class 1's
+precache, leaving the next offline cold start on that device with nothing to render — the app
+shell has no user data in it, so there is nothing to protect by purging it, and purging it anyway
+would trade a real privacy win for a false one plus a real regression.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — five-class table + named-cache sign-out purge + client-side `onError` fallback | — |
+| (b) Uniform `NetworkFirst` everywhere | Wrong for the billed POST (double-charge risk) and wasteful for immutable static assets. |
+| (c) `StaleWhileRevalidate` for photos | A signed URL's bytes never change for that exact URL; revalidating re-fetches identical bytes. A changed photo gets a **new** URL from the JSON anyway, so the old entry is superseded, not stale. |
+| (d) Detect signed-URL expiry inside the service worker | Requires decoding Supabase's URL format or an extra network call to check — more fragile than just handling the `<img>` element's own `error` event where the browser already reports the failure. |
+| (e) `caches.keys()` + delete everything at sign-out | Also deletes the app-shell precache (no user data, doesn't need purging) and regresses the next offline cold start on that device until a new service-worker install/activate cycle repopulates it. |
+| (f) Split taxonomy (class 5) into its own non-purged cache | Correct in principle, not worth a sixth cache name for one small reference list at this app's current scale. |
+
+## 53. Feature 014 (Offline, caching and the update prompt) — update detection, and draft copy pending design-owner review
+
+**Status: partially decided; copy is a draft, not final.** The handoff named this the slice's
+second named decision (§3.2) and pointed at §51 as the precedent for how to handle UI copy with no
+design-system entry. Full reasoning: `specs/014-offline-and-updates/research.md` R7–R8.
+
+### Detection: reload-triggered only
+
+Resolved via `/speckit-clarify` (2026-08-05), asked directly of the design owner: the app does
+**not** poll for a new service worker in the foreground (no `setInterval` + `registration.update()`)
+and does **not** attach a `visibilitychange` listener. Detection happens on the client's next real
+navigation (full reload, back-navigation to a fresh document load, reopening the installed app) —
+the browser's own navigation-time service-worker byte-check does the work; the app's job is only to
+notice the result (`registration.waiting`, or an `updatefound` → `installed` transition completing
+during that same navigation) and show the toast. `skipWaiting: false` (Serwist's default, not
+overridden) is what makes this possible — an installed-but-not-yet-active worker sits in `waiting`
+rather than taking over unasked. Dismissing the toast needs no persisted flag: since nothing
+re-checks mid-session, plain component state (reset by the next real navigation) is enough — there
+is no other event during the same page life that would justify bringing it back.
+
+### Why this is not §51's exception
+
+§51 carved out an exception to Principle VIII for copy that is *itself a response to unpredictable
+user input* (the five model-written conversational-turn lines) — a fixed string there would have
+been the canned-reply failure mode §37 exists to remove. The update-prompt toast is not that: it is
+one fixed system message that fires in exactly one circumstance, closer in kind to the offline
+banner ("You're offline…") than to a conversational reply. §51's exception does not apply here —
+this is ordinary Principle VIII copy that simply has no design-system entry yet, handled the
+ordinary way: drafted, flagged, and routed for review, not treated as licensed to write in code.
+
+### Draft copy (pending design-owner sign-off)
+
+Kept in exactly one file, `frontend/lib/pwa/updateToastCopy.ts`, marked as a draft in a comment a
+reader can't miss:
+
+| Element | Draft text |
+|---|---|
+| Body | "A new version is ready." |
+| Action button | "Update now" |
+| Dismiss | icon-only close control (existing `IconButton icon="close"`), `aria-label="Dismiss"` |
+
+Voice: impersonal/system register, per `design-system.md` §9's explicit exception for
+connection/sync copy ("stays impersonal because it's describing device/network state, not a
+styling decision") — matching the offline banner's own register, not the first-person-stylist
+voice used elsewhere. **This is a draft, not final copy** — swap it for the design owner's actual
+wording once given, in that one file, and remove the draft flag comment when it's real.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — reload-triggered detection, draft-and-flag copy | — |
+| (b) Poll + visibility-triggered detection (the more "robust" industry-standard combination) | Explicitly declined when asked directly — the design owner chose the simpler reload-triggered behavior over proactive detection while a tab stays open. |
+| (c) Toast reappears on next in-app navigation after a dismiss | Doesn't fit reload-triggered detection: in-app (client-side) navigation never re-checks the service worker, so there is no new information to justify re-showing it before the next real reload. |
+| (d) Treat this like §51's exception and let a model draft the copy per-occurrence | Wrong category of copy — this is one fixed system message, not a reply to unpredictable input; §51's own "What this does not license" section says as much. |
