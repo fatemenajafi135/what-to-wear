@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Chip } from "@/components/ui/Chip/Chip";
 import { Input } from "@/components/ui/Input/Input";
 import { Textarea } from "@/components/ui/Textarea/Textarea";
@@ -125,11 +125,12 @@ export function ReviewCard({
   // stored — the backend derives the group from it via `categories.group_of`.
   const [category, setCategory] = useState(initial.category ?? "");
   // The chip is the fixed five, and is a lens on `category` rather than a
-  // second value: inferred from whatever specific type is set, and choosing
-  // one narrows which types are offered. These used to be the SAME state
-  // variable, so picking "Top" overwrote a detected "blouse" with the bare
-  // group name (docs/design-decisions.md §31).
-  const [chip, setChip] = useState<CategoryChip | "">(() => inferChip(initial.category ?? "", {}));
+  // second value — these used to be the SAME state variable, so picking "Top"
+  // overwrote a detected "blouse" with the bare group name
+  // (docs/design-decisions.md §31). This holds only an EXPLICIT pick; `null`
+  // means the user hasn't chosen one, so the chip follows from `category`
+  // instead — see `chip` below.
+  const [pickedChip, setPickedChip] = useState<CategoryChip | "" | null>(null);
   const [fabric, setFabric] = useState(initial.fabric ?? "");
   const [formality, setFormality] = useState(initial.formality ?? "");
   const [warmth, setWarmth] = useState(initial.warmth ?? "");
@@ -144,10 +145,14 @@ export function ReviewCard({
   const [saving, setSaving] = useState(false);
   const colorFieldRef = useRef<HTMLDivElement>(null);
 
-  // The taxonomy is fetched, so it lands after first paint — re-infer once.
-  useEffect(() => {
-    if (!chip && category) setChip(inferChip(category, taxonomy));
-  }, [taxonomy, category, chip]);
+  // Derived during render, not stored by an effect. The taxonomy is fetched,
+  // so it lands after first paint; an effect that mirrored it into state cost
+  // an extra render round-trip (fetch resolves -> setTaxonomy -> render ->
+  // effect -> setChip -> render) and made the Type chips appear a beat late.
+  // Under parallel test load that beat exceeded Testing Library's 1s default
+  // query timeout, so `ReviewCard.test.tsx` failed roughly two runs in five —
+  // a flaky test whose cause was this indirection, not the assertion.
+  const chip = pickedChip ?? inferChip(category, taxonomy);
 
   const specifics = chip ? groupsForChip(chip).flatMap((g) => taxonomy[g] ?? []) : [];
 
@@ -232,7 +237,7 @@ export function ReviewCard({
               key={option.group}
               active={chip === option.group}
               onClick={() => {
-                setChip(option.group);
+                setPickedChip(option.group);
                 // Drop a specific type belonging to a different category, but
                 // keep one that still fits — re-tapping Top must not discard
                 // an already-detected "blouse".
