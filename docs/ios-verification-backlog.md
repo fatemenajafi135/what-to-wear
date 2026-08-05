@@ -64,14 +64,23 @@ Two mechanisms cause almost everything in this file:
 | 16 | **`BodyShapePicker`'s horizontal-scroll drag** (5 options, momentum scroll) on real iOS touch. | Touch momentum/overscroll behavior differs from a desktop trackpad/mouse simulation. | `components/ui/BodyShapePicker/BodyShapePicker.tsx` |
 | 17 | **`TagInput`'s Enter-to-commit on iOS's on-screen keyboard** (Style preferences → Brands to avoid) — whether the iOS "return" key reliably fires the same `keydown` Enter event a hardware keyboard does. | A known iOS Safari quirk area; unverifiable without a real on-screen keyboard. | `components/ui/TagInput/TagInput.tsx` (unchanged by this feature, first real usage of it) |
 
-### From features 014 / 015 — offline and install *(anticipated)*
+### From feature 015 — install *(anticipated, not yet built)*
 
 | # | What to check | Why it cannot be checked now |
 |---|---|---|
 | 9 | **The iOS manual "Add to Home Screen" card** across Safari, Chrome, Firefox, Edge and DuckDuckGo — each has a different Share entry point and needs its own copy. | Five real browsers on a real device. |
 | 10 | **Apple splash screens** render at the right sizes without letterboxing. | Only visible on cold launch of an installed app. |
-| 11 | **Service worker update prompt** appears after a deploy, and `skipWaiting` does not serve a stale build. | iOS service-worker lifecycle differs from Chrome's. |
-| 12 | **Storage quota.** iOS quotas are tighter than Chrome's and eviction behaviour differs — relevant once real item photos are cached. | Needs a device with real data. |
+
+### From feature 014 — offline, caching and the update prompt *(built and verified on Android/desktop Chrome; refines old items 11-12)*
+
+| # | What to check | Why it cannot be checked now | Built to |
+|---|---|---|---|
+| 18 | **The update prompt's full lifecycle on WebKit** — does a new service worker reliably reach and stay in `waiting` the same way Chromium's does, does the `SKIP_WAITING` `postMessage` reliably reach it, and does `controllerchange` reliably fire before the forced `location.reload()`? Confirmed working on Chromium (`e2e-pwa/update-prompt.spec.ts`); WebKit's service-worker lifecycle has historically had its own quirks around exactly these transitions. | No WebKit engine available in this environment; Chromium-only automated coverage. | `lib/pwa/useServiceWorkerUpdate.ts`, `app/sw.ts` |
+| 19 | **Opaque cross-origin responses actually get cached by `CacheFirst` + `CacheableResponsePlugin` on WebKit.** This feature's `wtw-photos` cache depends on it (`docs/design-decisions.md` §52) — older Safari/WebKit Cache API implementations have had bugs specifically around persisting opaque (`no-cors`) responses that Chromium didn't share. If this silently fails on iOS the way the *un-patched* `CacheFirst` config silently failed here (found only by inspecting real `Cache` contents, not by reading config), the symptom is a working-looking app that still re-fetches every photo. | WebKit-specific Cache API behavior, unverifiable outside a real WebKit engine. | `app/sw.ts` class 4 |
+| 20 | **Cache Storage eviction under iOS storage pressure**, for an *installed* PWA specifically. iOS is known to evict a web app's storage more aggressively than desktop Chrome once the device is low on space — relevant to both `wtw-api-data` and `wtw-photos`, and to whether the app-shell precache itself can be silently cleared (which would regress cold-start-offline, User Story 1, without any code change). | Needs a real device under real storage pressure; unsimulatable. | `docs/design-decisions.md` §52 |
+| 21 | **A true cold launch offline** (airplane mode, installed PWA, app fully killed then relaunched — not just a background/foreground cycle) renders the app shell. Chromium-equivalent proven (`e2e-pwa/offline-cold-start.spec.ts`), but iOS's own precache/document-fallback behavior on a genuine cold process start is unverified. | Requires a real installed PWA and a real airplane-mode cold launch. | spec.md User Story 1 |
+| 22 | **Sign-out cache purge**, for an installed iOS PWA's own storage partition specifically. Same-origin `caches.delete()` should behave identically to Android per this file's own "storage isolation" framing, but worth confirming rather than assuming, given how central the privacy guarantee is (spec.md User Story 2). | Requires the device's own storage container. | `lib/auth/signOut.ts` |
+| 23 | **Returning to an already-open PWA from the app switcher** — does iOS suspend-and-resume the page (no reload, so update detection per this feature's reload-triggered-only design never fires until an actual relaunch) or does it sometimes silently reload the page in the background (which *would* trigger a check)? This affects how often an installed iOS user is realistically offered an update, though not correctness — reload-triggered detection was chosen deliberately over polling (spec.md Clarifications) and this item is about iOS's specific suspend/resume behavior, not a reason to revisit that decision. | iOS's process-suspension behavior for installed web apps is not reproducible outside a device. | spec.md Clarifications, `docs/design-decisions.md` §53 |
 
 ---
 

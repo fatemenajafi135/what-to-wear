@@ -129,7 +129,7 @@ the toast, accept it, confirm the new build's code is what's now running.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T026 [P] Add iOS-only service-worker/cache items to `docs/ios-verification-backlog.md` (installed-PWA cache lifecycle, background/foreground reload behavior, Safari's more aggressive Cache Storage eviction under low disk — no physical iPhone available to verify any of it directly)
+- [X] T026 [P] Add iOS-only service-worker/cache items to `docs/ios-verification-backlog.md` (installed-PWA cache lifecycle, background/foreground reload behavior, Safari's more aggressive Cache Storage eviction under low disk — no physical iPhone available to verify any of it directly)
 - [ ] T027 Run `npm run lint`, `npm run typecheck`, `npm test` (frontend) and confirm the existing dev-server `npm run e2e` suite is unaffected; fix any regressions
 - [ ] T027a [P] Copy audit (FR-011/SC-006): grep every new/changed user-visible string this feature introduces (`updateToastCopy.ts`, any offline-related copy touched) for queue/retry/sync-promising language ("queued", "retry", "sync", "once you're back online") — zero matches expected; assert the exact toast copy in `update-prompt.spec.ts` (T025) as a regression guard
 - [ ] T028 Run `quickstart.md`'s manual DevTools pass at `localhost:3000` and `127.0.0.1:3000`, both themes, **and** in installed/standalone display mode (FR-013 — `chrome://apps` install or DevTools' "Emulate a focused page" + `display-mode: standalone` media override) — record what was actually observed in Cache Storage (not just that a strategy was configured), per the handoff's explicit instruction
