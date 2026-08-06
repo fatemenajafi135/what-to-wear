@@ -63,22 +63,25 @@ const runtimeCaching: RuntimeCaching[] = [
   // change for that exact URL (research.md R3 rejected alternative (c)), and
   // `maxAgeSeconds` matches the backend's own `wtw_photo_signed_url_ttl_seconds`.
   //
-  // CacheableResponsePlugin({statuses: [0, 200]}) is not decoration: Supabase
-  // Storage is a different origin, and `ItemPhoto`'s <img> has no
-  // `crossorigin` attribute, so the browser requests it `no-cors` — the
-  // response the service worker sees is opaque (`status === 0`). Serwist's
-  // `NetworkFirst` auto-allows opaque responses in its own constructor;
-  // `CacheFirst` does not, and silently declines to cache anything that
-  // isn't exactly `status === 200` without this plugin (confirmed empirically
-  // while writing e2e-pwa/service-worker-smoke.spec.ts — every photo request
-  // succeeded but `wtw-photos` stayed empty until this was added).
+  // `statuses: [200]` only — NOT `[0, 200]`. `ItemPhoto`'s <img> now carries
+  // `crossOrigin="anonymous"` (components/ui/ItemPhoto/ItemPhoto.tsx), so the
+  // response this rule sees is a real, readable one, not opaque — this
+  // plugin can finally tell a real photo from a failure apart. `[0, 200]` was
+  // the original fix for "CacheFirst doesn't cache opaque responses by
+  // default" (still true, see docs/design-decisions.md §52's first entry),
+  // but it had its own defect: an opaque response's `status` is `0`
+  // regardless of the real HTTP status, success or failure alike, so it
+  // cached failures indistinguishably from photos — a photo that failed once
+  // stayed broken from the cached failure for up to an hour, making zero
+  // further network requests even once the same signed URL was healthy
+  // again. Found in review, superseded here — see §52's amendment.
   {
     method: "GET",
     matcher: isSignedPhotoUrl,
     handler: new CacheFirst({
       cacheName: PHOTOS_CACHE,
       plugins: [
-        new CacheableResponsePlugin({ statuses: [0, 200] }),
+        new CacheableResponsePlugin({ statuses: [200] }),
         new ExpirationPlugin({ maxEntries: 300, maxAgeSeconds: 60 * 60 }),
       ],
     }),

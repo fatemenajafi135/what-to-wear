@@ -64,7 +64,22 @@ export function ItemPhoto({ src, alt = "", backgroundColor, className, radius = 
   return (
     <div className={[styles.frame, className].filter(Boolean).join(" ")} style={style}>
       {/* eslint-disable-next-line @next/next/no-img-element -- a signed Storage URL or object URL, not a static/optimizable asset */}
-      <img src={src} alt={alt} className={styles.image} onError={() => setHasError(true)} />
+      <img
+        src={src}
+        alt={alt}
+        className={styles.image}
+        onError={() => setHasError(true)}
+        // Defect found in review (docs/design-decisions.md §52): without this,
+        // a cross-origin request is `no-cors`, and every response — success
+        // or failure alike — is opaque (`status 0`) to both this component
+        // and the service worker's CacheFirst rule, which then can't tell a
+        // real photo from a transient failure and caches the failure for up
+        // to an hour. Supabase Storage sends `Access-Control-Allow-Origin: *`
+        // on every response, including errors, so this is safe — it doesn't
+        // change what loads, only what the browser is willing to report
+        // about the response.
+        crossOrigin="anonymous"
+      />
     </div>
   );
 }

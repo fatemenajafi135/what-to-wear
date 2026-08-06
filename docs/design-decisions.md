@@ -2479,7 +2479,7 @@ the backend API, and signed photo URLs (a third origin — Supabase Storage).
 | 1 | App shell (same-origin: navigation, static assets, fonts, manifest) | `@serwist/next/worker`'s `defaultCache` (Next-aware precache + runtime rules) | Serwist/Workbox defaults | No — no user data (see above) |
 | 2 | Backend API reads (`GET` to the API origin) | `NetworkFirst`, 4s timeout | `wtw-api-data` | **Yes** |
 | 3 | Backend API writes, **including `POST /recommend/messages`** | `NetworkOnly`, explicit rule (not left to unmatched-passthrough) | nothing stored | n/a |
-| 4 | Signed photo images (Supabase Storage origin) | `CacheFirst` + `ExpirationPlugin({ maxAgeSeconds: 3600 })` matching `wtw_photo_signed_url_ttl_seconds` | `wtw-photos` | **Yes** |
+| 4 | Signed photo images (Supabase Storage origin) | `CacheFirst` + `ExpirationPlugin({ maxAgeSeconds: 3600 })` matching `wtw_photo_signed_url_ttl_seconds`. `CacheableResponsePlugin({ statuses: [200] })` — **not `[0, 200]`**, see "Amendment" below | `wtw-photos` | **Yes** |
 | 5 | Reference data (`GET /taxonomy/categories`) | Folded into class 2 — same strategy, same cache, purged along with it | `wtw-api-data` | Yes (accepted cost, not worth a sixth cache name at this data volume) |
 
 **Why not one uniform strategy**: `NetworkFirst` for class 3 would let Workbox serve a *cached
@@ -2510,12 +2510,49 @@ reading `sw.ts` in isolation:
    `wtw-photos` stayed permanently empty — no error, no warning surfaced to application code, only
    visible by asserting real `caches.keys()` contents. Fixed with an explicit
    `CacheableResponsePlugin({ statuses: [0, 200] })` in class 4's plugin list, ahead of the
-   `ExpirationPlugin`.
+   `ExpirationPlugin`. **This fix's own conclusion is now partly superseded — see "Amendment"
+   below, found in the next round of review.**
 
 Neither would have been caught by a review of `sw.ts`'s config alone, or by unit-testing the route
 table's matcher logic — both required an actual browser, an actual service worker, and an actual
 inspection of `Cache` contents, exactly the "verify what is actually cached" instruction the
 handoff repeats twice.
+
+### Amendment (found in review after merge-readiness, before merge): opaque responses hid real failures too
+
+**Status: decided, supersedes part of item 2 above.** `statuses: [0, 200]` fixed photos not
+caching at all, but introduced a defect of its own, found in a later review pass: an opaque
+response's `status` reads `0` **regardless of the real HTTP status** — a `no-cors` request cannot
+tell the requester whether the underlying response was a 200 or a 500, by design (that is what
+"opaque" means). `CacheableResponsePlugin({ statuses: [0, 200] })` therefore could not distinguish
+a real photo from a transient failure and cached both identically. Proven: a photo URL made to
+fail once with a 500, then healthy forever after, was stored in `wtw-photos` as
+`type=opaque status=0` on the very first (failing) request; every subsequent visit — including
+ones long after the same signed URL had recovered — served that cached failure from `CacheFirst`
+with **zero** network requests, rendering `NoPhoto` for a URL that was perfectly valid.
+
+**Fix, both halves required together:**
+1. `ItemPhoto`'s `<img>` now carries `crossOrigin="anonymous"` — Supabase Storage sends
+   `Access-Control-Allow-Origin: *` on every response, success or error alike (verified, including
+   on a 400), so this doesn't change what loads, only what the browser is willing to report about
+   the response: it becomes a real, readable `type: "cors"` response instead of an opaque one.
+2. Class 4's plugin list is tightened to `CacheableResponsePlugin({ statuses: [200] })` — now that
+   the response is real, the plugin can actually see a 500 and correctly refuse to cache it.
+
+**Why both halves are required, not either alone:** `crossOrigin` alone, leaving `statuses: [0,
+200]` in place, fixes the common case (a real HTTP 500 becomes a readable `status: 500` response,
+which `[0, 200]` already correctly rejects) but leaves the `0` branch live for the case a
+`crossOrigin` request can still legitimately produce a bare network-level failure with no real HTTP
+response at all (DNS failure, connection refused, a rejected CORS preflight) — that residual `0`
+would still be cached as if it were a photo, just a narrower window than before. `statuses: [200]`
+alone, without `crossOrigin`, reverts straight to the original item-2 defect: every response stays
+opaque (`status 0`) regardless of the real outcome, `[200]` never matches anything, and
+`wtw-photos` goes back to staying permanently empty. Only both together close the gap.
+
+**Regression test**: `e2e-pwa/photo-failure-recovery.spec.ts` — fails a photo once, then serves it
+successfully, and asserts the second load actually reaches the network and recovers (not served
+from a cached failure), plus asserts the cache's own entry is `status: 200, type: "cors"`, never
+`status: 0`.
 
 ### Signed photo URLs: the fix is client-side, not a caching trick
 

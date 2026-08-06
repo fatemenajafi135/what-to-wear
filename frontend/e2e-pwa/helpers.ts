@@ -77,6 +77,38 @@ export async function cacheKeys(page: Page): Promise<string[]> {
 }
 
 /**
+ * Any assertion about what actually landed in Cache Storage is only
+ * meaningful once the service worker is genuinely controlling the page —
+ * an uncontrolled fetch bypasses the worker entirely and nothing gets
+ * cached, with no error of any kind (found empirically: `signUpFreshUser`'s
+ * signup-form-submit-then-client-side-redirect, followed immediately by a
+ * `page.goto` to a different route, does not reliably leave the controller
+ * attached — `navigator.serviceWorker.controller` stayed `null` well past
+ * a 15s wait in that exact sequence, even though `registration.active.state`
+ * was already `"activated"`). `clientsClaim: true` normally attaches control
+ * to an existing client without a reload, but this waits with a bounded
+ * fallback: if the controller still hasn't attached after a real wait, one
+ * explicit reload forces it (a reload is always guaranteed to be controlled
+ * by whichever worker is active at that moment).
+ */
+export async function ensureServiceWorkerControlling(page: Page): Promise<void> {
+  await page.waitForFunction(async () => {
+    const reg = await navigator.serviceWorker.getRegistration();
+    return reg?.active?.state === "activated";
+  }, { timeout: 15000 });
+
+  const controlled = await page
+    .waitForFunction(() => navigator.serviceWorker.controller !== null, { timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!controlled) {
+    await page.reload();
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null, { timeout: 15000 });
+  }
+}
+
+/**
  * A minimal but schema-valid `ClosetItemView` (backend/src/whattowear/api/v1/routes/closet.py).
  * `photoUrl` is intentionally the only thing callers usually vary.
  */
