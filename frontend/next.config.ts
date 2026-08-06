@@ -27,10 +27,37 @@ const nextConfig: NextConfig = {
 // manifest. Every service-worker behavior in this feature is only verifiable
 // against a production build (`npm run build && npm run start`), never
 // `next dev` — see specs/014-offline-and-updates/quickstart.md.
+const serwistEnabled = process.env.NODE_ENV !== "development";
+
+// Defect found in review (docs/design-decisions.md §52): `app/sw.ts` reads
+// `new URL(process.env.NEXT_PUBLIC_API_URL!).origin` at module top level.
+// When either var is absent at build time, webpack leaves the reference
+// unresolved instead of inlining a value, and the worker throws
+// `TypeError: Invalid URL` the moment the browser evaluates it —
+// registration fails silently, zero caches are ever created, and the whole
+// feature is absent. Crucially, `next build` itself still exits 0: nothing
+// about that failure happens at build time, only at script-evaluation time
+// in a browser. A missing env var must fail the BUILD, loudly, here — not
+// produce a service worker that looks fine until a user goes offline. Do
+// NOT make `app/sw.ts` tolerate a missing value instead: a worker that runs
+// with the wrong origins is worse than one that refuses to build.
+if (serwistEnabled) {
+  const required = ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_SUPABASE_URL"] as const;
+  const missing = required.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    throw new Error(
+      `Cannot build the service worker (app/sw.ts) without ${missing.join(", ")} — ` +
+        `it reads these at module load to compute the API/Storage origins its cache ` +
+        `routes match against. Set ${missing.length > 1 ? "them" : "it"} in frontend/.env.local ` +
+        `(or the build environment's env vars) before building. See docs/design-decisions.md §52.`,
+    );
+  }
+}
+
 const withSerwist = withSerwistInit({
   swSrc: "app/sw.ts",
   swDest: "public/sw.js",
-  disable: process.env.NODE_ENV === "development",
+  disable: !serwistEnabled,
 });
 
 export default withSerwist(nextConfig);

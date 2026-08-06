@@ -136,6 +136,16 @@ jobs:
 
       - name: Build
         working-directory: frontend
+        # app/sw.ts (feature 014) reads these at module load to compute the
+        # API/Storage origins its cache routes match against; next.config.ts
+        # now fails the build loudly if either is absent (docs/design-decisions.md
+        # §52) — CI was previously producing a service worker that silently
+        # never installed, green, on every run. Values only need to be
+        # syntactically valid URLs: they're inlined into a bundle this job
+        # never deploys. Same local-stack values as frontend/.env.example.
+        env:
+          NEXT_PUBLIC_API_URL: "http://localhost:8000"
+          NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
         run: npm run build
 
       - name: Unit tests
