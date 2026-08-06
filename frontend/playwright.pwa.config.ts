@@ -8,7 +8,12 @@ import { defineConfig, devices } from "@playwright/test";
  * build. Kept separate from `playwright.config.ts` (which runs `next dev`
  * for fast iteration on everything else) so the default `npm run e2e` loop
  * isn't slowed down by a full build on every run — this suite runs via
- * `npm run e2e:pwa` on demand and in CI.
+ * `npm run e2e:pwa` on demand, and in CI via the `pwa-e2e` job
+ * (.github/workflows/ci.yml), which starts real Supabase + a real backend
+ * first since this suite performs real sign-ups. (Found in review: this
+ * comment previously claimed CI coverage that didn't exist — nothing in
+ * the workflow invoked this suite. It does now; if you're reading this and
+ * that job is gone, fix this comment too.)
  */
 // Port 3100, not a fresh one: the backend's CORS allowlist
 // (backend/src/whattowear/main.py _CORS_ALLOWED_ORIGINS) only permits
