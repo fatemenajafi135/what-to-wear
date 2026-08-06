@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { IconButton } from "@/components/ui/IconButton/IconButton";
 import { Button } from "@/components/ui/Button/Button";
 import { createClient } from "@/lib/supabase/client";
+import { signOutAndClearCache } from "@/lib/auth/signOut";
 import { getProfile, type ProfileResponse } from "@/lib/api/profile";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import styles from "./page.module.css";
@@ -63,7 +64,7 @@ export default function ProfilePage() {
 
   async function handleSignOut() {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    await signOutAndClearCache(supabase);
     router.push("/signin");
     router.refresh();
   }

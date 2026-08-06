@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input/Input";
 import { Button } from "@/components/ui/Button/Button";
 import { Banner } from "@/components/ui/Banner/Banner";
 import { createClient } from "@/lib/supabase/client";
+import { signOutAndClearCache } from "@/lib/auth/signOut";
 import { useValidatedField, validatePassword, validateConfirmPassword } from "@/lib/auth-validation";
 import { authCopy } from "@/lib/auth-copy";
 import styles from "./AuthForm.module.css";
@@ -58,7 +59,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
     const supabase = createClient();
     const { error } = await supabase.auth.updateUser({ password: password.value });
     if (!error) {
-      await supabase.auth.signOut();
+      await signOutAndClearCache(supabase);
     }
     setSubmitting(false);
 

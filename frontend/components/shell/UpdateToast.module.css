@@ -1,0 +1,70 @@
+/*
+ * design/design-system.md §7 / "BottomSheet & toast motion" (no built
+ * prototype toast to extract from — this is the recommended spec, not an
+ * extraction). Position/stacking are stated exactly, not invented:
+ * bottom: calc(90px + env(safe-area-inset-bottom)) — NOT bottom: 0 — where
+ * 90px is TabBar's own total height (already including the FAB's upward
+ * protrusion), z-index: var(--z-toast) (50). The offline Banner stays
+ * `position: sticky; top: 0; z-index: var(--z-sticky)` (10) — opposite
+ * screen edges, no stacking conflict (handoff §3.2).
+ */
+.toast {
+  position: fixed;
+  inset-inline: var(--space-md);
+  bottom: calc(90px + env(safe-area-inset-bottom, 22px));
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  max-width: 420px;
+  margin-inline: auto;
+  padding: var(--space-md) var(--space-md) var(--space-md) var(--space-lg);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  /* No box-shadow: no --shadow-* token exists anywhere in tokens.css, and
+   * inventing one here is the exact violation Principle VIII exists to
+   * prevent (docs/design-decisions.md §13, same call for the auth panel). */
+
+  /* Slide up + fade in, base duration + decelerate easing. */
+  transform: translateY(100%);
+  opacity: 0;
+  transition:
+    transform var(--motion-duration-base) var(--motion-easing-decelerate),
+    opacity var(--motion-duration-base) var(--motion-easing-decelerate);
+}
+
+.toast.open {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* Dismissal reverses at the fast duration + accelerate easing — snappier
+ * than the entrance, consistent with the fast/base split BottomSheet's own
+ * open/close already establishes. */
+.toast.closing {
+  transition:
+    transform var(--motion-duration-fast) var(--motion-easing-accelerate),
+    opacity var(--motion-duration-fast) var(--motion-easing-accelerate);
+}
+
+/* Declared after the transitions above so it wins the cascade regardless of
+ * .open/.closing state — matches BottomSheet.module.css's own ordering. */
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    transition: none;
+  }
+}
+
+.body {
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}

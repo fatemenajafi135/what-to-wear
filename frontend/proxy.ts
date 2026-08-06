@@ -65,5 +65,15 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|webp|ico)$).*)"],
+  // `sw.js`/`workbox-*.js`/`swe-worker-*.js` (feature 014) must be excluded
+  // same as any other static asset: browsers refuse to register a service
+  // worker whose script response is a redirect (a security restriction, not
+  // a bug in the request itself), and this middleware redirects every
+  // unauthenticated, non-auth-stack request to /signin — which is exactly
+  // what registering the SW from the (pre-login) sign-in page triggered
+  // before this exclusion existed (found running specs/014-offline-and-updates
+  // e2e-pwa, "The script resource is behind a redirect, which is disallowed").
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw\\.js|workbox-.*\\.js|swe-worker-.*\\.js|.*\\.(?:svg|png|jpg|jpeg|webp|ico)$).*)",
+  ],
 };

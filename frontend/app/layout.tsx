@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { instrumentSans } from "@/lib/fonts";
+import { ServiceWorkerRegistration } from "@/components/shell/ServiceWorkerRegistration";
+import { UpdateToast } from "@/components/shell/UpdateToast";
 import "@/styles/tokens.css";
 import "@/styles/themes.css";
 import "@/styles/globals.css";
@@ -36,7 +38,11 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={instrumentSans.variable}>
-      <body>{children}</body>
+      <body>
+        <ServiceWorkerRegistration />
+        <UpdateToast />
+        {children}
+      </body>
     </html>
   );
 }
