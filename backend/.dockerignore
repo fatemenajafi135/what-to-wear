@@ -10,6 +10,11 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.import_linter_cache/
+
+# Tests — the suite runs in CI, never inside the runtime image.
+tests/
 
 # Development and build artifacts
 node_modules/
