@@ -2656,18 +2656,59 @@ wording once given, in that one file, and remove the draft flag comment when it'
 
 This prevents the silent failure mode where `"https://app.example.com, https://staging.example.com"` (note the leading space on the second origin) passes configuration validation but the second origin is never matched — the space becomes part of the origin string, no browser's `Origin` header includes it, and requests from that origin are silently rejected.
 
-### Why Settings, not bare os.getenv?
+### Amendment (found in review, before merge): the variable was inert, and this section's own reasoning is why
 
-The project's configuration layer (`core/config.py`) uses Pydantic Settings with an `lru_cache` to consolidate all environment loading in one place and avoid the zero-env-vars import contract violation (reproduces the legacy `db.py` defect). CORS follows the same pattern as every other deployed setting (AI keys, database URLs, Qdrant config).
+**Status: supersedes the "Why Settings, not bare os.getenv" argument originally recorded
+here.** As first implemented, `wtw_cors_origins` and its six unit tests existed, and
+`render.yaml` set `WTW_CORS_ORIGINS` — but `main.py` still passed a hardcoded localhost
+list to `CORSMiddleware`. **Nothing read the parsed value.** Every request from a
+deployed frontend would have been rejected by CORS.
 
-**Rejected alternatives:**
-- **(a) chosen** — Pydantic Settings with `wtw_cors_origins`, stripped/filtered parsing — Consistent with the rest of the codebase; optional field fails safely with defaults.
-- (b) Bare `os.getenv` at module level — Simpler locally, but breaks the import-safety contract and couples the app to the environment reading pattern the Settings class was created to fix.
-- (c) Hardcoded origins — Was the original state; can't change per environment.
+The sequence that produced it is worth recording, because the reasoning looked sound at
+each step:
+
+1. `allow_origins=get_settings().cors_allowed_origins` was wired in, correctly.
+2. That broke `test_import_safety.py` — `Settings` requires `DATABASE_URL`, middleware
+   registers at import time, and `whattowear.main` is named in that test's module list.
+3. The conflict was resolved by reverting to the hardcoded list, leaving the mechanism
+   in place but disconnected.
+
+Step 3 is the error, and this section's original claim — that bare `os.getenv` "breaks
+the import-safety contract" — is what made it look like the only option. **It does not.**
+`os.getenv` returns `None` for a missing variable; it never raises. The contract forbids
+*requiring configuration at import*, not *reading the environment at import*.
+
+**Resolution:** parsing moved to a module-level pure function,
+`core.config.parse_cors_origins(raw: str | None)`. `main.py` calls
+`parse_cors_origins(os.getenv("WTW_CORS_ORIGINS"))` — no `Settings`, contract intact —
+and `Settings.cors_allowed_origins` delegates to the same function for any caller that
+does hold a `Settings`. One parser, two entry points, no possible drift.
+
+**Why no test caught it:** `test_config.py` exercised the parser in isolation, and every
+test in `test_cors.py` used a localhost origin — which is allowed whether the wiring
+exists or not. Green suite, broken deployment. This is the fifth defect on this project
+with the identical shape: *a value is accepted, then silently dropped before it is used.*
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — module-level `parse_cors_origins()`, called from `main.py` via `os.getenv` and from `Settings.cors_allowed_origins` | — |
+| (b) `get_settings()` in `main.py` | Genuinely breaks the zero-env-vars import contract; this part of the original reasoning was right. |
+| (c) `Settings` field with no call site in `main.py` | What shipped and was reverted — the mechanism exists and does nothing. |
+| (d) App factory (`create_app()` + `uvicorn --factory`) | Clean, and would allow `get_settings()` — but changes the ASGI target referenced by the Dockerfile, CI, the e2e config and every `TestClient(app)` import. Disproportionate to the problem. |
+| (e) Duplicating the parsing inline in `main.py` | Two implementations of the stripping rules, free to diverge — the failure this section already exists to prevent. |
 
 ### Test coverage
 
-`tests/unit/test_config.py` covers: default behavior when unset, whitespace stripping, empty-entry filtering, combined whitespace + empty handling, whitespace-only input (reverts to defaults), and empty-string input (reverts to defaults).
+`tests/unit/test_config.py` covers the parser: unset, whitespace stripping, empty-entry
+filtering, whitespace-only and empty-string input.
+
+`tests/integration/test_cors.py::test_a_configured_deployment_origin_is_allowed` covers
+the **wiring** — that a configured origin reaches the running app, that an entry
+following a comma-space is matched, and that configuring origins *replaces* the local
+defaults rather than extending them. Verified to fail against the hardcoded list and
+pass against the fix.
 
 ---
 
@@ -2764,3 +2805,72 @@ The `render.yaml` currently specifies `plan: free`. When moving to production, c
 
 ---
 
+## 58. Feature 017 (Deployment readiness) — corrections found in review
+
+**Status: decided.** Four defects found reviewing 017 before merge, each verified by
+running it rather than reading it. Recorded together because they share a cause: config
+that is *written* is not config that is *in effect*, and none of these were observable
+from the source alone.
+
+### 58.1 `render.yaml` — `scope: "secret"` is not a Render field
+
+Six variables were marked `scope: "secret"`, which Render does not recognise on an env
+var; it makes nothing secret and may fail blueprint validation. Render's actual
+mechanism is `sync: false` — "prompt me in the dashboard, never store this in git."
+Corrected, and `WTW_CORS_ORIGINS` moved to `sync: false` as well: the real Vercel URL
+isn't known until the frontend deploys, and a guessed value silently rejects every API
+call from the actual one.
+
+### 58.2 `render.yaml` — no `branch`, so Render would have deployed the legacy app
+
+`rebuild` is not this repository's default branch; `main` still is, and `main` is the
+legacy prototype. A blueprint with no `branch:` deploys the default branch — so Render
+would have built the old application from a blueprint written for the new one, with the
+new environment variables. Pinned `branch: rebuild`, with a note to change it at cutover.
+
+### 58.3 `render.yaml` — `dockerfilePath` doubled the path, and `PORT` was overridden
+
+`rootDir: backend` sets the build context, and `dockerfilePath` resolves relative to it —
+so `./backend/Dockerfile` looks for `backend/backend/Dockerfile`. Corrected to
+`./Dockerfile`.
+
+`PORT` was also pinned to `8000` in `envVars`. Render injects its own `PORT` and
+health-checks the port it assigned; overriding it makes the service listen where the
+platform is not looking. Removed — the Dockerfile's `ENV PORT=8000` remains as a default
+for local `docker run`, and the CMD reads `${PORT}` at container start either way.
+
+### 58.4 The image was ~500 MB larger than it needed to be
+
+`RUN useradd && chown -R appuser:appuser /app`, placed after the dependency install,
+rewrites every file it touches into a new image layer — so the ~500 MB dependency tree
+was stored twice. Measured: **1.27 GB**, with 68 s spent in the chown step alone.
+
+Creating the user first, chowning `/app` while it is still empty, and using
+`COPY --chown` gives an identical result with no duplicate layer: **776 MB**, and build
+time down from 1m43s to 39s. `tests/`, `.ruff_cache/` and `.import_linter_cache/` were
+also added to `.dockerignore` — none are needed at runtime.
+
+`/app` must be chowned explicitly before `WORKDIR`: `WORKDIR` creates the directory
+root-owned, and `COPY --chown` sets ownership on the files it copies, not on the
+directory containing them, so `uv venv` fails with `Permission denied` without it.
+Found by building, not by reading.
+
+### 58.5 The runbook would have produced a broken Supabase project
+
+The runbook is what the repo owner follows without a developer present, so its errors
+are the most expensive kind. Corrected:
+
+| Wrong | Actual |
+|---|---|
+| Migrations in `backend/migrations/`, named `0001.sql` | `infra/supabase/migrations/`, named `0001_init.sql` … `0012_conversational_turns.sql`. `backend/migrations/` does not exist, and the documented `printf "%04d"` loop matched nothing. |
+| Storage bucket named `photos` | **`wardrobe-photos`** — hardcoded in `0006_wardrobe_photos.sql`'s RLS policy and in every signed URL. Any other name leaves uploads 404ing while the app looks fine. |
+| Create bucket RLS policies by hand | `0006_wardrobe_photos.sql` already creates `wardrobe_photos_owner_rw` and its grant. The hand-written SQL given was not valid policy syntax and cited a `0013_storage_rls.sql` that does not exist. Replaced with a verification query. |
+| `DATABASE_URL` shaped like `postgres.pooler-dev@db.<ref>.supabase.co:6543` | That username is the **local** Supabase CLI's pooler emulation. A hosted project's pooler host and username differ; the runbook now says to copy the string from the dashboard rather than hand-write it. |
+
+Also added: `supabase db push` as the primary migration path (the repo is already set up
+for it), `ON_ERROR_STOP=1` on the psql fallback so a failure cannot leave a half-applied
+schema, and a note that `DATABASE_URL_DIRECT` is best left unset on Render — Supabase's
+direct connection is IPv6-only without the IPv4 add-on, and the checkpointer already
+falls back to the pooler.
+
+---
