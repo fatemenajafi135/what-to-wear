@@ -45,6 +45,7 @@ from ..core.config import get_settings
 from . import preferences as preference_derivation
 
 if TYPE_CHECKING:
+    from ..core.config import Settings
     from ..ports import ClosetRepository
 
 _store = InMemoryStore()
@@ -65,6 +66,31 @@ def _reachable(url: str | None, timeout: float = 5.0) -> bool:
             return True
     except psycopg.OperationalError:
         return False
+
+
+def _init_postgres_saver(url: str, settings: Settings, mode: str) -> PostgresSaver:
+    """Initialize PostgresSaver with the given database URL.
+
+    Raises RuntimeError if initialization fails.
+    """
+    try:
+        pool: ConnectionPool[Connection[dict[str, object]]] = ConnectionPool(
+            conninfo=url,
+            min_size=1,
+            max_size=settings.wtw_checkpointer_pool_max,
+            kwargs={"autocommit": True, "prepare_threshold": None, "row_factory": dict_row},
+            check=ConnectionPool.check_connection,
+            open=True,
+        )
+        _checkpointer_stack.callback(pool.close)
+        saver = PostgresSaver(pool)
+        saver.setup()
+        _harden_checkpointer_tables(pool)
+        return saver
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to initialize PostgresSaver in '{mode}' mode. " f"Check your database URL configuration: {e}"
+        ) from e
 
 
 def _harden_checkpointer_tables(pool: ConnectionPool[Connection[dict[str, object]]]) -> None:
@@ -156,24 +182,7 @@ def get_checkpointer() -> InMemorySaver | PostgresSaver:
     # "auto" mode: use Postgres if available, fallback to memory
     if mode == "auto":
         if url:
-            try:
-                pool: ConnectionPool[Connection[dict[str, object]]] = ConnectionPool(
-                    conninfo=url,
-                    min_size=1,
-                    max_size=settings.wtw_checkpointer_pool_max,
-                    kwargs={"autocommit": True, "prepare_threshold": None, "row_factory": dict_row},
-                    check=ConnectionPool.check_connection,
-                    open=True,
-                )
-                _checkpointer_stack.callback(pool.close)
-                saver = PostgresSaver(pool)
-                saver.setup()
-                _harden_checkpointer_tables(pool)
-                _checkpointer = saver
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to initialize PostgresSaver in 'auto' mode. Check your database URL configuration: {e}"
-                ) from e
+            _checkpointer = _init_postgres_saver(url, settings, mode)
         else:
             logger.info(
                 "No database URL configured; using InMemorySaver. Set wtw_checkpointer_mode='memory' to silence this."
@@ -188,24 +197,7 @@ def get_checkpointer() -> InMemorySaver | PostgresSaver:
                 "wtw_checkpointer_mode is 'postgres' but no DATABASE_URL is configured. "
                 "Set DATABASE_URL or change wtw_checkpointer_mode to 'auto' or 'memory'."
             )
-        try:
-            pool: ConnectionPool[Connection[dict[str, object]]] = ConnectionPool(
-                conninfo=url,
-                min_size=1,
-                max_size=settings.wtw_checkpointer_pool_max,
-                kwargs={"autocommit": True, "prepare_threshold": None, "row_factory": dict_row},
-                check=ConnectionPool.check_connection,
-                open=True,
-            )
-            _checkpointer_stack.callback(pool.close)
-            saver = PostgresSaver(pool)
-            saver.setup()
-            _harden_checkpointer_tables(pool)
-            _checkpointer = saver
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to initialize PostgresSaver in 'postgres' mode. DATABASE_URL must be reachable: {e}"
-            ) from e
+        _checkpointer = _init_postgres_saver(url, settings, mode)
         return _checkpointer
 
     # Unknown mode
