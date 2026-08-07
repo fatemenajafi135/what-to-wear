@@ -2874,3 +2874,81 @@ direct connection is IPv6-only without the IPv4 add-on, and the checkpointer alr
 falls back to the pooler.
 
 ---
+## 59. Feature 017 (Deployment readiness) — the knowledge base on a host without the corpus
+
+**Status: decided.** Found on the first real staging deploy: the first styling request
+returned 500 from `pipeline/graph.py`'s `style_retrieval` node —
+
+```
+File "/app/src/whattowear/kb.py", line 40, in get_kb
+    raise RuntimeError: CORPUS_LOCAL_DIR is required to build/reconnect to the
+    knowledge base.
+```
+
+### Why a deployed instance could never satisfy that
+
+`CORPUS_LOCAL_DIR` points at `../../w2w-corpus` — a directory **outside the repository**.
+The corpus is deliberately not in git (Principle X treats documents as data; the eval
+fixtures under `evals/fixtures/` are called out as the one exception), and the Docker
+build context is `backend/`, so it is not in the image either.
+
+The non-obvious part is that this blocked *reconnecting*, not just building.
+`get_kb()` called `ingest_all(corpus_dir)` unconditionally, before deciding whether to
+re-embed, because it needs `len(chunks)` for the stale-corpus freshness check **and**
+because `KnowledgeBase.chunks` is itself load-bearing: `retrieval/hybrid.py` reads
+`kb.by_layer("L4")` and `kb.by_layer("L1")` directly off the raw chunks rather than
+through the vectorstore. So even a fully-populated Qdrant collection was unusable without
+the source documents on disk.
+
+### Resolution — `WTW_KB_MODE`
+
+| Mode | Behaviour |
+|---|---|
+| `corpus` | Read `CORPUS_LOCAL_DIR`, then build or reconnect. **The original, evaluated path, unchanged.** |
+| `reconnect` | Attach to an existing Qdrant collection; rebuild `chunks` by scrolling the stored payloads. Never reads the corpus. |
+| `auto` (default) | `corpus` when `CORPUS_LOCAL_DIR` is set, else `reconnect`. |
+
+`QdrantVectorStore.from_documents` writes each Document under langchain-qdrant's default
+payload keys (`page_content`, `metadata`) — verified by scrolling a real point from the
+staging collection before the code was written, not assumed from the library's defaults.
+The metadata carries `layer`, `rule_id` and `granularity`, so `by_layer()` works
+identically on reconstructed chunks.
+
+Verified against the real staging cluster with `CORPUS_LOCAL_DIR` unset: 391 chunks
+rebuilt from 391 points, `by_layer("L1")` → 197, `by_layer("L4")` → 65, L1-atomic → 15,
+and a live `similarity_search` through the gateway returning correctly ranked results.
+
+### Every reconnect failure is loud
+
+Missing URL, missing collection, and empty collection all raise, with a message naming
+the fix. This is the `wtw_checkpointer_mode` lesson (§55) applied again, and it matters
+more here: an empty knowledge base does not crash. Retrieval simply returns nothing, and
+styling produces ungrounded output — a Principle IV violation that looks like working
+software. Silence is the dangerous outcome, so it is the one that is forbidden.
+
+The `corpus`-mode error message now also names `WTW_KB_MODE=reconnect`. The original text
+named only `CORPUS_LOCAL_DIR`, which is unactionable advice on a host that will never have
+the corpus — it is what sent this investigation toward "set the variable" instead of
+"this host cannot have the file".
+
+### Constitution note
+
+The KB is evaluated code, and the constitution requires an eval run for any refactor of
+it. The `corpus` branch is byte-for-byte unchanged and remains the default wherever a
+corpus is configured, so the evaluated path is untouched by construction; the new branch
+is reachable only by explicit opt-in. On the design owner's decision, verification here
+was a single live reconnect + retrieval check (recorded above) rather than a full eval
+run, deferred until staging is working end to end. **The full run against
+`docs/eval-baselines/` is still outstanding and owed before this is treated as settled.**
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — `WTW_KB_MODE`, chunks rebuilt from Qdrant payloads | — |
+| (b) Ship the corpus into the image | Reverses a deliberate Principle X decision, and grows the image by the whole corpus for data Qdrant already holds. |
+| (c) Let retrieval degrade when the KB is unavailable | Constitution III makes style knowledge gate retrieval; silently ungrounded output is the failure Principle IV exists to prevent. |
+| (d) Persist the chunk list as a build artifact alongside the image | A second copy of the same data, free to drift from the collection it describes. |
+| (e) Have the deployed instance ingest on boot | Needs the corpus (which it does not have), re-embeds on every cold start, and on Render's free tier that is every ~15 idle minutes. |
+
+---

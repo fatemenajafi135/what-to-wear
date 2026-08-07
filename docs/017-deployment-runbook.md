@@ -142,29 +142,74 @@ Once the frontend is deployed to Vercel, Supabase auth links (email confirmation
 
 ## Part 2: Qdrant Vector Database
 
-### Step 1: Create a Qdrant Cloud collection
+### Step 1: Create a Qdrant Cloud cluster
+
+Create a **cluster** only — do not create a collection by hand. The ingest in Step 3
+creates the collection itself (`whattowear_kb`, with `force_recreate=True`) at the
+dimensionality the configured embedding model actually produces, currently **1536**
+(`wtw_embedding_dims`). A hand-made collection with a guessed name or vector size is
+either ignored or silently wrong.
 
 1. Go to https://cloud.qdrant.io and sign in.
-2. Click **"Create collection"** (or **"New Collection"** if you don't see that button).
-3. **Collection name:** `w2w-staging` (match Supabase naming for clarity).
-4. **Vector size:** `384` (the embedding model uses 384-dimensional vectors).
-5. **Distance metric:** `Cosine`.
-6. Click **"Create"** and wait for it to boot (~30 seconds).
+2. Create a cluster (the free tier is fine for staging).
+3. Wait for it to become ready (~1 min).
 
 ### Step 2: Get Qdrant credentials
 
-Once created:
-
-1. Click on the collection to open it.
-2. In the sidebar, find **API Keys** or similar.
-3. Create an API key (or copy the default one).
-4. Save:
-   - **Cluster URL** (looks like `https://xxxxx-w2w-staging.eu-0.qdrant.io:6333`)
-   - **API Key** (long string, treat like a password)
+1. Open the cluster.
+2. Create an API key, or copy the existing one.
+3. Save both:
+   - **Cluster URL** — e.g. `https://xxxxxxxx.eu-west-1-0.aws.cloud.qdrant.io`
+   - **API key** — treat it like a password
 
 ### Step 3: Populate the knowledge base
 
-The knowledge base is a separate task (not part of 017's runbook; see `docs/deferred-work.md` if you need to ingest documents). For now, the collection is empty, and the app will still boot (it just won't have fashion recommendations until data is added).
+⚠️ **This is required, not optional.** An earlier version of this runbook said the app
+works with an empty collection. It does not: `pipeline/graph.py`'s `style_retrieval` node
+calls `get_kb()`, so **every styling request returns 500** until the collection is populated.
+
+The deployed backend can never build it. `CORPUS_LOCAL_DIR` points at a directory outside
+the repository, and the Docker build context is `backend/`, so the corpus is not in the
+image. You populate the collection **from a machine that has the corpus**, and the deployed
+instance attaches to it.
+
+1. Point your local `backend/.env` at the cloud cluster (note the old value first):
+
+   ```
+   WTW_QDRANT_URL=https://your-cluster.region.cloud.qdrant.io
+   WTW_QDRANT_API_KEY=your-key
+   ```
+
+2. Embed the corpus. This makes real embedding calls and costs money:
+
+   ```bash
+   cd backend
+   uv run python -m whattowear.ingest.cli
+   ```
+
+   `Nothing changed — skipping re-embedding` means the *target* collection already matched
+   on point count — it is a real check, not a guess. But confirm it checked the cluster you
+   meant: if `WTW_QDRANT_URL` was still `localhost:6333`, it verified your local Qdrant and
+   the cloud collection is untouched.
+
+3. Verify:
+
+   ```bash
+   uv run python -c "
+   from whattowear.core.config import get_settings
+   from qdrant_client import QdrantClient
+   s = get_settings(); c = QdrantClient(url=s.wtw_qdrant_url, api_key=s.wtw_qdrant_api_key)
+   print('target:', s.wtw_qdrant_url)
+   print('points:', c.count('whattowear_kb').count)
+   "
+   ```
+
+4. `render.yaml` sets `WTW_KB_MODE=reconnect`, so the deployed backend attaches to that
+   collection and rebuilds its chunk list from the stored payloads — no corpus needed. If
+   the collection is missing or empty it **fails at startup** rather than serving an empty
+   knowledge base and producing ungrounded outfits (`docs/design-decisions.md` §59).
+
+Re-run the ingest whenever the corpus changes. The deployed instance never will on its own.
 
 ---
 
@@ -365,7 +410,7 @@ If that query fails, RLS is denying your auth role access.
 Once staging is running:
 
 1. **Test offline mode** — see docs/design-decisions.md §52 for the expected behavior.
-2. **Load the knowledge base** — ingest fashion recommendations into Qdrant (separate task).
+2. **Re-run the ingest whenever the corpus changes** — Part 2 Step 3. The deployed instance never rebuilds the knowledge base itself.
 3. **Invite collaborators** — give them the Vercel URL and Supabase sign-in.
 4. **Monitor cold starts** — if latency becomes a problem, upgrade Render's plan (see design-decisions.md §57).
 5. **Production checklist** — if ready to launch, create a prod variant of this runbook and upgrade to paid Render/Vercel plans.
