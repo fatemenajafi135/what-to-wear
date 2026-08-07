@@ -2643,3 +2643,124 @@ wording once given, in that one file, and remove the draft flag comment when it'
 | (b) Poll + visibility-triggered detection (the more "robust" industry-standard combination) | Explicitly declined when asked directly — the design owner chose the simpler reload-triggered behavior over proactive detection while a tab stays open. |
 | (c) Toast reappears on next in-app navigation after a dismiss | Doesn't fit reload-triggered detection: in-app (client-side) navigation never re-checks the service worker, so there is no new information to justify re-showing it before the next real reload. |
 | (d) Treat this like §51's exception and let a model draft the copy per-occurrence | Wrong category of copy — this is one fixed system message, not a reply to unpredictable input; §51's own "What this does not license" section says as much. |
+
+## 54. Feature 017 (Deployment readiness) — CORS origins configuration
+
+**Status: decided.** CORS allowlist is configured via the `wtw_cors_origins` environment variable, parsed through the `Settings` class (not bare `os.getenv` at module level).
+
+### Default and parsing
+
+- **Development (default):** If `wtw_cors_origins` is unset or empty, defaults to `["http://localhost:3000", "http://localhost:3100", "http://127.0.0.1:3000", "http://127.0.0.1:3100"]`.
+- **Staging/production:** Set to a comma-separated list (e.g., `https://app.example.com,https://staging.example.com`).
+- **Parsing:** Each origin is `.strip()`'d of leading/trailing whitespace; empty entries are filtered. A string of only commas and whitespace reverts to defaults.
+
+This prevents the silent failure mode where `"https://app.example.com, https://staging.example.com"` (note the leading space on the second origin) passes configuration validation but the second origin is never matched — the space becomes part of the origin string, no browser's `Origin` header includes it, and requests from that origin are silently rejected.
+
+### Why Settings, not bare os.getenv?
+
+The project's configuration layer (`core/config.py`) uses Pydantic Settings with an `lru_cache` to consolidate all environment loading in one place and avoid the zero-env-vars import contract violation (reproduces the legacy `db.py` defect). CORS follows the same pattern as every other deployed setting (AI keys, database URLs, Qdrant config).
+
+**Rejected alternatives:**
+- **(a) chosen** — Pydantic Settings with `wtw_cors_origins`, stripped/filtered parsing — Consistent with the rest of the codebase; optional field fails safely with defaults.
+- (b) Bare `os.getenv` at module level — Simpler locally, but breaks the import-safety contract and couples the app to the environment reading pattern the Settings class was created to fix.
+- (c) Hardcoded origins — Was the original state; can't change per environment.
+
+### Test coverage
+
+`tests/unit/test_config.py` covers: default behavior when unset, whitespace stripping, empty-entry filtering, combined whitespace + empty handling, whitespace-only input (reverts to defaults), and empty-string input (reverts to defaults).
+
+---
+
+## 55. Feature 017 (Deployment readiness) — Checkpointer initialization modes
+
+**Status: decided.** Checkpointer initialization is controlled by the `wtw_checkpointer_mode` setting ("auto" | "memory" | "postgres"), preventing silent fallback to RAM when a cloud service misconfigures or forgets `DATABASE_URL`.
+
+### Three modes
+
+- **"auto" (default):** Use Postgres if `DATABASE_URL` is reachable; otherwise use `InMemorySaver`. Suitable for local development with or without Postgres.
+- **"memory":** Explicitly use `InMemorySaver` (development, testing, or deployments that don't need persistence).
+- **"postgres":** `DATABASE_URL` must be set and reachable; fail at boot if missing (catches misconfiguration on cloud services).
+
+### The problem solved
+
+When `DATABASE_URL` is unset on a cloud service, the original code silently used `InMemorySaver`, and everything appeared to work until the first pod restart — then all active conversation threads vanished from RAM without warning. This is a load-bearing failure: conversations are the app's primary state, and losing them silently is worse than failing loudly at boot.
+
+The fix requires an **explicit signal** to distinguish:
+- Local development with no Postgres (valid, intentional, common) → "auto" or "memory"
+- Staging/production where DATABASE_URL was forgotten (misconfiguration, dangerous) → "postgres" mode + error at boot
+
+### Why not just raise when `DATABASE_URL` is missing?
+
+Local development often runs without Postgres (Supabase, checkpointer, and knowledge base can be optional depending on what you're testing). The `"auto"` default preserves that capability while `"postgres"` mode catches cloud misconfiguration.
+
+**Rejected alternatives:**
+- **(a) chosen** — Three-mode system with "auto" default — Backward compatible, explicit signal for prod, silent fallback still works locally.
+- (b) Always require `DATABASE_URL` — Breaks local dev; doesn't distinguish intentional (memory mode) from misconfiguration (forgot the env var).
+- (c) Environment-specific detection (check if `ENVIRONMENT=staging` to decide whether to fail) — Assumes the environment setting is correct, which is the same problem we're trying to catch.
+- (d) Add a separate `REQUIRE_POSTGRES` boolean — Redundant with the three modes; less clear than a named mode.
+
+### Test coverage
+
+`tests/unit/test_checkpointer_init.py` covers: memory mode (always InMemorySaver), auto mode with no DB (falls back to InMemory), postgres mode with no DB (raises RuntimeError), invalid mode (raises ValueError), and singleton behavior.
+
+---
+
+## 56. Feature 017 (Deployment readiness) — Docker image build strategy
+
+**Status: decided.** Docker image builds use `uv sync --frozen --no-dev` for reproducible, pinned dependency installation from `uv.lock`. `.dockerignore` explicitly excludes secrets (`.env`, `legacy.env`), large build artifacts (`.venv`, `evals/`), and development files.
+
+### Reproducibility and security
+
+- **`uv sync --frozen --no-dev`:** Installs exact versions from `uv.lock` (not `uv pip install -e .`, which ignores the lockfile and rebuilds from `pyproject.toml`). Guarantees every build is identical.
+- **`.dockerignore` exclusions:**
+  - `.env` and `legacy.env` — secrets never baked into images
+  - `.venv/` (531 MB) — no sense shipping the host's virtualenv; the image gets its own
+  - `evals/` (698 MB) — evaluation datasets not needed at runtime
+  - `.git/`, `__pycache__/`, `.pytest_cache/` — not needed at runtime
+  
+Without `.dockerignore`, the build context was ~1.2 GB (mostly `.venv` and `evals/`), and secrets were copied directly into the image layers.
+
+### Non-root user and $PORT
+
+The Dockerfile runs the app as a non-root user (`appuser`, UID 1000) for security. The `$PORT` environment variable is respected at runtime (defaults to `8000`), allowing hosting platforms (Render, Cloud Run) to inject their own port.
+
+**Rejected alternatives:**
+- **(a) chosen** — uv sync --frozen, .dockerignore, non-root user, $PORT env var — Production-ready, secure, reproducible, platform-flexible.
+- (b) `uv pip install -e .` — Ignores uv.lock; not reproducible.
+- (c) Hardcoded port 8000 in CMD — Inflexible; standard platforms inject PORT.
+- (d) Run as root — Security risk; Render and other platforms default to non-root anyway.
+
+### Image size
+
+Final image is ~1.27 GB (Python 3.12 slim + FastAPI + LangChain + Qdrant client). This is reasonable for this dependency footprint; optimization opportunities (e.g., multi-stage build, Debian packaging) are deferred.
+
+---
+
+## 57. Feature 017 (Deployment readiness) — Hosting plan and cold-start tradeoff
+
+**Status: decided.** Backend is deployed on Render's **free tier** (`plan: free`), accepting cold-start downtime in exchange for zero cost during development/staging.
+
+### The cold-start cost
+
+Render's free tier spins down on inactivity. A cold start means:
+1. Container spins up (takes 10-30 seconds typically)
+2. Python boots (instantiates uv dependencies)
+3. App startup runs (calls `get_engine()`, `get_compiled_graph()`, `PostgresSaver.setup()`, checkpointer RLS hardening)
+
+Total: ~20-60 seconds before the first request is answered. This is visible to the user.
+
+### Staging: acceptable. Production: not.
+
+**Staging/testing:** Free tier is fine. Infrequent requests, tolerable latency.
+
+**Production:** Should upgrade to Render's paid tier or an equivalent always-on service. Cold starts on user-facing endpoints are unacceptable.
+
+The `render.yaml` currently specifies `plan: free`. When moving to production, change this to `plan: starter` (~$7/month) or higher to eliminate cold starts.
+
+**Rejected alternatives:**
+- **(a) chosen** — Free tier for staging, cost upgrade for prod — Covers both use cases correctly without premature spending.
+- (b) Paid tier always — Wastes money during development.
+- (c) Serverless (e.g., Cloud Run) — Different cold-start behavior; still slow for the LLM bootstrap. Revisit if scaling demands it.
+
+---
+
