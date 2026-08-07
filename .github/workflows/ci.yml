@@ -126,6 +126,20 @@ jobs:
         working-directory: frontend
         run: npm run generate:api-types
 
+      # The generated file is committed (Vercel and any other build host has no
+      # backend to generate it from, and `next build` type-checks against it).
+      # Committing a generated artifact only stays safe if drift is caught, so
+      # this fails the build when the checked-in copy no longer matches what the
+      # backend actually serves — regenerate and commit it in that case.
+      - name: Fail if the committed API types are stale
+        working-directory: frontend
+        run: |
+          if ! git diff --exit-code -- lib/api/schema.d.ts; then
+            echo "::error::lib/api/schema.d.ts is out of date with the backend's OpenAPI schema." >&2
+            echo "Run 'npm run generate:api-types' against a local backend and commit the result." >&2
+            exit 1
+          fi
+
       - name: Lint
         working-directory: frontend
         run: npm run lint

@@ -4,9 +4,13 @@ notes/
 
 # --- Node / Next.js ---
 node_modules/
-# Generated from the backend's live OpenAPI schema (feature 013) — regenerate with
-# `npm run generate:api`, never hand-edit.
-frontend/lib/api/schema.d.ts
+# NOTE: frontend/lib/api/schema.d.ts is generated from the backend's live OpenAPI
+# schema (feature 013) but is deliberately TRACKED, not ignored. `next build`
+# type-checks against it and deploy hosts have no backend to generate it from —
+# ignoring it failed the first Vercel build with "Cannot find module
+# '@/lib/api/schema'". CI regenerates it against a real backend and fails on any
+# difference, so the committed copy cannot drift (Constitution VII).
+# Regenerate with `npm run generate:api-types`; never hand-edit.
 .pnp
 .pnp.*
 .yarn/*
