@@ -38,55 +38,92 @@ You'll use these to configure the backend and frontend.
 
 ### Step 3: Run database migrations
 
-Migrations live in `backend/migrations/` (numbered `0001.sql` through `0012.sql`). Run them in order:
+Migrations live in **`infra/supabase/migrations/`** — twelve files, `0001_init.sql`
+through `0012_conversational_turns.sql`. They are named `NNNN_slug.sql`, not `NNNN.sql`.
 
-**Option A: Via psql (direct connection)**
+**Option A — the Supabase CLI (recommended).** This is what the repo is set up for:
+`infra/supabase/` already contains the `config.toml` and migration history the CLI
+expects, and `db push` applies them in order and records which have run, so re-running
+it later is safe.
 
 ```bash
-# Get the direct connection string from Supabase Settings → Database
-# (port 5432, not 6543; session mode, not transaction pooler)
+cd infra
+npx supabase login                       # opens a browser once
+npx supabase link --project-ref <your-project-ref>   # from the project URL
+npx supabase db push
+```
+
+`<your-project-ref>` is the subdomain in your project URL —
+`https://abcdefgh.supabase.co` → `abcdefgh`. The CLI will ask for the database
+password you saved in Step 1.
+
+**Option B — psql**, if you'd rather not use the CLI. Note the glob: the filenames
+have slugs, so a `printf "%04d"` loop finds nothing.
+
+```bash
+# Direct connection: port 5432, session mode — NOT the 6543 transaction pooler.
 DIRECT_URL="postgresql://postgres:YOUR_PASSWORD@db.xxxxx.supabase.co:5432/postgres"
 
-for i in {1..12}; do
-  psql "$DIRECT_URL" -f backend/migrations/$(printf "%04d" $i).sql
+for f in infra/supabase/migrations/[0-9][0-9][0-9][0-9]_*.sql; do
+  echo "applying $f"
+  psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f "$f" || break
 done
 ```
 
-**Option B: Via Supabase's SQL editor (safer if you don't have psql)**
+`ON_ERROR_STOP=1` and the `break` matter — later migrations assume earlier ones
+succeeded, and without these psql would carry on past a failure and leave the schema
+half-applied.
 
-1. In the Supabase dashboard, go to **SQL Editor**.
-2. Create a new query.
-3. Copy the contents of `backend/migrations/0001.sql`, paste it, and run it.
-4. Repeat for `0002.sql` through `0012.sql` in order.
-5. (Copy-paste is tedious; psql is faster, but both work.)
+**Option C — the SQL editor**, if you have neither. Open each file in
+`infra/supabase/migrations/` in ascending order, paste into Supabase's **SQL Editor**,
+and run. Tedious but it works. Do not skip or reorder.
+
+Verify all twelve applied:
+
+```sql
+-- In the SQL Editor:
+select tablename from pg_tables where schemaname = 'public' order by tablename;
+```
+
+You should see `wardrobe_items`, `catalog_items`, `user_profile`, `outfits`,
+`chat_sessions` and others — plus four `checkpoint*` tables, which LangGraph creates
+itself at backend startup rather than by migration, so those appear later.
 
 ### Step 4: Create the storage bucket
 
-1. In Supabase, go to **Storage** (left sidebar).
-2. Click **"New bucket"**.
-3. **Bucket name:** `photos`
-4. **Public bucket:** Leave unchecked (we'll use signed URLs).
-5. Click **"Create bucket"**.
+⚠️ **The bucket must be named exactly `wardrobe-photos`.** That name is hardcoded in
+the RLS policy created by `0006_wardrobe_photos.sql` and in every photo URL the backend
+signs. A bucket called anything else leaves uploads failing with a 404 while everything
+else looks fine.
 
-### Step 5: Apply RLS policies to the bucket
+The bucket is declared in `infra/supabase/config.toml`, which provisions it
+automatically for **local** development only — `db push` does not create buckets on a
+hosted project, so this one step is manual.
 
-The photos bucket needs row-level security so users can only see their own photos.
+1. In Supabase, go to **Storage** → **New bucket**.
+2. **Name:** `wardrobe-photos`
+3. **Public bucket:** leave **unchecked**. The app serves photos through short-lived
+   signed URLs; a public bucket would make every user's photos readable by URL alone.
+4. **File size limit:** `10 MiB` — matches `wtw_max_upload_bytes` in the backend.
+5. **Allowed MIME types:** `image/jpeg`, `image/png`, `image/webp`
+6. Create it.
 
-1. Go to **Settings** → **Database** → **Edit policies**.
-2. Look for the `photos` bucket in the storage section.
-3. Create two policies (or paste the SQL from `backend/migrations/0013_storage_rls.sql` if it exists):
+### Step 5: Storage RLS — already done, just verify
 
-   **Policy 1: SELECT (read your own photos)**
-   ```sql
-   SELECT auth.uid()::text = (storage.foldername(name))[1]
-   ```
+**There is nothing to create here.** Migration `0006_wardrobe_photos.sql` already
+creates the `wardrobe_photos_owner_rw` policy on `storage.objects` and the matching
+grant, so Step 3 applied it. Writing the policies by hand risks a second, subtly
+different policy sitting alongside the real one.
 
-   **Policy 2: INSERT (upload to your folder)**
-   ```sql
-   auth.uid()::text = (storage.foldername(name))[1]
-   ```
+Confirm it landed:
 
-If these policies don't exist, users won't be able to upload or download photos.
+```sql
+select policyname from pg_policies
+where schemaname = 'storage' and tablename = 'objects';
+```
+
+You should see `wardrobe_photos_owner_rw`. If it's missing, Step 3 didn't fully apply —
+fix that rather than adding policies here.
 
 ### Step 6: Configure Supabase auth for the deployed frontend
 
@@ -142,32 +179,49 @@ The knowledge base is a separate task (not part of 017's runbook; see `docs/defe
 
 ### Step 2: Let Render detect the render.yaml
 
-Render will automatically detect `render.yaml` at the repo root and read:
+Render reads `render.yaml` from the **repository root** and configures:
 - **Service name:** `w2w-backend-staging`
-- **Dockerfile path:** `./backend/Dockerfile`
-- **Build context:** `backend/` directory
+- **Branch:** `rebuild` — pinned in the blueprint. Without it Render would deploy this
+  repo's default branch, which is still `main`, i.e. the **legacy** prototype.
+- **Build context:** `backend/` (`rootDir`)
+- **Dockerfile:** `./Dockerfile`, resolved relative to that root
 - **Health check path:** `/health`
-- **Environment variables:** Defined in `render.yaml` (but you'll fill in secrets below)
 
-Click **"Create Web Service"** — Render will build and deploy.
+Click **"Create Web Service"**. The first build takes a few minutes.
 
 ### Step 3: Add secrets
 
-Render won't start the app until all secret env vars are set:
+Variables marked `sync: false` in `render.yaml` are deliberately not stored in git —
+Render prompts for them instead. The service won't run correctly until they're set.
 
-1. Once the service is created, go to its **Environment** section.
-2. For each secret var in `render.yaml` marked `scope: "secret"`, click **"Add secret"** and fill in:
+1. Go to the service's **Environment** section.
+2. Fill in each one:
 
-   | Variable | Value | Where to get it |
-   |---|---|---|
-   | `DATABASE_URL` | `postgresql://postgres.pooler-dev:PASSWORD@db.SUPABASE_ID.supabase.co:6543/postgres` | Supabase Settings → Database (use transaction-pooler port 6543, not direct 5432) |
-   | `DATABASE_URL_DIRECT` | `postgresql://postgres:PASSWORD@db.SUPABASE_ID.supabase.co:5432/postgres` | Same, but port 5432 (session mode) |
-   | `SUPABASE_URL` | From Supabase Settings → API | Copy "Project URL" |
-   | `AI_GATEWAY_API_KEY` | Your Vercel AI Gateway key or leave blank if not available | https://vercel.com/ai (optional; set later if needed) |
-   | `WTW_QDRANT_URL` | Your Qdrant cluster URL | From Qdrant Cloud settings |
-   | `WTW_QDRANT_API_KEY` | Your Qdrant API key | From Qdrant Cloud settings |
+   | Variable | Where to get it |
+   |---|---|
+   | `DATABASE_URL` | Supabase → **Connect** (or Settings → Database) → copy the **Transaction pooler** string verbatim, then substitute your password |
+   | `SUPABASE_URL` | Supabase → Settings → API → "Project URL" |
+   | `AI_GATEWAY_API_KEY` | Your Vercel AI Gateway key |
+   | `WTW_QDRANT_URL` | Qdrant Cloud → cluster details |
+   | `WTW_QDRANT_API_KEY` | Qdrant Cloud → API keys |
+   | `WTW_CORS_ORIGINS` | Your Vercel URL — **you won't have this until Part 4.** Leave it blank now and come back. |
 
-3. Click **"Save"** and Render will redeploy with the new secrets.
+   ⚠️ **Copy the connection string from the dashboard; do not hand-write it.** A hosted
+   project's pooler host and username are not the same shape as the local stack's — the
+   local `postgres.pooler-dev@127.0.0.1:54329` form is the Supabase CLI's own emulation
+   and will not work against a hosted project. Supabase shows the exact string, per mode.
+
+   `DATABASE_URL_DIRECT` is **optional and best left unset here.** Supabase's direct
+   connection (port 5432) is IPv6-only unless you've bought the IPv4 add-on, and it may
+   simply be unreachable from Render. The backend probes it and falls back to
+   `DATABASE_URL` when it isn't available, so leaving it out avoids a pointless
+   connection attempt on every boot.
+
+3. Save. Render redeploys automatically.
+
+Because `WTW_CHECKPOINTER_MODE=postgres` is set in the blueprint, a missing or
+unreachable `DATABASE_URL` will **fail startup loudly** rather than silently falling
+back to in-memory storage. That's intentional — see the troubleshooting section.
 
 ### Step 4: Verify the backend is running
 
@@ -218,9 +272,19 @@ If you set:
 
 Then photos will fetch successfully (Supabase will redirect both URLs), but the service worker's cache rule won't match, photos won't be cached, and offline mode will have no images.
 
-**Solution:** Make sure both point to the same Supabase instance:
-- Frontend: `https://w2w-staging.supabase.co`
-- Backend (via Render env var `SUPABASE_URL` or `DATABASE_URL` connection string): same URL or direct connection to the same database
+**Solution:** set both to the *identical string* — same scheme, same host, no trailing
+slash:
+
+- Vercel `NEXT_PUBLIC_SUPABASE_URL` = `https://<your-ref>.supabase.co`
+- Render `SUPABASE_URL` = `https://<your-ref>.supabase.co`
+
+Copy-paste one into the other rather than typing each. This is exact string matching,
+not "the same instance" — `https://x.supabase.co` and `https://x.supabase.co/` are
+different origins to the cache rule.
+
+**Verify after deploying:** open the closet on the deployed site, then DevTools →
+Application → Cache Storage. There should be a `wtw-photos` cache with entries in it.
+Empty, while photos display fine on screen, means the origins don't match.
 
 ### Step 4: Verify the frontend is running
 
@@ -297,20 +361,28 @@ Once staging is running:
 
 ## Reference: Environment Variables by Service
 
-**Backend (Render):**
+**Backend (Render).** `SUPABASE_JWT_AUD`, `WTW_CHECKPOINTER_MODE`, `LOG_LEVEL` and
+`ENVIRONMENT` are already set by `render.yaml`; the rest you enter in the dashboard.
+
 ```
-DATABASE_URL=postgresql://postgres.pooler-dev:PASSWORD@db.SUPABASE_ID.supabase.co:6543/postgres
-DATABASE_URL_DIRECT=postgresql://postgres:PASSWORD@db.SUPABASE_ID.supabase.co:5432/postgres
-SUPABASE_URL=https://SUPABASE_ID.supabase.co
-SUPABASE_JWT_AUD=authenticated
-WTW_CHECKPOINTER_MODE=postgres
-WTW_CORS_ORIGINS=https://w2w-staging.vercel.app
+# Copy this from Supabase → Connect → Transaction pooler. Do NOT hand-write it:
+# the hosted pooler's host and username differ from the local CLI's emulation.
+DATABASE_URL=<paste from the Supabase dashboard>
+
+# Optional, and usually best left UNSET on Render — Supabase's direct connection
+# is IPv6-only without the IPv4 add-on. The backend falls back to DATABASE_URL.
+# DATABASE_URL_DIRECT=
+
+SUPABASE_URL=https://SUPABASE_REF.supabase.co
+WTW_CORS_ORIGINS=https://YOUR-APP.vercel.app
 WTW_QDRANT_URL=https://QDRANT_CLUSTER.eu-0.qdrant.io:6333
 WTW_QDRANT_API_KEY=YOUR_QDRANT_KEY
-AI_GATEWAY_API_KEY=(optional) your Vercel AI Gateway key
-LOG_LEVEL=INFO
-ENVIRONMENT=staging
+AI_GATEWAY_API_KEY=YOUR_GATEWAY_KEY
 ```
+
+`AI_GATEWAY_API_KEY` is optional only in the sense that the app boots without it —
+every styling request fails until it's set, so treat it as required for a usable
+deployment.
 
 **Frontend (Vercel):**
 ```
