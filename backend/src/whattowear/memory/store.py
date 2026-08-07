@@ -89,7 +89,7 @@ def _init_postgres_saver(url: str, settings: Settings, mode: str) -> PostgresSav
         return saver
     except Exception as e:
         raise RuntimeError(
-            f"Failed to initialize PostgresSaver in '{mode}' mode. " f"Check your database URL configuration: {e}"
+            f"Failed to initialize PostgresSaver in '{mode}' mode. Check your database URL configuration: {e}"
         ) from e
 
 
