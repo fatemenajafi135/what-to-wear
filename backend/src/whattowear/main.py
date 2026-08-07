@@ -7,7 +7,6 @@ it exists to prove JWT verification works end to end.
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -21,21 +20,11 @@ from whattowear.api.v1.routes.profile import router as profile_router
 from whattowear.api.v1.routes.recommend import router as recommend_router
 from whattowear.api.v1.routes.taxonomy import router as taxonomy_router
 from whattowear.api.v1.routes.whoami import router as whoami_router
+from whattowear.core.config import get_settings
 from whattowear.core.db import get_engine
 from whattowear.core.logging import configure_logging
 from whattowear.pipeline.graph import get_compiled_graph
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
-
-_CORS_ALLOWED_ORIGINS = (
-    os.getenv("CORS_ORIGINS", "").split(",")
-    if os.getenv("CORS_ORIGINS")
-    else [
-        "http://localhost:3000",
-        "http://localhost:3100",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3100",
-    ]
-)
 
 logger = logging.getLogger(__name__)
 
@@ -63,13 +52,30 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="What to Wear — backend foundation", lifespan=lifespan)
+
 # Feature 004 is the first slice where a browser calls this API directly
 # (003's /whoami was never called from the UI) — without this, every
 # request from the Next.js dev server is blocked by the browser's CORS
 # preflight before it ever reaches a route.
+#
+# CORS origins are read from Settings (wtw_cors_origins) or default to
+# localhost. BOTH `localhost` and `127.0.0.1` are included in defaults
+# deliberately: to a browser, they are different origins even though they
+# resolve to the same machine. Supabase's `site_url` is `http://127.0.0.1:3000`,
+# and `next.config.ts`'s `allowedDevOrigins` allows 127.0.0.1 (feature 003
+# needed that for OAuth), while Playwright and most developers typing a URL use
+# `localhost`. Listing only one produces a 400 on every preflight from the
+# other, surfacing as the closet's generic "Couldn't load your closet." error
+# — invisible to the whole test suite because Playwright runs on the host that
+# happens to work. There is no security cost to allowing both locally; a
+# deployed frontend gets a single explicit origin from configuration.
+#
+# In production, set wtw_cors_origins to a comma-separated allowlist (e.g.,
+# "https://app.example.com,https://staging.example.com"). Each origin is
+# stripped of whitespace and empty entries are filtered.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_CORS_ALLOWED_ORIGINS,
+    allow_origins=get_settings().cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

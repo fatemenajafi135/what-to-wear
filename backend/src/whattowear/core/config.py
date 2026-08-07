@@ -119,6 +119,36 @@ class Settings(BaseSettings):
     # §48) — counted from existing `messages` rows, not a separate counter.
     wtw_conversation_turn_cap: int = 6
 
+    # --- CORS (feature 017) — deployment readiness --------------------------------
+    # Comma-separated list of allowed origins for CORS. Optional; if unset, defaults
+    # to localhost origins for local development. Each origin is stripped of whitespace
+    # and empty entries are filtered. Read via .cors_allowed_origins property.
+    wtw_cors_origins: str | None = None
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        """Parsed and validated CORS allowed origins.
+
+        Defaults to localhost origins for development. In production,
+        set wtw_cors_origins to a comma-separated list of allowed origins.
+        Each origin is stripped of leading/trailing whitespace; empty entries
+        are filtered out."""
+        if not self.wtw_cors_origins:
+            return self._default_cors_origins()
+        origins = [o.strip() for o in self.wtw_cors_origins.split(",")]
+        filtered = [o for o in origins if o]
+        return filtered if filtered else self._default_cors_origins()
+
+    @staticmethod
+    def _default_cors_origins() -> list[str]:
+        """Default CORS origins for development."""
+        return [
+            "http://localhost:3000",
+            "http://localhost:3100",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3100",
+        ]
+
     @property
     def judge_model(self) -> str:
         return self.wtw_judge_model or self.wtw_chat_model
