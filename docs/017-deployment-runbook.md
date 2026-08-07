@@ -29,12 +29,19 @@ Deploy the What to Wear staging environment from scratch. This runbook walks you
 Once the project is ready:
 
 1. Go to **Settings** → **API** (left sidebar).
-2. Copy and save these three values:
-   - **Project URL** (looks like `https://xxxxx.supabase.co`)
-   - **Anon key** (public, safe to commit in frontend code)
-   - **Service role key** (secret; treat like a password)
+2. Copy and save:
+   - **Project URL** — `https://xxxxx.supabase.co`. ⚠️ The dashboard may show this as an
+     "API URL" ending in `/rest/v1/`. Strip that: everywhere this runbook says Project
+     URL it means scheme + host only, no path and no trailing slash. The backend appends
+     to it to build its token-verification URL, so a stray path makes every sign-in fail.
+   - **anon (public) key** — for the frontend's `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Newer
+     projects also offer `sb_publishable_...`; either works, but `anon` is the shape the
+     local stack issues and therefore the one everything was built and tested against.
+   - **Project ref** — the subdomain, 20 lowercase characters. Needed for `supabase link`.
 
-You'll use these to configure the backend and frontend.
+⚠️ Never put the **service_role** or `sb_secret_...` key in Vercel. They bypass row-level
+security, and anything in a `NEXT_PUBLIC_*` variable ships to every visitor's browser.
+Neither is needed anywhere in this setup.
 
 ### Step 3: Run database migrations
 
@@ -127,16 +134,59 @@ fix that rather than adding policies here.
 
 ### Step 6: Configure Supabase auth for the deployed frontend
 
-Once the frontend is deployed to Vercel, Supabase auth links (email confirmation, OAuth) will point to the deployed URL. Configure this now:
+Come back to this once the frontend is deployed and you know its URL (Part 4).
 
-1. Go to **Settings** → **Auth** → **URL Configuration**.
-2. **Site URL:** Set to your Vercel staging URL (you'll know this after deploying the frontend).
-   - Example: `https://w2w-staging.vercel.app`
-3. **Redirect URLs:** Add your Vercel URL and any redirect paths, e.g.:
-   - `https://w2w-staging.vercel.app/auth/callback`
-4. Save.
+**Authentication → URL Configuration:**
 
-(You can update this after the frontend deploys if you don't know the URL yet.)
+1. **Site URL:** `https://your-app.vercel.app`
+2. **Redirect URLs:** add `https://your-app.vercel.app/auth/callback`
+   — both `SignInForm` and `SignUpForm` pass
+   `redirectTo: ${window.location.origin}/auth/callback`.
+
+⚠️ **Use the stable production domain, and no trailing slash.** Vercel also mints a
+per-deployment URL with a hash in it (`your-app-41xic2hnc-you.vercel.app`) — that one
+changes on every single deploy, so anything configured against it breaks on the next
+push. And `https://your-app.vercel.app/` with a trailing slash never matches: a browser's
+`Origin` is scheme + host + port, never a path.
+
+**Authentication → Emails → Reset Password:**
+
+Set the subject to `Reset your What to Wear password` and paste the body from
+`infra/supabase/templates/recovery.html`:
+
+```html
+<h2>Reset your password</h2>
+
+<p>Follow this link to reset the password for your What to Wear account.</p>
+
+<p><a href="{{ .SiteURL }}/reset-password/{{ .TokenHash }}">Reset password</a></p>
+```
+
+Without this, **password reset silently does not work.** The app's reset page lives at
+`/reset-password/<token>` and calls `verifyOtp({ token_hash })` from that route param,
+while Supabase's default recovery email links to the site root with a query-string shape,
+so the link never reaches the form. `ForgotPasswordForm` calls `resetPasswordForEmail()`
+with no `redirectTo` — deliberately, because it relies on this template — so there is no
+code-side workaround.
+
+Test it before moving on: sign out → **Forgot password** → follow the emailed link and
+confirm it lands on the reset form.
+
+### ⚠️ What `infra/supabase/config.toml` does NOT do for a hosted project
+
+This has now caught three separate steps in this runbook, so treat it as a category
+rather than three coincidences. `supabase db push` pushes **migrations only**. Everything
+else in `config.toml` configures your *local* stack and is silently absent in the cloud:
+
+| Declared in config.toml | Hosted reality |
+|---|---|
+| `[storage.buckets.wardrobe-photos]` | Bucket must be created by hand (Step 4) |
+| `[auth.email.template.recovery]` | Template must be pasted into the dashboard (above) |
+| `enable_confirmations = false` | Hosted projects default to confirmations **on** |
+
+The failure mode is consistent and nasty: the service stays healthy and one feature
+quietly does nothing. When something on staging behaves differently from local and the
+logs are clean, check whether the setting lives in `config.toml`.
 
 ---
 
