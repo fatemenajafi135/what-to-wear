@@ -112,9 +112,10 @@ def _harden_checkpointer_tables(pool: ConnectionPool[Connection[dict[str, object
 def get_checkpointer() -> InMemorySaver | PostgresSaver:
     """Lazy singleton (mirrors kb.get_kb()/graph.get_compiled_graph()).
     Prefers `database_url_direct` (session-mode, port 5432) over
-    `database_url` (the Supavisor transaction pooler, port 6543), then
-    falls back to `InMemorySaver` if neither is configured/reachable (e.g.
-    local dev without a checkpointer-capable Postgres set up at all).
+    `database_url` (the Supavisor transaction pooler, port 6543). If no URL
+    is configured, uses `InMemorySaver` (e.g. local dev without a
+    checkpointer-capable Postgres). If a URL is configured but unreachable,
+    fails loudly to catch configuration errors early.
 
     Backed by a `ConnectionPool`, NOT a single long-lived connection. The
     process-wide graph singleton reuses one checkpointer across every
@@ -139,28 +140,25 @@ def get_checkpointer() -> InMemorySaver | PostgresSaver:
     settings = get_settings()
     url = settings.database_url_direct if _reachable(settings.database_url_direct) else settings.database_url
 
-    if url:
-        # Explicit type param: row_factory=dict_row in kwargs is what
-        # actually makes rows dicts at runtime (unchanged from the legacy
-        # behavior); ConnectionPool's own generic default is
-        # Connection[tuple[Any, ...]], and mypy can't infer the override
-        # from a runtime kwargs dict, so the variable annotation carries it
-        # instead — mypy's own type-guided inference on the constructor call.
-        pool: ConnectionPool[Connection[dict[str, object]]] = ConnectionPool(
-            conninfo=url,
-            min_size=1,
-            max_size=settings.wtw_checkpointer_pool_max,
-            kwargs={"autocommit": True, "prepare_threshold": None, "row_factory": dict_row},
-            check=ConnectionPool.check_connection,
-            open=True,
-        )
-        _checkpointer_stack.callback(pool.close)
-        saver = PostgresSaver(pool)
-        saver.setup()
-        _harden_checkpointer_tables(pool)
-        _checkpointer = saver
-    else:
+    if not url:
         _checkpointer = InMemorySaver()
+    else:
+        try:
+            pool: ConnectionPool[Connection[dict[str, object]]] = ConnectionPool(
+                conninfo=url,
+                min_size=1,
+                max_size=settings.wtw_checkpointer_pool_max,
+                kwargs={"autocommit": True, "prepare_threshold": None, "row_factory": dict_row},
+                check=ConnectionPool.check_connection,
+                open=True,
+            )
+            _checkpointer_stack.callback(pool.close)
+            saver = PostgresSaver(pool)
+            saver.setup()
+            _harden_checkpointer_tables(pool)
+            _checkpointer = saver
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize PostgresSaver. Check your database URL configuration: {e}") from e
     return _checkpointer
 
 
