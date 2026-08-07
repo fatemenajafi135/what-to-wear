@@ -90,6 +90,14 @@ class Settings(BaseSettings):
 
     # --- LangGraph checkpointer pool (memory/store.py) ------------------------
     wtw_checkpointer_pool_max: int = 5
+    # Mode for checkpointer initialization. Prevents silent fallback to RAM on
+    # misconfiguration (e.g., forgetting DATABASE_URL on a cloud service).
+    # Options:
+    #   "auto" (default): use Postgres if DATABASE_URL is set and reachable;
+    #     otherwise use InMemorySaver (for local dev).
+    #   "memory": explicitly use InMemorySaver (no Postgres).
+    #   "postgres": require DATABASE_URL to be set and reachable; fail if missing.
+    wtw_checkpointer_mode: str = "auto"
 
     # --- Closet (feature 004) --------------------------------------------------
     wtw_closet_page_size: int = 20
