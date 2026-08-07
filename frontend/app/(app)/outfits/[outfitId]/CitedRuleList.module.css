@@ -1,0 +1,26 @@
+.list {
+  list-style: none;
+  margin: var(--space-md) 0 0;
+  padding: var(--space-md) 0 0;
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+
+.number {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--color-primary);
+  min-width: 1.2em;
+}
+
+.text {
+  color: var(--color-text-secondary);
+}

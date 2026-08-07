@@ -1,19 +1,21 @@
 """Weather-fitness dimension scorer.
 
 Reuses `categories.group_of` for the outerwear check and
-`eval.properties.weather_appropriate` for the hard requires-outer/max-warmth
+`scoring.properties.weather_appropriate` for the hard requires-outer/max-warmth
 check — the same predicate the golden-set eval already encodes, imported
-here rather than forked into a second implementation. Blends that hard check
-with a continuous "how close is average core warmth to the temp band's
-target" signal, so two outfits that both pass the hard check can still be
-ranked against each other.
+here rather than forked into a second implementation. (Ported from
+`eval.properties` per specs/007-ai-port/research.md §2 — production
+importing the `eval` package had the dependency backwards.) Blends that
+hard check with a continuous "how close is average core warmth to the temp
+band's target" signal, so two outfits that both pass the hard check can
+still be ranked against each other.
 """
 
 from __future__ import annotations
 
 from ..categories import is_core
-from ..eval.properties import weather_appropriate
 from ..schema import Context, DimensionScore, TempBand, WardrobeItem
+from .properties import weather_appropriate
 
 # 0 (airy) .. 5 (heaviest) — mirrors WardrobeItem.warmth's own scale.
 _TARGET_WARMTH: dict[TempBand, int] = {

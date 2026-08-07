@@ -40,7 +40,36 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Answer each gate explicitly. Mark N/A where a principle genuinely does not apply to this
+feature, and say why in one line. Any gate that cannot be satisfied goes into Complexity
+Tracking with a justification, or the plan does not proceed to `/speckit-tasks`.
+
+- [ ] **I — Salvaged AI code is authoritative.** Does this plan regenerate any of
+      retrieval, chunking, ingest, the knowledge base, scoring, the pipeline, or the eval
+      harness? Refactoring is fine; regenerating is prohibited. If it refactors any of
+      them, is an eval run against `docs/eval-baselines/` included as a task?
+- [ ] **II — Deterministic scoring.** Is every outfit score pure Python with no LLM call?
+      Is a deterministic guard, not the LLM, the last checkpoint before output?
+- [ ] **III — Style gates wardrobe.** Does style retrieval run first and shape the wardrobe
+      query? The two are never parallel tracks.
+- [ ] **IV — Grounded output.** Is every surfaced item provably owned by the requester?
+      Is every rationale cited, or honestly uncited rather than fabricated?
+- [ ] **V — Scorers are eval metrics.** Is every new quality judgement deterministic code,
+      reused unchanged by the harness, rather than living inside a prompt?
+- [ ] **VI — Schema stability.** Does this conform to the frozen taxonomy, without adding a
+      parallel formality scale or renaming a category group?
+- [ ] **VII — Contracts.** Does the frontend consume OpenAPI-generated types, with no
+      hand-maintained duplicate?
+- [ ] **VIII — Visual truth.** Does every visual value read a token from
+      `design/design-system.md` or `docs/design-decisions.md`? Is no code copied from
+      `design/prototype/`? Does every screen implement loading, empty, error and offline?
+      Is WCAG AA met — 44px targets, real `:focus-visible`, one `<h1>` per screen, focus
+      moved on navigation, focus trapped and restored in overlays, reduced motion honoured?
+- [ ] **IX — One codebase.** Identical routes at every form factor, with only the chrome
+      changing? No separate mobile build and no user-agent branching on what a user can
+      reach? Do all four display-mode × form-factor combinations work?
+- [ ] **X — Documents are data.** Is no document committed or read from a path inside the
+      repo? Is any new corpus entry described in `infra/corpus.yaml`?
 
 ## Project Structure
 
@@ -57,51 +86,44 @@ specs/[###-feature]/
 ```
 
 ### Source Code (repository root)
+
 <!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
+  The repository layout is FIXED by the constitution ("Technology Constraints":
+  frontend/, backend/, infra/, design/, docs/ — do not restructure). There is no
+  layout choice to make. List only the concrete paths this feature touches.
+
+  There is deliberately no mobile-app option. Principle IX: one Next.js codebase
+  serves the desktop web experience and the installed mobile PWA. Creating ios/,
+  android/, or any second frontend is a constitutional violation, not an option.
 -->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+frontend/                     # Next.js App Router + TypeScript. Web AND installed PWA.
+├── app/                      # routes — identical at every form factor
+├── components/
+├── styles/                   # token layers: system → semantic → theme blocks
+└── public/                   # icons/ and logo.svg already exist; do not regenerate
 
-tests/
-├── contract/
-├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
 backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
+├── pyproject.toml
+├── src/whattowear/           # src layout, single package
+│   ├── main.py  api/v1/routes/  core/  schemas/  models/
+│   ├── repositories/         # ALL database access
+│   ├── services/             # use cases: repositories + AI
+│   ├── pipeline/ retrieval/ scoring/ memory/ ingest/   # framework-free
+│   ├── prompts/              # prompt FILES, loaded by name — never inline strings
+│   ├── adapters/  ports.py   # Protocols; AI reaches the DB only through these
+│   └── evals/
+└── tests/{unit,integration,evals}
 
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+infra/
+├── corpus.yaml               # the tracked corpus manifest
+└── supabase/migrations/      # the ONLY migration system — Alembic is not used
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: list the concrete files and directories this feature adds or
+changes, within the fixed layout above. If this feature appears to need a path outside it,
+that is a Complexity Tracking entry, not a restructure.
 
 ## Complexity Tracking
 

@@ -3,10 +3,11 @@ name = "whattowear-evals"
 version = "0.1.0"
 description = "Isolated RAGAS + LLM-as-judge scoring for What to Wear. Reads run artifacts (JSONL) produced by the main package and scores them via the Vercel AI Gateway."
 requires-python = ">=3.12"
-# Isolated from the main package: the vibrantlabs Ragas fork pins
-# langchain-community==0.3.31 (imports a legacy Vertex AI module removed in 0.4),
-# which conflicts with the retrieval layer's langchain-cohere>=0.4. This project
-# never imports the retrieval stack — it only reads JSONL and scores.
+# Isolated from the main package (specs/007-ai-port/research.md §9): the
+# vibrantlabs RAGAS fork pins langchain-community==0.3.31 (it imports a
+# legacy Vertex AI module removed in 0.4), which conflicts with
+# retrieval/advanced.py's langchain-cohere>=0.4. This project never
+# imports the retrieval stack — it only reads JSONL and scores.
 dependencies = [
     "ipykernel>=6.29.0",
     "jupyterlab>=4.2.0",

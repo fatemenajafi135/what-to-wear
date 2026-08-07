@@ -30,9 +30,7 @@ class TestGroupOf:
     def test_unknown_category_defaults_to_accessory(self):
         assert categories.group_of("space_suit") == "accessory"
 
-    @pytest.mark.parametrize(
-        "group", ["top", "bottom", "full_body", "outerwear", "footwear", "accessory"]
-    )
+    @pytest.mark.parametrize("group", ["top", "bottom", "full_body", "outerwear", "footwear", "accessory"])
     def test_group_names_round_trip(self, group):
         """The photo-extraction path (vision.py) stores the bare GROUP name as
         the category, so every group name MUST map to itself — not fall

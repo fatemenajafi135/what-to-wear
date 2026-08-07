@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify
 
 from ..logging_utils import get_logger
@@ -31,25 +31,53 @@ from ..logging_utils import get_logger
 log = get_logger(__name__)
 
 SKIP_SECTION_TITLES = {
-    "see also", "notes", "references", "notes and references", "citations",
-    "notes and citations", "external links", "further reading", "bibliography",
-    "sources", "footnotes", "gallery", "works cited", "explanatory notes",
-    "notes and sources", "further information",
+    "see also",
+    "notes",
+    "references",
+    "notes and references",
+    "citations",
+    "notes and citations",
+    "external links",
+    "further reading",
+    "bibliography",
+    "sources",
+    "footnotes",
+    "gallery",
+    "works cited",
+    "explanatory notes",
+    "notes and sources",
+    "further information",
 }
 
 # chrome selectors removed wholesale before conversion (not part of the running text)
 _STRIP_SELECTORS = [
-    "script", "style", ".mw-editsection", ".hatnote", ".navbox", ".vertical-navbox",
-    ".infobox", ".ambox", ".dmbox", ".tmbox", ".ombox", ".cmbox", ".metadata",
-    ".reflist", ".catlinks", ".printfooter", ".mw-jump-link", ".noprint",
-    ".sistersitebox", "table.metadata",
+    "script",
+    "style",
+    ".mw-editsection",
+    ".hatnote",
+    ".navbox",
+    ".vertical-navbox",
+    ".infobox",
+    ".ambox",
+    ".dmbox",
+    ".tmbox",
+    ".ombox",
+    ".cmbox",
+    ".metadata",
+    ".reflist",
+    ".catlinks",
+    ".printfooter",
+    ".mw-jump-link",
+    ".noprint",
+    ".sistersitebox",
+    "table.metadata",
 ]
 
 
 _HEADING_RE = re.compile(r"^h[1-6]$")
 
 
-def _own_section_heading_text(section) -> str:
+def _own_section_heading_text(section: Tag) -> str:
     """The heading title belonging directly to this <section> — NOT a nested
     subsection's. MediaWiki (Vector 2022) nests subsections as <section>
     children of their parent section, each wrapped
@@ -70,7 +98,7 @@ def _own_section_heading_text(section) -> str:
     return h.get_text(strip=True) if h else ""
 
 
-def _strip_chrome(root) -> None:
+def _strip_chrome(root: Tag) -> None:
     for sel in _STRIP_SELECTORS:
         for el in root.select(sel):
             el.decompose()
@@ -78,7 +106,7 @@ def _strip_chrome(root) -> None:
         sup.decompose()
 
 
-def _clean_text_no_magnify(el) -> str:
+def _clean_text_no_magnify(el: Tag) -> str:
     """get_text(separator=' ') is needed for correctly spaced word boundaries
     across tags (e.g. a linked name immediately followed by more prose), but it
     over-inserts a space before a directly-attached possessive/punctuation
@@ -90,7 +118,7 @@ def _clean_text_no_magnify(el) -> str:
     return re.sub(r"\s+('s\b|[,.;:!?)])", r"\1", text)
 
 
-def _replace_image_blocks(root) -> None:
+def _replace_image_blocks(root: Tag) -> None:
     """Collapse each image block (figure/thumb, possibly multi-image) into a
     plain <p><img></p><p><em>caption</em></p> pair, in place — guarantees
     correct, predictable markdown regardless of Wikipedia's wrapper markup, and
@@ -101,8 +129,7 @@ def _replace_image_blocks(root) -> None:
     # deliberately — BeautifulSoup elements compare by structural equality, so
     # `in o.descendants` would misfire on duplicate-looking sibling figures.
     top_level = [
-        c for c in candidates
-        if not any(c is not o and any(c is d for d in o.descendants) for o in candidates)
+        c for c in candidates if not any(c is not o and any(c is d for d in o.descendants) for o in candidates)
     ]
     for node in top_level:
         imgs = node.find_all("img")
@@ -114,19 +141,23 @@ def _replace_image_blocks(root) -> None:
             captions = [_clean_text_no_magnify(c) for c in node.find_all(class_="thumbcaption")]
         parts = []
         for i, img in enumerate(imgs):
-            src = img.get("src") or img.get("data-src") or ""
+            # src/data-src are single-valued HTML attributes in practice
+            # (never the multi-valued form bs4's stubs allow for, e.g.
+            # `class`); str() makes that assumption explicit for mypy
+            # rather than leaving `str | AttributeValueList` unresolved.
+            src = str(img.get("src") or img.get("data-src") or "")
             if not src:
                 continue
             src = src[2:] if src.startswith("./") else src
             cap = captions[i] if i < len(captions) else (captions[0] if len(captions) == 1 else "")
-            alt = (img.get("alt") or "").strip() or cap or "image"
+            alt = str(img.get("alt") or "").strip() or cap or "image"
             parts.append(f'<p><img src="{src}" alt="{alt}"></p>')
             if cap:
                 parts.append(f"<p><em>{cap}</em></p>")
         node.replace_with(BeautifulSoup("".join(parts), "html.parser"))
 
 
-def _drop_skip_sections(root) -> None:
+def _drop_skip_sections(root: Tag) -> None:
     """Drop every <section> whose OWN heading is skip-listed ('See also',
     'References', 'Notes', 'External links', ...).
 

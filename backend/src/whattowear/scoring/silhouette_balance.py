@@ -3,13 +3,13 @@
 General proportion principles only — a fitted piece paired with a looser
 piece (or vice versa) reads as a deliberately balanced silhouette; two loose
 pieces together tend to read as shapeless. Deliberately NOT personalized to
-any body shape (spec Future Work) — reasons purely from each item's own
-`fit` text, never a user attribute.
+any body shape — reasons purely from each item's own `fit` text, never a
+user attribute.
 """
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from ..categories import group_of
 from ..schema import Context, DimensionScore, WardrobeItem
@@ -20,7 +20,7 @@ _LOOSE_KEYWORDS = ("loose", "oversized", "relaxed", "wide", "baggy")
 _FITTED_KEYWORDS = ("fitted", "slim", "tailored", "skinny", "tight", "bodycon")
 
 
-def _bucket(fit: Optional[str]) -> Optional[FitBucket]:
+def _bucket(fit: str | None) -> FitBucket | None:
     if not fit:
         return None
     text = fit.lower()

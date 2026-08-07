@@ -1,17 +1,24 @@
 """Baseline retriever — naive dense over ALL chunks.
 
-Built on purpose (handoff + cert both stress this). No metadata filtering, no
-per-layer logic, one NL query embedded and matched against the whole collection.
-This is the comparison floor the advanced retriever must beat with numbers
-(Task 6). We know it is worse; it is the evidence.
+Built on purpose (the A/B control). No metadata filtering, no per-layer
+logic, one NL query embedded and matched against the whole collection.
+This is the comparison floor the advanced retriever must beat with
+numbers — kept per specs/007-ai-port/spec.md's decision to preserve it as
+the A/B control the recorded baselines depend on (inventory §10 Q5).
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from langchain_core.documents import Document
 
-from ..kb import KnowledgeBase
 from .base import RetrievalResult
+
+if TYPE_CHECKING:
+    # kb.py doesn't land until Phase 11 (ingest) — see ports.py's identical
+    # TYPE_CHECKING note for why this is safe: only ever used as a type hint.
+    from ..kb import KnowledgeBase
 
 
 def retrieve(kb: KnowledgeBase, nl_query: str, k: int = 8) -> RetrievalResult:

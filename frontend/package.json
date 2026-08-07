@@ -1,29 +1,47 @@
 {
-  "name": "frontend",
+  "name": "what-to-wear-frontend",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "fetch:openapi": "curl -sf \"${API_BASE_URL:-http://localhost:8000}/openapi.json\" -o openapi.json",
-    "gen:types": "openapi-typescript ./openapi.json -o lib/api-types.ts"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "e2e:pwa": "playwright test --config=playwright.pwa.config.ts",
+    "generate:api-types": "openapi-typescript http://localhost:8000/openapi.json -o lib/api/schema.d.ts"
   },
   "dependencies": {
-    "next": "16.2.10",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "@supabase/supabase-js": "^2.45.0"
+    "@serwist/next": "^9.5.12",
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.111.0",
+    "lucide-react": "1.27.0",
+    "next": "16.2.12",
+    "openapi-fetch": "^0.17.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "serwist": "^9.5.12"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.10",
-    "typescript": "^5",
-    "openapi-typescript": "^7.4.0"
+    "@next/eslint-plugin-next": "16.2.12",
+    "@playwright/test": "1.62.0",
+    "@testing-library/jest-dom": "7.0.0",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.1",
+    "@types/node": "26.1.2",
+    "@types/react": "19.2.17",
+    "@vitejs/plugin-react": "6.0.4",
+    "eslint": "9.39.5",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "jsdom": "30.0.0",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.65.0",
+    "vitest": "4.1.10"
   }
 }

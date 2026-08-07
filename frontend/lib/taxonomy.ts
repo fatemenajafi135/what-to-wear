@@ -1,23 +1,66 @@
-// Mirrors the backend's frozen schema (backend/src/whattowear/schema.py,
-// categories.py -- constitution Principle VI). These are runtime arrays for
-// <select> options; the generated OpenAPI types (lib/api-types.ts) give the
-// matching compile-time union but no runtime list, so this file must be kept
-// in sync by hand if the backend enum ever changes (it's frozen, so it
-// shouldn't).
+"use client";
 
-export const CATEGORY_GROUPS = ["top", "bottom", "full_body", "outerwear", "footwear", "accessory"] as const;
+import { useEffect, useState } from "react";
+import { apiClient } from "@/lib/api/client";
 
-export const FORMALITY_VALUES = [
-  "casual",
-  "smart_casual",
-  "business_casual",
-  "semi_formal",
-  "formal",
-  "black_tie",
+/**
+ * The five Category chips the design system's Add-item and Closet screens
+ * both specify. `full_body` has no chip of its own and lives under Bottoms —
+ * the same mapping feature 004 resolved for the Closet filter, kept
+ * identical here so a dress is filed the same way in both places.
+ */
+export const CATEGORY_CHIPS = [
+  { group: "top", label: "Top" },
+  { group: "bottom", label: "Bottom" },
+  { group: "outerwear", label: "Outerwear" },
+  { group: "footwear", label: "Footwear" },
+  { group: "accessory", label: "Accessory" },
 ] as const;
 
-export const SEASON_VALUES = ["spring", "summer", "autumn", "winter"] as const;
+export type CategoryChip = (typeof CATEGORY_CHIPS)[number]["group"];
 
-export type CategoryGroup = (typeof CATEGORY_GROUPS)[number];
-export type Formality = (typeof FORMALITY_VALUES)[number];
-export type Season = (typeof SEASON_VALUES)[number];
+/** Bottoms covers `full_body`, so its type list is the union of both. */
+export function groupsForChip(chip: CategoryChip): string[] {
+  return chip === "bottom" ? ["bottom", "full_body"] : [chip];
+}
+
+/** `necklace` -> `Necklace`, `bow_tie` -> `Bow tie`, `t-shirt` -> `T-shirt`. */
+export function humanizeCategory(value: string): string {
+  const spaced = value.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * `{group: [specific categories]}` from `GET /api/v1/taxonomy/categories`.
+ *
+ * Fetched rather than hard-coded: `categories.CATEGORY_GROUPS` is the single
+ * source of truth and grows whenever new garment types show up in data. A
+ * hand-mirrored copy of it would drift — this project already had one such
+ * mirror (the colour palette, carrying a "keep in sync by hand" comment)
+ * and deleted it once the review card stopped needing names at all
+ * (constitution VII).
+ *
+ * Returns `{}` until it loads, and on failure — the Group control degrades
+ * to free text, which is exactly what `category` is on the backend anyway,
+ * so a taxonomy fetch failing never blocks adding an item.
+ */
+export function useCategoryTaxonomy(): Record<string, string[]> {
+  const [taxonomy, setTaxonomy] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await apiClient.GET("/api/v1/taxonomy/categories", {});
+        if (!cancelled && data) setTaxonomy(data as Record<string, string[]>);
+      } catch {
+        // Left empty — see the docstring: the Group field still works.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return taxonomy;
+}

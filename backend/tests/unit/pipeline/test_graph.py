@@ -1,15 +1,24 @@
 """Unit tests for pipeline/graph.py.
 
-Feature 002 Phase 3, T035: `wardrobe_retrieval`'s hard-constraint pruning +
-the k=8-per-slot cap (FR-014).
-Feature 002 Phase 4, T044: refinement-intent parsing and the delta-shifted
-pruning bounds it feeds (FR-013), the "alternatives" exclusion (FR-012), and
-the unsatisfiable-refinement fallback (FR-015).
+Covers `wardrobe_retrieval`'s hard-constraint pruning + the k=8-per-slot
+cap, refinement-intent parsing and the delta-shifted pruning bounds it
+feeds, the "alternatives" exclusion, and the unsatisfiable-refinement
+fallback.
+
+`generate_outfits`/`gather_context`/`verify_grounding` now take an
+injected `repo: ClosetRepository` (specs/007-ai-port/research.md §1) — a
+`MagicMock()` stand-in is enough here since none of these test cases set
+`ctx.user_id`, so `memory.profile_note` short-circuits before ever
+touching it.
 """
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 from whattowear.pipeline import graph
+from whattowear.pipeline.generator import GenOutfit, GenOutput, GenRationale
+from whattowear.retrieval.base import RetrievalResult
 from whattowear.schema import Context, DimensionScore, Rationale, ScoredOutfit, WardrobeItem
 
 
@@ -100,12 +109,12 @@ class TestWardrobeRetrievalPruning:
         assert set(result["candidates"].keys()) == {"top", "bottom", "footwear"}
 
     def test_best_fitting_item_survives_the_cap_even_when_placed_after_it(self):
-        # Feature 009, FR-008: the cap used to take a naive positional prefix
-        # (items[:8]) with no sort — an exact formality match placed 9th in
-        # closet order would be silently dropped even though it's the best
-        # fit. All 10 items pass the hard-constraint floor (>= one notch
-        # below "formal") so none are excluded before the cap; only the item
-        # at index 8 (the 9th item) is an *exact* formality match.
+        # The cap must not take a naive positional prefix (items[:8]) with
+        # no sort — an exact formality match placed 9th in closet order
+        # must not be silently dropped even though it's the best fit. All
+        # 10 items pass the hard-constraint floor (>= one notch below
+        # "formal") so none are excluded before the cap; only the item at
+        # index 8 (the 9th item) is an *exact* formality match.
         near_matches_before = [_item(f"near{i}", "top", formality="black_tie") for i in range(8)]
         exact_match = _item("exact", "top", formality="formal")
         near_match_after = _item("near8", "top", formality="black_tie")
@@ -189,11 +198,10 @@ class TestItemFitsHardConstraintsRefinementDeltas:
         assert graph._item_fits_hard_constraints(cold_item, ctx, []) is True
 
     def test_warmer_floor_scales_to_a_low_ceiling_category_instead_of_exempting_it(self):
-        # footwear/accessories rarely carry high warmth values in practice (a
-        # fixture-data reality) -- Feature 007 Task C replaces the old
-        # blanket exemption with a floor scaled to what THIS category can
-        # actually offer (its own max warmth in the closet), not a flat
-        # absolute number and not a full pass-through.
+        # footwear/accessories rarely carry high warmth values in practice
+        # (a fixture-data reality) -- the floor scales to what THIS
+        # category can actually offer (its own max warmth in the closet),
+        # not a flat absolute number and not a full pass-through.
         ctx = Context(occasion="office", formality="business_casual")
         ceilings = {"footwear": 3}
         cold_shoe = _item("a", "sneakers", formality="business_casual", warmth=0)
@@ -202,8 +210,8 @@ class TestItemFitsHardConstraintsRefinementDeltas:
         assert graph._item_fits_hard_constraints(warm_enough_shoe, ctx, ["warmer"], ceilings) is True
 
     def test_warmer_floor_never_exceeds_the_category_s_own_ceiling(self):
-        # repeated "warmer" requests keep climbing elsewhere but never demand
-        # more than a low-ceiling category can actually supply (FR-011) --
+        # repeated "warmer" requests keep climbing elsewhere but never
+        # demand more than a low-ceiling category can actually supply --
         # its own warmest item always still passes.
         ctx = Context(occasion="office", formality="business_casual")
         ceilings = {"footwear": 3}
@@ -237,9 +245,9 @@ class TestItemFitsHardConstraintsRefinementDeltas:
 
 class TestGenerateOutfitsAlternativesExclusion:
     """Outfits must be slot-complete (top+bottom+footwear) to survive
-    generate_outfits at all (FR-011) — every outfit built here covers all
-    three so the alternatives-exclusion logic is what's actually exercised,
-    not the completeness filter."""
+    generate_outfits at all -- every outfit built here covers all three so
+    the alternatives-exclusion logic is what's actually exercised, not the
+    completeness filter."""
 
     def _complete_outfit_items(self, ids: tuple[str, str, str]) -> tuple:
         top_id, bottom_id, shoe_id = ids
@@ -249,14 +257,11 @@ class TestGenerateOutfitsAlternativesExclusion:
             _item(shoe_id, "sneakers"),
         )
 
-    def test_alternatives_delta_excludes_previously_shown_item_sets(self, mocker):
-        from whattowear.pipeline.generator import GenOutfit, GenOutput, GenRationale
-
+    def test_alternatives_delta_excludes_previously_shown_item_sets(self):
         shown_top, shown_bottom, shown_shoe = self._complete_outfit_items(("st", "sb", "ss"))
         new_top, new_bottom, new_shoe = self._complete_outfit_items(("nt", "nb", "ns"))
         repeated = GenOutfit(items=["st", "sb", "ss"], rationale=[GenRationale(text="r", cites=["L1-x"])])
         fresh = GenOutfit(items=["nt", "nb", "ns"], rationale=[GenRationale(text="r", cites=["L1-x"])])
-        mocker.patch.object(graph, "generate", return_value=GenOutput(outfits=[repeated, fresh]))
 
         wardrobe = [shown_top, shown_bottom, shown_shoe, new_top, new_bottom, new_shoe]
         ctx = Context(occasion="office", formality="business_casual", wardrobe=wardrobe)
@@ -267,43 +272,39 @@ class TestGenerateOutfitsAlternativesExclusion:
                 "bottom": [shown_bottom, new_bottom],
                 "footwear": [shown_shoe, new_shoe],
             },
-            "retrieval": mocker.Mock(),
+            "retrieval": MagicMock(),
             "refinement_deltas": ["alternatives"],
-            "last_result": mocker.Mock(outfits=[_scored_outfit_multi(["st", "sb", "ss"])]),
+            "last_result": MagicMock(outfits=[_scored_outfit_multi(["st", "sb", "ss"])]),
         }
 
-        result = graph.generate_outfits(state)
+        with patch.object(graph, "generate", return_value=GenOutput(outfits=[repeated, fresh])):
+            result = graph.generate_outfits(state, MagicMock())
 
         kept_item_sets = [frozenset(o.items) for o in result["generated"].outfits]
         assert frozenset(["st", "sb", "ss"]) not in kept_item_sets
         assert frozenset(["nt", "nb", "ns"]) in kept_item_sets
 
-    def test_no_alternatives_delta_keeps_all_generated_outfits(self, mocker):
-        from whattowear.pipeline.generator import GenOutfit, GenOutput, GenRationale
-
+    def test_no_alternatives_delta_keeps_all_generated_outfits(self):
         top, bottom, shoe = self._complete_outfit_items(("a", "b", "c"))
         outfit = GenOutfit(items=["a", "b", "c"], rationale=[GenRationale(text="r", cites=["L1-x"])])
-        mocker.patch.object(graph, "generate", return_value=GenOutput(outfits=[outfit]))
 
         ctx = Context(occasion="office", formality="business_casual", wardrobe=[top, bottom, shoe])
         state = {
             "ctx": ctx,
             "candidates": {"top": [top], "bottom": [bottom], "footwear": [shoe]},
-            "retrieval": mocker.Mock(),
+            "retrieval": MagicMock(),
             "refinement_deltas": [],
             "last_result": None,
         }
 
-        result = graph.generate_outfits(state)
+        with patch.object(graph, "generate", return_value=GenOutput(outfits=[outfit])):
+            result = graph.generate_outfits(state, MagicMock())
 
         assert len(result["generated"].outfits) == 1
 
 
 class TestExplainUnsatisfiableRefinementFallback:
-    def test_empty_scored_outfits_during_refinement_falls_back_to_last_result(self, mocker):
-        from whattowear.pipeline.generator import GenOutput
-        from whattowear.retrieval.base import RetrievalResult
-
+    def test_empty_scored_outfits_during_refinement_falls_back_to_last_result(self):
         ctx = Context(occasion="office", formality="business_casual")
         previous = graph.SuggestResult(outfits=[_scored_outfit("a")], sources=[], context=ctx)
         state = {
@@ -322,10 +323,7 @@ class TestExplainUnsatisfiableRefinementFallback:
         assert result["note"] is not None
         assert result["last_result"] == previous
 
-    def test_empty_scored_outfits_without_refinement_gets_the_plain_empty_note(self, mocker):
-        from whattowear.pipeline.generator import GenOutput
-        from whattowear.retrieval.base import RetrievalResult
-
+    def test_empty_scored_outfits_without_refinement_gets_the_plain_empty_note(self):
         ctx = Context(occasion="office", formality="business_casual")
         state = {
             "ctx": ctx,
@@ -344,10 +342,10 @@ class TestExplainUnsatisfiableRefinementFallback:
 
 
 class TestIsValidCombination:
-    """The deterministic coherence guard. Split into the incoherent combos it
-    MUST reject (the reported funny outfits) and the legitimately plural looks
-    it MUST still allow (guarding against over-strictness re-creating the
-    'returns nothing' failure)."""
+    """The deterministic coherence guard. Split into the incoherent combos
+    it MUST reject (the reported funny outfits) and the legitimately
+    plural looks it MUST still allow (guarding against over-strictness
+    re-creating the 'returns nothing' failure)."""
 
     def _wb(self, *items):
         return {it.id: it for it in items}
@@ -361,7 +359,9 @@ class TestIsValidCombination:
 
     def test_two_footwear_is_rejected(self):
         # the reported shoes + sneakers bug
-        assert self._valid(_item("t", "top"), _item("j", "jeans"), _item("sh", "shoes"), _item("sn", "sneakers")) is False
+        assert (
+            self._valid(_item("t", "top"), _item("j", "jeans"), _item("sh", "shoes"), _item("sn", "sneakers")) is False
+        )
 
     def test_full_body_with_a_separate_bottom_is_rejected(self):
         # the reported dress + pants bug
@@ -371,12 +371,17 @@ class TestIsValidCombination:
         assert self._valid(_item("d1", "dress"), _item("d2", "gown"), _item("h", "heels")) is False
 
     def test_two_separate_bottoms_are_rejected(self):
-        assert self._valid(_item("t", "top"), _item("j", "jeans"), _item("c", "chinos"), _item("s", "sneakers")) is False
+        assert (
+            self._valid(_item("t", "top"), _item("j", "jeans"), _item("c", "chinos"), _item("s", "sneakers")) is False
+        )
 
     # --- must still allow (leniency: real, common layered looks) ---
     def test_layered_tops_are_allowed(self):
         # t-shirt + cardigan are both the 'top' group -- layering, not a conflict
-        assert self._valid(_item("tee", "t-shirt"), _item("card", "cardigan"), _item("j", "jeans"), _item("s", "sneakers")) is True
+        assert (
+            self._valid(_item("tee", "t-shirt"), _item("card", "cardigan"), _item("j", "jeans"), _item("s", "sneakers"))
+            is True
+        )
 
     def test_a_cardigan_over_a_dress_is_allowed(self):
         # cardigan is the 'top' group; a top layered over a full_body piece is fine
@@ -386,32 +391,88 @@ class TestIsValidCombination:
         assert self._valid(_item("d", "dress"), _item("b", "blazer"), _item("h", "heels")) is True
 
     def test_layered_outerwear_is_allowed(self):
-        assert self._valid(
-            _item("t", "top"), _item("j", "jeans"), _item("bl", "blazer"), _item("co", "coat"), _item("s", "sneakers")
-        ) is True
+        assert (
+            self._valid(
+                _item("t", "top"),
+                _item("j", "jeans"),
+                _item("bl", "blazer"),
+                _item("co", "coat"),
+                _item("s", "sneakers"),
+            )
+            is True
+        )
 
 
 class TestGenerateOutfitsValidityFilter:
-    def test_an_incoherent_generated_outfit_is_dropped(self, mocker):
-        from whattowear.pipeline.generator import GenOutfit, GenOutput, GenRationale
-
+    def test_an_incoherent_generated_outfit_is_dropped(self):
         # LLM returns one clean outfit and one with two pairs of footwear
         clean = GenOutfit(items=["t", "j", "s1"], rationale=[GenRationale(text="r", cites=["L1-x"])])
         two_shoes = GenOutfit(items=["t", "j", "s1", "s2"], rationale=[GenRationale(text="r", cites=["L1-x"])])
-        mocker.patch.object(graph, "generate", return_value=GenOutput(outfits=[clean, two_shoes]))
 
         wardrobe = [_item("t", "top"), _item("j", "jeans"), _item("s1", "sneakers"), _item("s2", "shoes")]
         ctx = Context(occasion="office", formality="business_casual", wardrobe=wardrobe)
         state = {
             "ctx": ctx,
             "candidates": {"top": [wardrobe[0]], "bottom": [wardrobe[1]], "footwear": [wardrobe[2], wardrobe[3]]},
-            "retrieval": mocker.Mock(),
+            "retrieval": MagicMock(),
             "refinement_deltas": [],
             "last_result": None,
         }
 
-        result = graph.generate_outfits(state)
+        with patch.object(graph, "generate", return_value=GenOutput(outfits=[clean, two_shoes])):
+            result = graph.generate_outfits(state, MagicMock())
 
         kept = [frozenset(o.items) for o in result["generated"].outfits]
         assert frozenset(["t", "j", "s1"]) in kept
         assert frozenset(["t", "j", "s1", "s2"]) not in kept
+
+
+class TestVerifyGroundingUsesInjectedRepo:
+    def test_catalog_ids_come_from_the_repo_not_a_db_session(self):
+        item = _item("a", "top")
+        ctx = Context(occasion="office", formality="business_casual", wardrobe=[item])
+        outfit = _scored_outfit("a")
+        state = {"ctx": ctx, "scored_outfits": [outfit]}
+        repo = MagicMock()
+        repo.list_catalog_items.return_value = []
+
+        result = graph.verify_grounding(state, repo)
+
+        repo.list_catalog_items.assert_called_once_with()
+        assert len(result["scored_outfits"]) == 1
+
+    def test_outfit_grounded_only_via_catalog_is_kept(self):
+        ctx = Context(occasion="office", formality="business_casual", wardrobe=[])
+        outfit = _scored_outfit("catalog-item")
+        state = {"ctx": ctx, "scored_outfits": [outfit]}
+        repo = MagicMock()
+        repo.list_catalog_items.return_value = [_item("catalog-item", "top")]
+
+        result = graph.verify_grounding(state, repo)
+
+        assert len(result["scored_outfits"]) == 1
+
+    def test_ungrounded_outfit_is_dropped(self):
+        ctx = Context(occasion="office", formality="business_casual", wardrobe=[])
+        outfit = _scored_outfit("ghost-item")
+        state = {"ctx": ctx, "scored_outfits": [outfit]}
+        repo = MagicMock()
+        repo.list_catalog_items.return_value = []
+
+        result = graph.verify_grounding(state, repo)
+
+        assert result["scored_outfits"] == []
+
+
+class TestBuildGraphWiring:
+    def test_build_graph_compiles_without_error(self):
+        repo = MagicMock()
+        graph_obj = graph.build_graph(repo)
+        assert graph_obj is not None
+
+    def test_route_by_approach_defaults_to_grounded(self):
+        assert graph._route_by_approach({}) == "grounded"
+        assert graph._route_by_approach({"approach": "something-else"}) == "grounded"
+
+    def test_route_by_approach_engine(self):
+        assert graph._route_by_approach({"approach": "engine"}) == "engine"

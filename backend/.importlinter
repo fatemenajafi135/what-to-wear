@@ -1,0 +1,25 @@
+[importlinter]
+root_package = whattowear
+# Required because one of this contract's forbidden_modules (fastapi) is an
+# external package, not a whattowear submodule.
+include_external_packages = True
+
+# AI-independence contract (constitution "Technology Constraints"): pipeline/,
+# retrieval/, scoring/, memory/ and ingest/ must never import whattowear.api,
+# whattowear.main, or fastapi. Feature 007 (the AI layer port) extended
+# source_modules with all five as each landed, so this contract is always
+# true, never aspirational — see specs/007-ai-port/tasks.md T055.
+# whattowear.core stays covered too, unchanged from feature 002.
+[importlinter:contract:core-is-framework-free]
+name = core stays framework-free (AI-independence contract, narrow form)
+type = forbidden
+source_modules =
+    whattowear.core
+    whattowear.pipeline
+    whattowear.retrieval
+    whattowear.scoring
+    whattowear.memory
+    whattowear.ingest
+forbidden_modules =
+    whattowear.main
+    fastapi

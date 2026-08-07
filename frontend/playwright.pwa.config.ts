@@ -1,0 +1,67 @@
+import { defineConfig, devices } from "@playwright/test";
+
+/**
+ * Serwist disables service-worker registration under `next dev`
+ * (next.config.ts, research.md R9) — everything this config exercises
+ * (precaching, offline navigation, sign-out cache purge, the update/
+ * skip-waiting round trip) is only observable against a real production
+ * build. Kept separate from `playwright.config.ts` (which runs `next dev`
+ * for fast iteration on everything else) so the default `npm run e2e` loop
+ * isn't slowed down by a full build on every run — this suite runs via
+ * `npm run e2e:pwa` on demand, and in CI via the `pwa-e2e` job
+ * (.github/workflows/ci.yml), which starts real Supabase + a real backend
+ * first since this suite performs real sign-ups. (Found in review: this
+ * comment previously claimed CI coverage that didn't exist — nothing in
+ * the workflow invoked this suite. It does now; if you're reading this and
+ * that job is gone, fix this comment too.)
+ */
+// Port 3100, not a fresh one: the backend's CORS allowlist
+// (backend/src/whattowear/main.py _CORS_ALLOWED_ORIGINS) only permits
+// 3000/3100, and adding a third port is a backend change this feature's
+// handoff explicitly rules out. 3100 is already claimed by the dev-server
+// e2e suite (playwright.config.ts), but that suite and this one are never
+// run concurrently in normal use (one drives `next dev`, this one drives a
+// production build+start), so reusing the port is safe.
+const PORT = 3100;
+
+export default defineConfig({
+  testDir: "./e2e-pwa",
+  fullyParallel: false, // several specs mutate shared Cache Storage / the SW's own lifecycle
+  // Single worker, not just fullyParallel:false: update-prompt.spec.ts
+  // overwrites public/sw.js on disk mid-test to simulate a deploy, which
+  // every OTHER spec file's own service worker also reads from — running
+  // spec files in parallel workers races that file against every other
+  // test's registration. fullyParallel only serializes tests *within* one
+  // file; this is what actually pins the whole suite to one worker.
+  workers: 1,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  reporter: "list",
+  timeout: 60_000,
+  use: {
+    baseURL: `http://localhost:${PORT}`,
+    trace: "on-first-retry",
+  },
+  webServer: {
+    command: `npm run build && npm run start -- -p ${PORT}`,
+    url: `http://localhost:${PORT}`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 180_000,
+  },
+  projects: [
+    {
+      // A fixed mobile viewport, not devices["Desktop Chrome"]'s default:
+      // this app's TabBar swaps from a bottom bar to a desktop rail/sidebar
+      // right around 1024px (TabBar.module.css), and Chromium's own desktop
+      // default viewport lands in that zone — found while writing this
+      // suite, when `getByRole("navigation")` reported a real but 0-height
+      // element (the desktop-rail branch mounts but this viewport happened
+      // to size it to nothing). Mobile is also the more central case for a
+      // PWA feature. See e2e/chrome-breakpoints.spec.ts for the existing
+      // dev-server suite's own multi-breakpoint coverage of this component;
+      // that responsive behavior is out of scope here, not being re-tested.
+      name: "pwa-mobile",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 } },
+    },
+  ],
+});

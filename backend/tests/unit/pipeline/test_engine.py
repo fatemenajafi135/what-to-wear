@@ -1,11 +1,12 @@
-"""Unit tests for pipeline/engine.py (Feature 010, WP2 Engine).
-
-T007 [US1]: enumerate_outfits skeleton counts, full_body handling, and
-coherence-guard exclusion. T015 [US2]: engine_write's selection validation
-and deterministic fallback. T019 [US3]: outerwear crossing.
+"""Unit tests for pipeline/engine.py — the opt-in deterministic-selection
+approach. Covers enumerate_outfits' skeleton counts, full_body handling,
+coherence-guard exclusion and outerwear crossing, and engine_write's
+selection validation and deterministic fallback.
 """
 
 from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
 
 from whattowear.pipeline import engine
 from whattowear.pipeline.generator import GenRationale
@@ -102,7 +103,7 @@ class TestEnumerateOutfitsOuterwearCrossing:
         }
         combos = engine.enumerate_outfits(candidates, require_outerwear=True)
         item_sets = {frozenset(c) for c in combos}
-        assert frozenset(["top0", "bot0", "shoe0"]) in item_sets  # bare skeleton still present (FR-009)
+        assert frozenset(["top0", "bot0", "shoe0"]) in item_sets  # bare skeleton still present
         assert frozenset(["top0", "bot0", "shoe0", "coat0"]) in item_sets  # outerwear-added version
 
     def test_require_outerwear_with_no_outerwear_candidates_still_returns_base_skeletons(self):
@@ -143,7 +144,7 @@ class TestEnumerateOutfitsSafetyValve:
 
 
 class TestEngineWriteFallback:
-    def test_invalid_output_falls_back_to_top_3_by_rank_score_with_no_fabricated_citation(self, mocker):
+    def test_invalid_output_falls_back_to_top_3_by_rank_score_with_no_fabricated_citation(self):
         shortlist = [
             _scored_outfit(["a"], 0.9),
             _scored_outfit(["b"], 0.7),
@@ -158,20 +159,21 @@ class TestEngineWriteFallback:
                 engine.EngineSelection(index=1, rationale=[GenRationale(text="r", cites=["L1-x"])]),
             ]
         )
-        fake_llm = mocker.Mock()
+        fake_llm = MagicMock()
         fake_llm.with_structured_output.return_value.invoke.return_value = bad_output
-        mocker.patch.object(engine, "get_chat_model", return_value=fake_llm)
-        mocker.patch.object(engine, "_format_rules", return_value="")
-
-        retrieval = mocker.Mock()
+        retrieval = MagicMock()
         retrieval.all.return_value = []
 
-        result = engine.engine_write(shortlist, ctx, retrieval)
+        with (
+            patch.object(engine, "get_chat_model", return_value=fake_llm),
+            patch.object(engine, "_format_rules", return_value=""),
+        ):
+            result = engine.engine_write(shortlist, ctx, retrieval)
 
         assert [o.items for o in result] == [["a"], ["b"], ["c"]]
         assert all(r.cites == [] for o in result for r in o.rationale)
 
-    def test_out_of_range_index_falls_back(self, mocker):
+    def test_out_of_range_index_falls_back(self):
         shortlist = [_scored_outfit(["a"], 0.9), _scored_outfit(["b"], 0.7), _scored_outfit(["c"], 0.5)]
         ctx = Context(occasion="office", formality="business_casual", wardrobe=[])
         bad_output = engine.EngineWriteOutput(
@@ -181,32 +183,36 @@ class TestEngineWriteFallback:
                 engine.EngineSelection(index=99, rationale=[]),  # out of range
             ]
         )
-        fake_llm = mocker.Mock()
+        fake_llm = MagicMock()
         fake_llm.with_structured_output.return_value.invoke.return_value = bad_output
-        mocker.patch.object(engine, "get_chat_model", return_value=fake_llm)
-        mocker.patch.object(engine, "_format_rules", return_value="")
-        retrieval = mocker.Mock()
+        retrieval = MagicMock()
         retrieval.all.return_value = []
 
-        result = engine.engine_write(shortlist, ctx, retrieval)
+        with (
+            patch.object(engine, "get_chat_model", return_value=fake_llm),
+            patch.object(engine, "_format_rules", return_value=""),
+        ):
+            result = engine.engine_write(shortlist, ctx, retrieval)
 
         assert [o.items for o in result] == [["a"], ["b"], ["c"]]
 
-    def test_llm_call_exception_falls_back(self, mocker):
+    def test_llm_call_exception_falls_back(self):
         shortlist = [_scored_outfit(["a"], 0.9), _scored_outfit(["b"], 0.7), _scored_outfit(["c"], 0.5)]
         ctx = Context(occasion="office", formality="business_casual", wardrobe=[])
-        fake_llm = mocker.Mock()
+        fake_llm = MagicMock()
         fake_llm.with_structured_output.return_value.invoke.side_effect = RuntimeError("gateway down")
-        mocker.patch.object(engine, "get_chat_model", return_value=fake_llm)
-        mocker.patch.object(engine, "_format_rules", return_value="")
-        retrieval = mocker.Mock()
+        retrieval = MagicMock()
         retrieval.all.return_value = []
 
-        result = engine.engine_write(shortlist, ctx, retrieval)
+        with (
+            patch.object(engine, "get_chat_model", return_value=fake_llm),
+            patch.object(engine, "_format_rules", return_value=""),
+        ):
+            result = engine.engine_write(shortlist, ctx, retrieval)
 
         assert [o.items for o in result] == [["a"], ["b"], ["c"]]
 
-    def test_valid_output_maps_selections_and_filters_unresolvable_citations(self, mocker):
+    def test_valid_output_maps_selections_and_filters_unresolvable_citations(self):
         shortlist = [_scored_outfit(["a"], 0.9), _scored_outfit(["b"], 0.7), _scored_outfit(["c"], 0.5)]
         ctx = Context(occasion="office", formality="business_casual", wardrobe=[])
         good_output = engine.EngineWriteOutput(
@@ -219,19 +225,21 @@ class TestEngineWriteFallback:
                 engine.EngineSelection(index=1, rationale=[GenRationale(text="fine", cites=[])]),
             ]
         )
-        fake_llm = mocker.Mock()
+        fake_llm = MagicMock()
         fake_llm.with_structured_output.return_value.invoke.return_value = good_output
-        mocker.patch.object(engine, "get_chat_model", return_value=fake_llm)
-        mocker.patch.object(engine, "_format_rules", return_value="")
 
-        retrieved_doc = mocker.Mock()
+        retrieved_doc = MagicMock()
         retrieved_doc.metadata = {"rule_id": "L1-real"}
-        retrieval = mocker.Mock()
+        retrieval = MagicMock()
         retrieval.all.return_value = [retrieved_doc]
 
-        result = engine.engine_write(shortlist, ctx, retrieval)
+        with (
+            patch.object(engine, "get_chat_model", return_value=fake_llm),
+            patch.object(engine, "_format_rules", return_value=""),
+        ):
+            result = engine.engine_write(shortlist, ctx, retrieval)
 
-        # returned in deterministic rank_score order (Option B), NOT the LLM's pick order
+        # returned in deterministic rank_score order, NOT the LLM's pick order
         assert [o.items for o in result] == [["a"], ["b"], ["c"]]
         assert result[0].rank_score == 0.9  # highest deterministic score ranked first
         # the hallucinated citation on the "c" pick was dropped wherever it lands

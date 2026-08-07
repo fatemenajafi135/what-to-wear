@@ -1,0 +1,257 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [rebuild]
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.5.x"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync --all-extras
+
+      # Trap 1's regression test, run standalone before anything else so a
+      # broken import fails loudly and first — see
+      # specs/002-backend-foundation/research.md §1.
+      - name: Import-safety check (zero environment variables)
+        working-directory: backend
+        # Calls the venv's python binary directly (not `uv run`), so `env -i`
+        # clearing every variable doesn't also strip what `uv` itself needs
+        # (PATH, HOME) to locate the project. Imports each module that could
+        # grow a module-level get_settings()/create_engine() call, not just
+        # the empty whattowear/__init__.py — that alone would stay green
+        # regardless of what core.config/core.db/core.logging/main do at
+        # import time. Same check as tests/unit/test_import_safety.py, run
+        # standalone as a fast early gate — see research.md §1.
+        run: |
+          for module in whattowear.core.config whattowear.core.db whattowear.core.logging whattowear.main; do
+            env -i .venv/bin/python -c "import $module"
+          done
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.110.0
+
+      - name: Start local Supabase
+        working-directory: infra
+        run: supabase start
+
+      # The real reproducibility test (brief trap 4): a reset from empty,
+      # not "applied once when the containers were created."
+      - name: Reset database from empty
+        working-directory: infra
+        run: supabase db reset
+
+      - name: Export DATABASE_URL
+        run: echo "DATABASE_URL=postgresql://postgres.pooler-dev:postgres@127.0.0.1:54329/postgres" >> "$GITHUB_ENV"
+
+      - name: Run tests
+        working-directory: backend
+        run: uv run pytest
+
+      - name: Lint (ruff)
+        working-directory: backend
+        run: uv run ruff check .
+
+      - name: Format check (ruff)
+        working-directory: backend
+        run: uv run ruff format --check .
+
+      - name: Type-check (mypy)
+        working-directory: backend
+        run: uv run mypy src
+
+      - name: AI-independence import contract
+        working-directory: backend
+        run: uv run lint-imports
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # frontend/lib/api/schema.d.ts is generated, not committed (docs/design-decisions.md
+      # §17) — a live backend is required to produce it. `/openapi.json` is served from
+      # route/type definitions alone (FastAPI builds it without touching the database), so
+      # this doesn't need Supabase running — only Settings() to construct, which needs *some*
+      # DATABASE_URL/SUPABASE_URL value, not a reachable one (same fake-env pattern
+      # tests/integration/test_whoami.py already uses).
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.5.x"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync --all-extras
+
+      - name: Start backend to serve /openapi.json
+        working-directory: backend
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:1/postgres"
+          SUPABASE_URL: "http://127.0.0.1:1"
+        run: |
+          uv run uvicorn whattowear.main:app --host 127.0.0.1 --port 8000 &
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/openapi.json > /dev/null && exit 0
+            sleep 1
+          done
+          echo "backend never became ready" >&2
+          exit 1
+
+      - name: Generate API types from the live backend
+        working-directory: frontend
+        run: npm run generate:api-types
+
+      # The generated file is committed (Vercel and any other build host has no
+      # backend to generate it from, and `next build` type-checks against it).
+      # Committing a generated artifact only stays safe if drift is caught, so
+      # this fails the build when the checked-in copy no longer matches what the
+      # backend actually serves — regenerate and commit it in that case.
+      - name: Fail if the committed API types are stale
+        working-directory: frontend
+        run: |
+          if ! git diff --exit-code -- lib/api/schema.d.ts; then
+            echo "::error::lib/api/schema.d.ts is out of date with the backend's OpenAPI schema." >&2
+            echo "Run 'npm run generate:api-types' against a local backend and commit the result." >&2
+            exit 1
+          fi
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Type-check
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: frontend
+        # app/sw.ts (feature 014) reads these at module load to compute the
+        # API/Storage origins its cache routes match against; next.config.ts
+        # now fails the build loudly if either is absent (docs/design-decisions.md
+        # §52) — CI was previously producing a service worker that silently
+        # never installed, green, on every run. Values only need to be
+        # syntactically valid URLs: they're inlined into a bundle this job
+        # never deploys. Same local-stack values as frontend/.env.example.
+        env:
+          NEXT_PUBLIC_API_URL: "http://localhost:8000"
+          NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
+        run: npm run build
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm test
+
+  pwa-e2e:
+    name: PWA e2e (offline, caching, update prompt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # This suite (frontend/e2e-pwa/) signs up real users against Supabase
+      # auth and — for the tests that don't mock the closet API — reads
+      # through the real FastAPI backend, so it needs the same real Supabase
+      # + backend startup the `backend` job above performs, duplicated here
+      # rather than shared: jobs run on separate runners with no shared
+      # state. Serwist disables the service worker under `next dev`
+      # (research.md R9), so this cannot run inside the `frontend` job's
+      # existing dev-server-shaped steps — it needs its own production
+      # build+start, which is what playwright.pwa.config.ts's own webServer
+      # already does.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.5.x"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync --all-extras
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.110.0
+
+      - name: Start local Supabase
+        working-directory: infra
+        run: supabase start
+
+      - name: Reset database from empty
+        working-directory: infra
+        run: supabase db reset
+
+      - name: Export DATABASE_URL
+        run: echo "DATABASE_URL=postgresql://postgres.pooler-dev:postgres@127.0.0.1:54329/postgres" >> "$GITHUB_ENV"
+
+      - name: Start backend
+        working-directory: backend
+        env:
+          # Real, reachable values — unlike the `frontend` job's Settings()-only
+          # fake env above, this backend actually serves requests the e2e-pwa
+          # suite depends on (real sign-up, real GET /closet/items for the
+          # tests that don't mock it). No AI-gateway/calendar/token-encryption
+          # vars: nothing this suite exercises reaches the pipeline or calendar
+          # routes, and the import-safety check already proves the app doesn't
+          # need them to start.
+          SUPABASE_URL: "http://127.0.0.1:54321"
+          SUPABASE_JWT_AUD: "authenticated"
+        run: |
+          uv run uvicorn whattowear.main:app --host 127.0.0.1 --port 8000 &
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/health > /dev/null && exit 0
+            sleep 1
+          done
+          echo "backend never became ready" >&2
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run PWA e2e suite
+        working-directory: frontend
+        env:
+          # Same local-stack values as frontend/.env.example — real ones,
+          # since this suite performs real Supabase sign-ups. The anon key is
+          # `supabase start`'s fixed local-dev demo value (not project-
+          # specific, not a secret — every local Supabase CLI install with
+          # default config produces the same one).
+          NEXT_PUBLIC_API_URL: "http://localhost:8000"
+          NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+          CI: "true"
+        run: npm run e2e:pwa

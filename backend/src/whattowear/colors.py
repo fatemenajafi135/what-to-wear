@@ -7,23 +7,23 @@ structurally impossible — there is exactly one place color data lives.
 
 Why a curated palette instead of a generic name library (e.g. CSS3/webcolors):
 this project's vocabulary is fashion-specific ("camel", "oatmeal", "charcoal"),
-which generic 147-name web-color lists don't cover — the same "generic model
-doesn't know fashion terms" problem the RAG-handoff flags for embeddings
-applies here too. Extend FASHION_COLOR_PALETTE as new colors show up in data.
+which generic 147-name web-color lists don't cover. Extend
+FASHION_COLOR_PALETTE as new colors show up in data.
 
 Also implements the WCAG 2.x contrast-ratio formula, repurposed here as an
 objective, computable proxy for how much two garment colors "pop" together —
-NOT for UI text/background accessibility (no frontend this phase). It sits
-alongside the subjective L1 rule text (Chevreul's simultaneous contrast, etc.)
-as a numeric signal the generator or a future scorer can reason with.
+NOT for UI text/background accessibility (a different concern, owned by the
+frontend's own design system). It sits alongside the subjective L1 rule text
+(Chevreul's simultaneous contrast, etc.) as a numeric signal the generator or
+a scorer can reason with.
 """
 
 from __future__ import annotations
 
 import re
 
-# name -> hex. Every color name currently used in data/fixtures/wardrobe.json
-# is covered exactly (not approximated) — see the repo guide for the source list.
+# name -> hex. Every color name currently used in evals/fixtures/wardrobe.json
+# is covered exactly (not approximated).
 FASHION_COLOR_PALETTE: dict[str, str] = {
     # neutrals
     "black": "#000000",

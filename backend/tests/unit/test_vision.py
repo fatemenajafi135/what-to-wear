@@ -1,7 +1,7 @@
-"""Unit tests for photo -> attribute extraction (Feature 003: mvp-app, US2).
+"""Unit tests for photo -> attribute extraction.
 
 Covers the deterministic parts only (payload building) plus the LLM-call
-seam with the model mocked -- no live gateway call, no network. Extraction
+seam with the model mocked — no live gateway call, no network. Extraction
 quality against real photos is the golden-set check
 (whattowear.eval.vision_harness), not this file.
 """
@@ -9,6 +9,7 @@ quality against real photos is the golden-set check
 from __future__ import annotations
 
 import base64
+from unittest.mock import MagicMock, patch
 
 from whattowear import vision
 from whattowear.schema import ExtractedAttributes
@@ -33,13 +34,12 @@ def test_build_human_message_has_text_then_image():
     assert message[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
 
 
-def test_extract_attributes_from_image_returns_structured_output(mocker):
-    """Feature 005 US4: `with_structured_output` is called with the
-    hand-written `_EXTRACTION_SCHEMA` dict (method="json_schema"), not the
-    `ExtractedAttributes` class directly — the gateway rejects the
-    class-derived schema for this all-Optional model (research.md §1). The
-    call therefore returns a plain dict, parsed into `ExtractedAttributes`
-    by `extract_attributes_from_image` itself."""
+def test_extract_attributes_from_image_returns_structured_output():
+    """The hand-written `_EXTRACTION_SCHEMA` dict (method="json_schema") is
+    what's passed to `with_structured_output`, not the `ExtractedAttributes`
+    class directly — the gateway rejects the class-derived schema for this
+    all-Optional model. The call therefore returns a plain dict, parsed
+    into `ExtractedAttributes` by `extract_attributes_from_image` itself."""
     raw = {
         "category": "top",
         "colors": ["#1b2a4a"],
@@ -51,13 +51,13 @@ def test_extract_attributes_from_image_returns_structured_output(mocker):
         "fit": None,
     }
 
-    fake_structured_llm = mocker.Mock()
+    fake_structured_llm = MagicMock()
     fake_structured_llm.invoke.return_value = raw
-    fake_chat_model = mocker.Mock()
+    fake_chat_model = MagicMock()
     fake_chat_model.with_structured_output.return_value = fake_structured_llm
-    mocker.patch.object(vision, "get_chat_model", return_value=fake_chat_model)
 
-    result = vision.extract_attributes_from_image(b"fake-bytes", "image/jpeg")
+    with patch.object(vision, "get_chat_model", return_value=fake_chat_model):
+        result = vision.extract_attributes_from_image(b"fake-bytes", "image/jpeg")
 
     assert result == ExtractedAttributes(**raw)
     fake_chat_model.with_structured_output.assert_called_once_with(vision._EXTRACTION_SCHEMA, method="json_schema")
@@ -65,8 +65,8 @@ def test_extract_attributes_from_image_returns_structured_output(mocker):
 
 
 def test_extracted_attributes_all_fields_optional():
-    # FR-006: extraction failing on every field must not raise -- an
-    # all-null instance is a valid, constructable value.
+    # extraction failing on every field must not raise -- an all-null
+    # instance is a valid, constructable value.
     attrs = ExtractedAttributes()
 
     assert attrs.category is None

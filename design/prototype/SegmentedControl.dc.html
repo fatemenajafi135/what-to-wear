@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+button{ display:inline-flex; align-items:center; justify-content:center; }
+</style>
+</helmet>
+<div style="display:flex;background:var(--color-surface-sunken);border-radius:var(--radius-sm);padding:3px;">
+  <sc-for list="{{ optionsView }}" as="opt" hint-placeholder-count="2">
+    <sc-if value="{{ opt.active }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ opt.onClick }}" disabled="{{ opt.isDisabled }}" style-active="background:var(--color-border);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;flex:1;border:none;background:var(--color-surface);font-size:var(--font-size-sm);font-weight:600;padding:var(--space-sm) 0;border-radius:var(--radius-sm);color:var(--color-text-primary);font-family:'Instrument Sans',sans-serif;cursor:pointer;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ opt.disabledOpacity }};">{{ opt.label }}</button>
+    </sc-if>
+    <sc-if value="{{ opt.inactive }}" hint-placeholder-val="{{ true }}">
+      <button onClick="{{ opt.onClick }}" disabled="{{ opt.isDisabled }}" style-active="background:var(--color-border);" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;flex:1;border:none;background:transparent;font-size:var(--font-size-sm);font-weight:600;padding:var(--space-sm) 0;border-radius:var(--radius-sm);color:var(--color-text-secondary);font-family:'Instrument Sans',sans-serif;cursor:pointer;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);opacity:{{ opt.disabledOpacity }};">{{ opt.label }}</button>
+    </sc-if>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:220,&quot;height&quot;:50},&quot;options&quot;:{&quot;editor&quot;:null,&quot;default&quot;:[{&quot;key&quot;:&quot;a&quot;,&quot;label&quot;:&quot;Sign in&quot;},{&quot;key&quot;:&quot;b&quot;,&quot;label&quot;:&quot;Sign up&quot;}],&quot;tsType&quot;:&quot;{key:string,label:string}[]&quot;},&quot;value&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;a&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;disabled&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onChange&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(key: string) =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const options = this.props.options || [];
+    const value = this.props.value;
+    const disabled = !!this.props.disabled;
+    const onChange = this.props.onChange || (() => {});
+    return {
+      optionsView: options.map(o => ({
+        ...o, active: o.key === value, inactive: o.key !== value,
+        isDisabled: disabled, disabledOpacity: disabled ? 0.5 : 1,
+        onClick: () => { if (!disabled) { onChange(o.key); } }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

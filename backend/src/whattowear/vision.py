@@ -1,56 +1,39 @@
-"""Photo -> item attribute extraction (Feature 003: mvp-app, US2).
+"""Photo -> item attribute extraction.
 
 One structured-output VLM call over a single item photo. Reuses the exact
-`get_chat_model(...).with_structured_output(...)` pattern already validated in
-`pipeline/generator.py` — same gateway config layer, no second way to call an
-LLM. This is a metadata-labeling task over a single photo the user already
-chose, not outfit item selection (constitution Principle II is about the
-latter; see specs/003-mvp-app/plan.md's Constitution Check).
+`get_chat_model(...).with_structured_output(...)` pattern already used in
+`pipeline/generator.py` — same gateway config layer, no second way to call
+an LLM. This is a metadata-labeling task over a single photo the user
+already chose, not outfit item selection (constitution Principle II is
+about the latter).
 """
 
 from __future__ import annotations
 
 import base64
-import os
+from typing import Any
 
 from langsmith import traceable
 
-from .config import CHAT_MODEL, get_chat_model
+from .adapters.llm_gateway import get_chat_model
+from .core.config import get_settings
+from .prompts import load_prompt
 from .schema import ExtractedAttributes
 
-VISION_MODEL = os.environ.get("WTW_VISION_MODEL", CHAT_MODEL)
-
-SYSTEM_PROMPT = (
-    "You are a garment attribute extractor. Given a photo of a single clothing "
-    "item or accessory, extract:\n"
-    "- category: one of top, bottom, full_body, outerwear, footwear, accessory\n"
-    "- colors: dominant color(s) as hex strings\n"
-    "- fabric: e.g. cotton, denim, wool, leather, knit\n"
-    "- warmth: integer 0 (airy) to 5 (heaviest)\n"
-    "- formality: one of casual, smart_casual, business_casual, semi_formal, formal, black_tie\n"
-    "- season: one or more of spring, summer, autumn, winter\n"
-    "- pattern: e.g. solid, striped, plaid, floral, print\n"
-    "- fit: e.g. slim, regular, relaxed, oversized\n"
-    "If the photo doesn't clearly show a garment, or you can't confidently "
-    "determine a field, leave that field null rather than guessing. Never "
-    "invent a value you aren't reasonably confident in — a null field is "
-    "expected and fine; the user reviews and fills in whatever's missing."
-)
-
-# Feature 005 US4: a hand-written schema, not one derived automatically from
+# A hand-written schema, not one derived automatically from
 # `ExtractedAttributes` via `with_structured_output(ExtractedAttributes)`.
-# `ExtractedAttributes` is all-`Optional` fields (by design — a failed field
-# must not block the others), which Pydantic's generated JSON schema omits
-# from `required`. The gateway's structured-output mode rejects that
+# `ExtractedAttributes` is all-`Optional` fields (by design — a failed
+# field must not block the others), which Pydantic's generated JSON schema
+# omits from `required`. The gateway's structured-output mode rejects that
 # ("'required' ... including every key in properties. Missing 'category'.")
 # — confirmed by reproducing the real `BadRequestError`, and `strict=False`
-# does not change this behavior (also reproduced). OpenAI-style structured
-# outputs instead expect every property listed in `required`, with
-# optionality expressed as a nullable type — so every field here is
-# `["<type>", "null"]`, all fields are in `required`. The plain
-# `json_object` response-format mode (no schema at all) was tried too and
-# is rejected outright by this gateway route regardless of prompt content
-# — this is the only mode that works against it for a schema this shape.
+# does not change this behavior. OpenAI-style structured outputs instead
+# expect every property listed in `required`, with optionality expressed
+# as a nullable type — so every field here is `["<type>", "null"]`, all
+# fields are in `required`. The plain `json_object` response-format mode
+# (no schema at all) was tried too and is rejected outright by this
+# gateway route regardless of prompt content — this is the only mode that
+# works against it for a schema this shape.
 _EXTRACTION_SCHEMA = {
     "title": "ExtractedAttributes",
     "type": "object",
@@ -63,8 +46,19 @@ _EXTRACTION_SCHEMA = {
         "season": {"type": ["array", "null"], "items": {"type": "string"}},
         "pattern": {"type": ["string", "null"]},
         "fit": {"type": ["string", "null"]},
+        "background_color": {"type": ["string", "null"]},
     },
-    "required": ["category", "colors", "fabric", "warmth", "formality", "season", "pattern", "fit"],
+    "required": [
+        "category",
+        "colors",
+        "fabric",
+        "warmth",
+        "formality",
+        "season",
+        "pattern",
+        "fit",
+        "background_color",
+    ],
     "additionalProperties": False,
 }
 
@@ -86,18 +80,19 @@ def _build_human_message(image_bytes: bytes, mime_type: str) -> list:
 
 @traceable(name="vision.extract_attributes", run_type="chain")
 def extract_attributes_from_image(image_bytes: bytes, mime_type: str) -> ExtractedAttributes:
-    """One VLM call. Raises on a genuine call failure (network/gateway error)
-    — the caller (api.py) maps that to extraction_ok=False, never a 5xx, per
-    FR-006.
+    """One VLM call. Raises on a genuine call failure (network/gateway
+    error) — the caller maps that to `extraction_ok=False`, never a 5xx.
 
     Uses `_EXTRACTION_SCHEMA` (a hand-written nullable-required schema, see
-    its docstring) rather than deriving the schema from `ExtractedAttributes`
-    directly — passing a raw dict schema makes `with_structured_output`
-    return a plain dict (`JsonOutputParser`, not `PydanticOutputParser`),
-    parsed into `ExtractedAttributes` here instead."""
-    llm = get_chat_model(model=VISION_MODEL, temperature=0.0).with_structured_output(
+    its docstring) rather than deriving the schema from
+    `ExtractedAttributes` directly — passing a raw dict schema makes
+    `with_structured_output` return a plain dict (`JsonOutputParser`, not
+    `PydanticOutputParser`), parsed into `ExtractedAttributes` here
+    instead."""
+    system_prompt, _version = load_prompt("vision_system")
+    llm = get_chat_model(model=get_settings().vision_model, temperature=0.0).with_structured_output(
         _EXTRACTION_SCHEMA, method="json_schema"
     )
     human = _build_human_message(image_bytes, mime_type)
-    raw = llm.invoke([("system", SYSTEM_PROMPT), ("human", human)])
+    raw: Any = llm.invoke([("system", system_prompt), ("human", human)])
     return ExtractedAttributes(**raw)

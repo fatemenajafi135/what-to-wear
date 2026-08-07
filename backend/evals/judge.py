@@ -1,19 +1,26 @@
 """End-to-end LLM-as-judge rubric on the run artifacts (openevals).
 
-The crisp, verifiable checks (owned-only, cites-grounded, weather, occasion floor)
-are already computed by the main harness and stored in each row's `checks`. This
-adds the FUZZY rubric scores an LLM is better at:
+The crisp, verifiable checks (owned-only, cites-grounded, weather,
+occasion floor) are already computed by the main harness and stored in
+each row's `checks`. This adds the FUZZY rubric scores an LLM is better
+at:
 - groundedness   (openevals RAG_GROUNDEDNESS_PROMPT)
 - answer quality (openevals CORRECTNESS_PROMPT vs the reference)
 - stylistic coherence + occasion nuance (custom rubric)
 
 Run (in the evals venv):  uv run python judge.py
+
+COHERENCE_PROMPT stays inline here, not extracted to `whattowear/
+prompts/` — this project deliberately never imports from `whattowear`
+(isolation, specs/007-ai-port/research.md §9), and the constitution's
+"prompts are files" requirement scopes to the main package's own five
+inline prompts (inventory §4), which this isolated scoring project's own
+prompt was never counted among.
 """
 
 from __future__ import annotations
 
 import pandas as pd
-
 from common import discover_strategies, load_runs, openevals_judge_llm
 
 COHERENCE_PROMPT = """You are a fashion-styling judge. Given a styling REQUEST and a
@@ -38,16 +45,22 @@ def _build_judges():
     judge = openevals_judge_llm()
     return {
         "groundedness": create_llm_as_judge(
-            prompt=RAG_GROUNDEDNESS_PROMPT, judge=judge,
-            feedback_key="groundedness", continuous=True,
+            prompt=RAG_GROUNDEDNESS_PROMPT,
+            judge=judge,
+            feedback_key="groundedness",
+            continuous=True,
         ),
         "correctness": create_llm_as_judge(
-            prompt=CORRECTNESS_PROMPT, judge=judge,
-            feedback_key="correctness", continuous=True,
+            prompt=CORRECTNESS_PROMPT,
+            judge=judge,
+            feedback_key="correctness",
+            continuous=True,
         ),
         "coherence": create_llm_as_judge(
-            prompt=COHERENCE_PROMPT, judge=judge,
-            feedback_key="coherence", continuous=True,
+            prompt=COHERENCE_PROMPT,
+            judge=judge,
+            feedback_key="coherence",
+            continuous=True,
         ),
     }
 

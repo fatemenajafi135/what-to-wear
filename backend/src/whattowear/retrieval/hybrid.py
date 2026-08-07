@@ -1,38 +1,42 @@
 """Hybrid per-layer retriever — the advanced design (minus the rerank stage).
 
-Retrieval method is chosen per layer by query shape (handoff §3):
-- **L4** structured metadata *lookup* — occasion/formality/temp_band map to fields,
-  nothing fuzzy to embed. Pure metadata filter (a Python lookup over the small L4
-  set; forcing vector search here would be worse).
-- **L1** load-all of the atomic harmony rules (small, injected wholesale, always
-  present), UNIONED with a genuine semantic search over the long-form section
-  chunks (Wikipedia color theory/harmony, Chevreul, Munsell) that build_kb.py
-  already embeds into the same L1 layer but that retrieval never queried before
-  (Feature 007 Task A) — optionally narrowed to rules touching the wardrobe's
-  colors (atomic pool only).
-- **L3** a live Tavily web search performed at request time (Feature 007 Task B),
-  turned into citable Documents — no longer a static pre-ingested collection for
-  the hybrid/advanced strategies (baseline still queries the whole corpus
-  including the static trend cards directly, untouched by this change).
+Retrieval method is chosen per layer by query shape:
+- **L4** structured metadata *lookup* — occasion/formality/temp_band map to
+  fields, nothing fuzzy to embed. Pure metadata filter (a Python lookup
+  over the small L4 set; forcing vector search here would be worse).
+- **L1** load-all of the atomic harmony rules (small, injected wholesale,
+  always present), UNIONED with a genuine semantic search over the
+  long-form section chunks (Wikipedia color theory/harmony, Chevreul,
+  Munsell) that `ingest/build_kb.py` embeds into the same L1 layer —
+  optionally narrowed to rules touching the wardrobe's colors (atomic pool
+  only).
+- **L3** a live Tavily web search performed at request time, turned into
+  citable Documents — not a static pre-ingested collection for the
+  hybrid/advanced strategies (baseline still queries the whole corpus
+  including the static trend cards directly, untouched by this).
 
-"It's RAG with hybrid retrieval — structured filtering on the constraint layers,
-dense retrieval on the trend layer, and a live search tool for what's current."
+"It's RAG with hybrid retrieval — structured filtering on the constraint
+layers, dense retrieval on the trend layer, and a live search tool for
+what's current."
 """
 
 from __future__ import annotations
 
 import hashlib
+import logging
+from typing import TYPE_CHECKING
 
 from langchain_core.documents import Document
 from qdrant_client import models
 
 from ..colors import nearest_names
-from ..kb import KnowledgeBase
-from ..logging_utils import get_logger
 from ..schema import Context
 from .base import RetrievalResult
 
-log = get_logger(__name__)
+if TYPE_CHECKING:
+    from ..kb import KnowledgeBase
+
+log = logging.getLogger(__name__)
 
 _L1_SEMANTIC_K = 5
 
@@ -73,11 +77,11 @@ def retrieve_l1(
     kb: KnowledgeBase, ctx: Context, semantic_query: str = "", color_filter: bool = False
 ) -> list[Document]:
     """Atomic L1 rules (load-all, small, injected wholesale) UNIONED with a
-    similarity_search over the long-form section chunks build_kb.py already
-    embeds into the L1 layer (Wikipedia color theory/harmony, Chevreul,
-    Munsell) — genuine chunked-embedding retrieval, not just hand-written
-    cards (Feature 007 Task A). `color_filter` narrows the atomic pool only;
-    the semantic branch is already query-relevant by construction."""
+    similarity_search over the long-form section chunks `ingest/build_kb.py`
+    already embeds into the L1 layer (Wikipedia color theory/harmony,
+    Chevreul, Munsell) — genuine chunked-embedding retrieval, not just
+    hand-written cards. `color_filter` narrows the atomic pool only; the
+    semantic branch is already query-relevant by construction."""
     rules = [c for c in kb.by_layer("L1") if c.metadata.get("granularity") == "atomic"]
     if color_filter and ctx.wardrobe:
         # wardrobe colors are hex (source of truth); rule prose uses color
@@ -100,13 +104,13 @@ def retrieve_l1(
 
 
 def retrieve_l3(l3_query: str, k: int = 5) -> list[Document]:
-    """Live trend search via the gateway's Tavily tool (Feature 007 Task B) —
-    replaces the old static pre-ingested trend collection for the hybrid/
-    advanced strategies (baseline still queries the whole corpus, including
-    the still-ingested static trend cards, directly and never calls this).
-    Degrades gracefully: a Tavily failure/timeout returns [] rather than
-    propagating, mirroring context_assembler's weather-lookup fallback, so a
-    suggestion is still produced without trend-sourced rationale."""
+    """Live trend search via the gateway's Tavily tool — replaces a static
+    pre-ingested trend collection for the hybrid/advanced strategies
+    (baseline still queries the whole corpus, including the still-ingested
+    static trend cards, directly and never calls this). Degrades
+    gracefully: a Tavily failure/timeout returns [] rather than
+    propagating, mirroring context_assembler's weather-lookup fallback, so
+    a suggestion is still produced without trend-sourced rationale."""
     from ..external.trends import search_trends
 
     try:

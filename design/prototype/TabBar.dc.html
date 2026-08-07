@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+button{ display:inline-flex; align-items:center; justify-content:center; }
+.wtw-tab-icon{ display:none; }
+.wtw-tabbar-fab .wtw-tab-label{ display:none; }
+.wtw-tabbar-brand{ display:none; }
+.wtw-profile-avatar{ display:none; }
+.wtw-tab-btn{ flex:1; }
+.wtw-tabbar-fab{ flex:0 0 auto; }
+@container (min-width:768px){
+  .wtw-tabbar-nav{ flex-direction:column; align-items:stretch !important; justify-content:flex-start !important; width:76px; height:100% !important; border-top:none !important; border-inline-end:1px solid var(--color-border); padding:16px 10px !important; gap:6px; box-sizing:border-box; }
+  .wtw-tabbar-nav .wtw-tab-icon{ display:flex; }
+  .wtw-tabbar-nav .wtw-tab-label{ display:none; }
+  .wtw-tab-btn{ width:100%; flex:none; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:10px 4px !important; border-radius:var(--radius-sm); }
+  .wtw-tabbar-fab{ order:-1; margin:0 0 8px !important; align-self:center; }
+}
+@container (min-width:1024px){
+  .wtw-tabbar-nav{ width:240px; height:100% !important; padding:20px 14px !important; gap:2px; }
+  .wtw-tabbar-nav .wtw-tab-label{ display:inline; }
+  .wtw-tab-btn{ flex:none; flex-direction:row; justify-content:flex-start; gap:10px; padding:10px 12px !important; }
+  .wtw-tabbar-brand{ display:flex; align-items:center; gap:10px; padding:6px 8px 18px; order:-3; }
+  .wtw-tabbar-fab{ width:100% !important; border-radius:var(--radius-sm) !important; flex-direction:row !important; justify-content:center !important; padding:0 14px !important; gap:8px; margin:0 0 18px !important; height:44px !important; order:-2; }
+  .wtw-tabbar-fab .wtw-tab-label{ display:inline !important; font-size:var(--font-size-sm); font-weight:700; white-space:nowrap; }
+  .wtw-tabbar-fab{ padding:0 8px !important; gap:6px; }
+  .wtw-profile-btn{ order:99; margin-top:auto !important; border-top:1px solid var(--color-border); padding-top:14px !important; margin-bottom:0 !important; }
+  .wtw-profile-btn .wtw-tab-icon{ display:none !important; }
+  .wtw-profile-avatar{ display:flex !important; }
+}
+@media (hover:hover){
+  .wtw-tab-btn:hover{ background:var(--color-surface-sunken); }
+  .wtw-tabbar-fab:hover{ background:var(--color-primary-hover); }
+}
+</style>
+</helmet>
+<nav aria-label="Primary" class="wtw-tabbar-nav" style="display:flex;align-items:flex-end;justify-content:space-around;padding:var(--space-sm) var(--space-md) max(22px, env(safe-area-inset-bottom));border-top:1px solid var(--color-border);background:var(--color-background);box-sizing:border-box;flex-shrink:0;">
+
+  <div class="wtw-tabbar-brand">
+    <div style="width:28px;height:28px;background:var(--color-primary);border-radius:8px;position:relative;flex-shrink:0;">
+      <div style="position:absolute;top:6px;left:6px;width:5px;height:5px;border-radius:50%;background:var(--color-background);"></div>
+    </div>
+    <div style="font-size:14px;font-weight:700;color:var(--color-text-primary);white-space:nowrap;">What to Wear</div>
+  </div>
+
+  <sc-for list="{{ navBeforeView }}" as="it" hint-placeholder-count="2">
+    <sc-if value="{{ it.active }}" hint-placeholder-val="{{ false }}">
+      <button aria-current="page" class="wtw-tab-btn" onClick="{{ it.onClick }}" style-active="opacity:0.6;" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;display:flex;background:transparent;border:none;font-size:var(--font-size-sm);font-weight:700;color:var(--color-primary);font-family:'Instrument Sans',sans-serif;cursor:pointer;padding:var(--space-xs) var(--space-sm);">
+        <span class="wtw-tab-icon" style="width:20px;height:20px;align-items:center;justify-content:center;flex-shrink:0;">
+          <sc-if value="{{ it.isRecommend }}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.5-.75L4 21l1.8-4.9A8.5 8.5 0 1 1 21 11.5z"/></svg></sc-if>
+          <sc-if value="{{ it.isCloset }}" hint-placeholder-val="{{ true }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a2 2 0 1 1 2 2c-.5.4-1 .9-1 1.6V7"/><path d="M12 7.6c0 .7-.4 1.2-1 1.6l-7 4.4c-1 .6-1 2.2 0 2.8l7 3.6a2 2 0 0 0 2 0l7-3.6c1-.6 1-2.2 0-2.8l-7-4.4c-.6-.4-1-.9-1-1.6z"/></svg></sc-if>
+        </span>
+        <span class="wtw-tab-label">{{ it.label }}</span>
+      </button>
+    </sc-if>
+    <sc-if value="{{ it.inactive }}" hint-placeholder-val="{{ true }}">
+      <button class="wtw-tab-btn" onClick="{{ it.onClick }}" style-active="opacity:0.6;" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;display:flex;background:transparent;border:none;font-size:var(--font-size-sm);font-weight:600;color:var(--color-text-secondary);font-family:'Instrument Sans',sans-serif;cursor:pointer;padding:var(--space-xs) var(--space-sm);">
+        <span class="wtw-tab-icon" style="width:20px;height:20px;align-items:center;justify-content:center;flex-shrink:0;">
+          <sc-if value="{{ it.isRecommend }}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.5-.75L4 21l1.8-4.9A8.5 8.5 0 1 1 21 11.5z"/></svg></sc-if>
+          <sc-if value="{{ it.isCloset }}" hint-placeholder-val="{{ true }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a2 2 0 1 1 2 2c-.5.4-1 .9-1 1.6V7"/><path d="M12 7.6c0 .7-.4 1.2-1 1.6l-7 4.4c-1 .6-1 2.2 0 2.8l7 3.6a2 2 0 0 0 2 0l7-3.6c1-.6 1-2.2 0-2.8l-7-4.4c-.6-.4-1-.9-1-1.6z"/></svg></sc-if>
+        </span>
+        <span class="wtw-tab-label">{{ it.label }}</span>
+      </button>
+    </sc-if>
+  </sc-for>
+
+  <button aria-label="Add item" onClick="{{ onAdd }}" class="wtw-tab-btn wtw-tabbar-fab" style-active="background:var(--color-primary-hover);" style-focus="box-shadow:var(--shadow-focus-ring);" style="width:44px;height:44px;border-radius:var(--radius-circle);background:var(--color-primary);color:var(--color-on-primary);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:300;border:none;cursor:pointer;margin-top:-18px;box-shadow:var(--shadow-sm);flex-shrink:0;line-height:1;transition:background-color var(--motion-duration-fast) var(--motion-easing-standard);">
+    <span style="line-height:1;">+</span><span class="wtw-tab-label">New item</span>
+  </button>
+
+  <sc-for list="{{ navAfterView }}" as="it" hint-placeholder-count="1">
+    <sc-if value="{{ it.active }}" hint-placeholder-val="{{ false }}">
+      <button aria-current="page" class="wtw-tab-btn" onClick="{{ it.onClick }}" style-active="opacity:0.6;" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;display:flex;background:transparent;border:none;font-size:var(--font-size-sm);font-weight:700;color:var(--color-primary);font-family:'Instrument Sans',sans-serif;cursor:pointer;padding:var(--space-xs) var(--space-sm);">
+        <span class="wtw-tab-icon" style="width:20px;height:20px;align-items:center;justify-content:center;flex-shrink:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+        <span class="wtw-tab-label">{{ it.label }}</span>
+      </button>
+    </sc-if>
+    <sc-if value="{{ it.inactive }}" hint-placeholder-val="{{ true }}">
+      <button class="wtw-tab-btn" onClick="{{ it.onClick }}" style-active="opacity:0.6;" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;display:flex;background:transparent;border:none;font-size:var(--font-size-sm);font-weight:600;color:var(--color-text-secondary);font-family:'Instrument Sans',sans-serif;cursor:pointer;padding:var(--space-xs) var(--space-sm);">
+        <span class="wtw-tab-icon" style="width:20px;height:20px;align-items:center;justify-content:center;flex-shrink:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+        <span class="wtw-tab-label">{{ it.label }}</span>
+      </button>
+    </sc-if>
+  </sc-for>
+
+  <sc-if value="{{ profileActive }}" hint-placeholder-val="{{ false }}">
+    <button aria-current="page" class="wtw-tab-btn wtw-profile-btn" onClick="{{ onProfileClick }}" style-active="opacity:0.6;" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;display:flex;background:transparent;border:none;font-size:var(--font-size-sm);font-weight:700;color:var(--color-primary);font-family:'Instrument Sans',sans-serif;cursor:pointer;padding:var(--space-xs) var(--space-sm);">
+      <span class="wtw-tab-icon" style="width:20px;height:20px;align-items:center;justify-content:center;flex-shrink:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span>
+      <span class="wtw-profile-avatar" style="align-items:center;justify-content:center;flex-shrink:0;"><dc-import name="AvatarInitial" person-name="{{ userName }}" size="28" hint-size="28px,28px"></dc-import></span>
+      <span class="wtw-tab-label">Profile</span>
+    </button>
+  </sc-if>
+  <sc-if value="{{ profileInactive }}" hint-placeholder-val="{{ true }}">
+    <button class="wtw-tab-btn wtw-profile-btn" onClick="{{ onProfileClick }}" style-active="opacity:0.6;" style-focus="box-shadow:var(--shadow-focus-ring);" style-after="content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);min-width:44px;min-height:44px;" style="position:relative;display:flex;background:transparent;border:none;font-size:var(--font-size-sm);font-weight:600;color:var(--color-text-secondary);font-family:'Instrument Sans',sans-serif;cursor:pointer;padding:var(--space-xs) var(--space-sm);">
+      <span class="wtw-tab-icon" style="width:20px;height:20px;align-items:center;justify-content:center;flex-shrink:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span>
+      <span class="wtw-profile-avatar" style="align-items:center;justify-content:center;flex-shrink:0;"><dc-import name="AvatarInitial" person-name="{{ userName }}" size="28" hint-size="28px,28px"></dc-import></span>
+      <span class="wtw-tab-label">Profile</span>
+    </button>
+  </sc-if>
+</nav>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:90},&quot;activeKey&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;recommend&quot;,&quot;options&quot;:[&quot;recommend&quot;,&quot;closet&quot;,&quot;outfits&quot;,&quot;profile&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;userName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Maya&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onNavigate&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(key: string) =&gt; void&quot;},&quot;onAdd&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const active = this.props.activeKey;
+    const onNavigate = this.props.onNavigate || (() => {});
+    const onAdd = this.props.onAdd || (() => {});
+    const mk = (key, label) => ({ key, label, active: key === active, inactive: key !== active, isRecommend: key === 'recommend', isCloset: key === 'closet', onClick: () => onNavigate(key) });
+    return {
+      userName: this.props.userName || '',
+      onAdd,
+      onProfileClick: () => onNavigate('profile'),
+      profileActive: active === 'profile', profileInactive: active !== 'profile',
+      navBeforeView: [mk('recommend', 'Styling'), mk('closet', 'Closet')],
+      navAfterView: [{ key: 'outfits', label: 'Outfits', active: active === 'outfits', inactive: active !== 'outfits', onClick: () => onNavigate('outfits') }]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+/* design/design-system.md §5: Add item is stacked, one card at a time,
+   centred at max-width: 480px from tablet up. */
+.content {
+  padding: var(--space-lg);
+}
+
+@media (min-width: 768px) {
+  .content {
+    max-width: 480px;
+    margin-inline: auto;
+  }
+}
+
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

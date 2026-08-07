@@ -1,0 +1,145 @@
+.nav {
+  --tabbar-active: var(--color-primary);
+  --tabbar-inactive: var(--color-text-secondary);
+}
+
+/* ---- shared item styles ---- */
+.item {
+  composes: control hitArea from global;
+  display: flex;
+  align-items: center;
+  color: var(--tabbar-inactive);
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.item[aria-current="page"] {
+  color: var(--tabbar-active);
+  font-weight: 600;
+}
+@media (hover: hover) {
+  .item:hover {
+    color: var(--tabbar-active);
+  }
+}
+
+.itemLabel {
+  font-size: var(--font-size-xs);
+}
+
+/* ================= Mobile: bottom bar, 0-767px ================= */
+.bar {
+  display: flex;
+}
+.tablet .bar,
+.desktop .bar {
+  display: none;
+}
+.bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: var(--z-sticky);
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding-bottom: env(safe-area-inset-bottom, 22px);
+  justify-content: space-around;
+  align-items: center;
+}
+.bar .item {
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-sm) 0;
+  flex: 1;
+}
+.barCreate {
+  transform: translateY(-18px);
+}
+
+/* ================= Tablet: 76px icon rail, 768-1023px ================= */
+.rail {
+  display: none;
+}
+
+/* ================= Desktop: 240px sidebar, 1024px+ ================= */
+.sidebar {
+  display: none;
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .bar {
+    display: none;
+  }
+  .rail {
+    display: flex;
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 76px;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-lg);
+    padding-block: var(--space-lg);
+    background-color: var(--color-surface);
+    border-inline-end: 1px solid var(--color-border);
+  }
+  .rail .item {
+    flex-direction: column;
+    width: 44px;
+  }
+  .railCreateWrap {
+    padding-bottom: var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: var(--space-sm);
+  }
+  .railLabel {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .bar,
+  .rail {
+    display: none;
+  }
+  .sidebar {
+    display: flex;
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 240px;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: var(--space-lg);
+    background-color: var(--color-surface);
+    border-inline-end: 1px solid var(--color-border);
+  }
+  .sidebarCreateWrap {
+    padding-bottom: var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: var(--space-md);
+  }
+  .sidebar .item {
+    justify-content: flex-start;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border-radius: var(--radius-sm);
+    position: relative;
+  }
+  .sidebar .item[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    top: var(--space-sm);
+    bottom: var(--space-sm);
+    width: 3px;
+    background-color: var(--color-primary);
+    border-radius: var(--radius-sm);
+  }
+  .sidebarProfile {
+    margin-top: auto;
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--color-border);
+  }
+}

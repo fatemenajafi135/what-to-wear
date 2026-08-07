@@ -1,9 +1,15 @@
-"""Verbose logging for ingestion (and beyond).
+"""Verbose logging for ingestion (and other CLI tools) — human-readable,
+plain-text, a `--verbose`/`-v` toggle. Distinct from `core/logging.py`,
+which is structured JSON logging for the running API service, configured
+from `Settings.log_level` at app startup: a chunk-by-chunk ingestion
+preview rendered as JSON blobs would be unreadable, and this module has
+no `Settings`/env dependency at all — it's a pure CLI concern, not an app
+one.
 
 Default (INFO): one line per source with its chunk count.
-Verbose (DEBUG): additionally logs every chunk's rule_id + a content preview,
-so you can see exactly which source produced which chunks before spending
-anything on embeddings.
+Verbose (DEBUG): additionally logs every chunk's rule_id + a content
+preview, so you can see exactly which source produced which chunks before
+spending anything on embeddings.
 """
 
 from __future__ import annotations

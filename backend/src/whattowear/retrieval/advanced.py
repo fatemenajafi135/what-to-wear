@@ -1,21 +1,24 @@
 """Advanced retriever — hybrid per-layer + Cohere rerank on the L3 trend layer.
 
-This is THE featured advanced technique for the Task-6 baseline→advanced story.
-L4 (structured) and L1 (load-all + semantic union, Feature 007 Task A) need no
-reranking; the semantic/live L3 layer is where a cross-encoder rerank pays off.
-We over-fetch L3 candidates (now live Tavily results, Feature 007 Task B), then
-Cohere rerank down to the final top-n — same shape as before, different source.
+L4 (structured) and L1 (load-all + semantic union) need no reranking; the
+semantic/live L3 layer is where a cross-encoder rerank pays off. We
+over-fetch L3 candidates (live Tavily results), then Cohere rerank down to
+the final top-n.
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from langchain_core.documents import Document
 
-from ..config import get_reranker
-from ..kb import KnowledgeBase
+from ..adapters.llm_gateway import get_reranker
 from ..schema import Context
 from . import hybrid
 from .base import RetrievalResult
+
+if TYPE_CHECKING:
+    from ..kb import KnowledgeBase
 
 FIRST_STAGE_K = 8  # over-fetch before rerank
 

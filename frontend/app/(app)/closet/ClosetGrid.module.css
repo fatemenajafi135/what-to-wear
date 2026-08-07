@@ -1,0 +1,98 @@
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.skeletonGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+/* Matches the tiles it stands in for — square, not the old 120px band. */
+.skeletonGrid > * {
+  aspect-ratio: 1 / 1;
+  height: auto;
+}
+
+/* design/design-system.md § Image treatment — the diagonal-stripe photo
+   placeholder is gone (feature 006): a real photo renders here now, or
+   components/ui/NoPhoto's flat treatment (research.md §11) when the item
+   has none.
+   The design's fixed 120px height is replaced by a 1:1 square
+   (docs/design-decisions.md §31): garment photos arrive in wildly different
+   ratios, and a grid of mixed shapes reads as broken. ItemPhoto owns the
+   ratio, border and radius, so this is a positioning wrapper only. */
+.tile {
+  display: block;
+  text-decoration: none;
+}
+
+.tileSelected {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.tilePhoto {
+  border-radius: var(--radius-md);
+}
+
+.stateBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-lg);
+  padding: var(--space-3xl) var(--space-lg);
+}
+
+.stateBody {
+  max-width: 32ch;
+  color: var(--color-text-secondary);
+}
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.loadMoreButton {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+}
+
+.loadMoreButton:focus-visible {
+  box-shadow: var(--shadow-focus-ring);
+  outline: none;
+  border-radius: var(--radius-sm);
+}

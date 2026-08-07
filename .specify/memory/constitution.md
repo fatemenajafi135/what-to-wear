@@ -1,142 +1,247 @@
 <!--
 Sync Impact Report
 ==================
-Version change: (template, unratified) → 1.0.0
-Rationale: initial ratification, MINOR/MAJOR n/a — treated as first release (1.0.0)
-per semantic versioning for a first-time constitution.
+Version change: 1.0.0 (legacy prototype) → 2.0.0
+Rationale: MAJOR. Principle II is redefined rather than clarified — the legacy
+wording ("The LLM MUST NOT select clothing items directly") was measured to be
+untrue of its own default path, so continuing to assert it would make the
+constitution aspirational. See docs/legacy-ai-inventory.md §Q6.
 
-Modified principles: n/a (template → concrete, no prior named principles)
-Added principles:
-  - I. Existing Pipeline Is Authoritative
-  - II. Deterministic Core, LLM At The Edges
+Carried forward unchanged in substance:
   - III. Style Knowledge Gates Wardrobe Retrieval
-  - IV. Grounded Output Only
-  - V. Scoring Functions Are Eval Metrics
-  - VI. Schema Stability
+  - IV.  Grounded Output Only
+  - V.   Scoring Functions Are Eval Metrics
+  - VI.  Schema Stability
   - VII. Single Source Of Truth For Contracts
-Added sections: Technology Constraints, Quality Bar, Governance (amendment +
-  versioning + compliance procedure)
-Removed sections: none (template placeholders only)
 
-Templates requiring updates:
-  - .specify/templates/plan-template.md: ✅ no changes needed — its
-    "Constitution Check" gate is generic and already defers to this file.
-  - .specify/templates/spec-template.md: ✅ no changes needed — generic,
-    no principle-specific references to update.
-  - .specify/templates/tasks-template.md: ✅ no changes needed — generic,
-    no principle-specific references to update.
-  - docs/SDD-HANDOFF.md: ✅ appendix already aligned (edited prior to this run
-    to match schema.py's actual taxonomy — see principle VI).
-  - Installed speckit skills (.claude/skills/speckit-*): ✅ reviewed, all
-    generic / agent-agnostic, no hardcoded principle text to update.
+Redefined:
+  - I.  Existing Pipeline Is Authoritative → Existing AI Code Is Authoritative
+        (paths updated for the rebuild layout; salvage scope made explicit)
+  - II. Deterministic Core, LLM At The Edges
+        → Deterministic Scoring, LLM Within Guardrails
+
+Added (the rebuild's frontend and data concerns, absent from 1.0.0):
+  - VIII. The Design System Is The Source Of Visual Truth
+  - IX.   One Codebase Serves Web And Installed PWA
+  - X.    Documents Are Data, Not Code
+
+Removed: none.
+
+Templates reviewed 2026-07-28. The assumption that generic defaults would need
+no edits was WRONG — two of the three actively invited a violation:
+  - .specify/templates/plan-template.md: ✅ UPDATED. Its Constitution Check was
+    the placeholder "[Gates determined based on constitution file]", which would
+    have let every plan invent its own gate list; replaced with the ten explicit
+    gates. Its Source Code section offered "Option 3: Mobile + API" with ios/ or
+    android/ directories — a direct Principle IX violation available to anyone
+    following the template correctly. Replaced with the fixed layout.
+  - .specify/templates/tasks-template.md: ✅ UPDATED. Path Conventions offered
+    "Mobile: api/src/, ios/src/ or android/src/". Same hazard, same fix.
+  - .specify/templates/spec-template.md: ✅ reviewed, no changes needed —
+    genuinely generic, no layout or platform assumptions.
 
 Follow-up TODOs: none.
 -->
 
 # What to Wear Constitution
-<!-- Solo-developer AI personal styling agent; course capstone that may become a product. -->
+
+<!-- A from-scratch rebuild of a personal styling agent, delivered as one Next.js
+codebase serving both the desktop web experience and the installed mobile PWA,
+on top of the prototype's evaluated AI pipeline. -->
 
 ## Core Principles
 
-### I. Existing Pipeline Is Authoritative
-The retrieval strategies (baseline, hybrid, advanced), chunking, ingest, knowledge
-base, and eval harness in `backend/src/whattowear` are working and already
-evaluated. New features MUST integrate with them as-is. Rewriting any of these
-components requires explicit justification in the plan and a passing eval run
-showing no regression against `backend/artifacts/eval_runs`. Rationale: this
-code represents validated, graded work; unjustified rewrites risk losing
-evaluated behavior for no measurable gain.
+### I. Existing AI Code Is Authoritative
 
-### II. Deterministic Core, LLM At The Edges
-Outfit generation and scoring MUST be pure Python and independently unit-testable.
-The LLM's role is limited to parsing intent and writing rationale text. The LLM
-MUST NOT select clothing items directly — item selection is the output of
-deterministic pruning, combination, and scoring code. Rationale: deterministic
-selection is reproducible, unit-testable, and immune to hallucinated items;
-confining the LLM to language tasks keeps the one failure-prone component out
-of the one place correctness matters most.
+The retrieval strategies (baseline, hybrid, advanced), chunking, ingest, knowledge base,
+scoring, LangGraph pipeline, and eval harness salvaged from the prototype are working,
+evaluated code. Features MUST integrate with them as they are. Regenerating any of these
+components is prohibited; refactoring them is expected and welcome, but any refactor MUST
+be justified in the plan and MUST be accompanied by an eval run showing no regression
+against the recorded baselines in `docs/eval-baselines/`.
+
+**Rationale:** this code carries three iterations of measured quality work. A rewrite that
+"looks cleaner" but is not evaluated is a net loss, and the baselines exist precisely so
+that claim can be tested rather than argued.
+
+### II. Deterministic Scoring, LLM Within Guardrails
+
+Outfit **scoring** MUST be pure Python, independently unit-testable, and free of any LLM
+call. The four dimension scorers and their combination strategy are the single source of
+outfit quality.
+
+On the **grounded path (the default)**, the LLM assembles candidate outfits from an
+inventory that deterministic retrieval has already restricted to items the user owns. Every
+candidate it proposes MUST then pass the deterministic coherence guards and MUST be scored
+by the deterministic scorers before reaching the user. The LLM proposes; Python disposes.
+
+On the **engine path (opt-in)**, enumeration, scoring and final ranking are entirely
+deterministic and the LLM only selects which of a pre-scored top-K to surface and writes
+the rationale.
+
+In all cases the LLM MUST NOT invent an item, MUST NOT compute or override a score, and
+MUST NOT be the last checkpoint before output.
+
+**Rationale:** the previous wording claimed the LLM never selects items, which measurement
+showed was false on the default path. A principle that the code visibly violates trains
+everyone to read the constitution as decoration. This states the guarantee that is actually
+enforced — and it is still a strong one, because grounding and scoring are the two places
+correctness matters.
 
 ### III. Style Knowledge Gates Wardrobe Retrieval
-The style knowledge base MUST be queried first and MUST return structured
-directives, never raw prose. Those structured directives shape the subsequent
-wardrobe query. Style retrieval and wardrobe retrieval are never parallel
-tracks — style retrieval always gates wardrobe retrieval. Rationale: this
-ordering is what makes the generated rationale defensible and traceable back
-to a specific styling principle, rather than a post-hoc justification.
+
+The style knowledge base MUST be queried first and MUST return structured directives, never
+raw prose. Those directives shape the subsequent wardrobe query. Style retrieval and
+wardrobe retrieval are never parallel tracks — style retrieval always gates wardrobe
+retrieval.
+
+**Rationale:** this ordering is what makes a rationale defensible and traceable to a
+specific styling principle, rather than a post-hoc justification of an arbitrary pick.
 
 ### IV. Grounded Output Only
-Every item in a suggested outfit MUST exist in the user's closet or the shared
-catalog — no invented items. Every rationale MUST cite retrieved style
-principles (rule_ids) or scorer output. Rationale: grounding is the
-hallucination killer for a system whose entire value proposition is "wear
-something you actually own."
+
+Every item in a suggested outfit MUST exist in the requesting user's closet or the shared
+catalog. Every rationale MUST cite retrieved style principles (`rule_id`s) or scorer output.
+Where the deterministic fallback produces an outfit with nothing honest to cite, it MUST
+return an empty citation list rather than fabricate one.
+
+**Rationale:** grounding is the hallucination killer for a product whose entire proposition
+is "wear something you actually own." The fallback clause is explicit because the eval
+harness previously scored honest empty citations as a failure.
 
 ### V. Scoring Functions Are Eval Metrics
-Any function that judges outfit quality (color harmony, formality coherence,
-weather fitness, silhouette balance, etc.) MUST be written as deterministic
-code first, then reused unchanged inside the eval harness. No quality metric
-may exist only inside a prompt. Rationale: a metric that only an LLM can
-compute cannot be trusted as ground truth for the metric itself.
+
+Any function that judges outfit quality MUST be written as deterministic code first, then
+reused unchanged inside the eval harness. No quality metric may exist only inside a prompt.
+
+**Rationale:** a metric only an LLM can compute cannot be trusted as ground truth for
+itself.
 
 ### VI. Schema Stability
-The item taxonomy already exists in `backend/src/whattowear/schema.py` and
-`categories.py` and is frozen as-is: category groups (`top`, `bottom`,
-`full_body`, `outerwear`, `footwear`, `accessory`), the six-value formality
-enum (`casual`, `smart_casual`, `business_casual`, `semi_formal`, `formal`,
-`black_tie`), warmth 0-5, seasons, and hex colors. New features MUST conform to
-this taxonomy. They MUST NOT introduce a parallel numeric formality scale or
-rename existing category groups. Any change to the taxonomy requires an
-explicit migration and is a breaking change. Rationale: retrofitting the item
-taxonomy after other features depend on it is the single most expensive
-mistake available on this project.
+
+The item taxonomy is frozen as inherited: category groups (`top`, `bottom`, `full_body`,
+`outerwear`, `footwear`, `accessory`), the six-value formality enum (`casual`,
+`smart_casual`, `business_casual`, `semi_formal`, `formal`, `black_tie`), warmth 0–5,
+seasons, hex colors, plus `pattern` and `fit`. Features MUST conform. They MUST NOT
+introduce a parallel numeric formality scale or rename category groups. Any taxonomy change
+requires an explicit migration and is a breaking change.
+
+**Rationale:** retrofitting the item taxonomy once other features depend on it is the single
+most expensive mistake available on this project.
 
 ### VII. Single Source Of Truth For Contracts
-Pydantic models defined in the backend are the API contract. The frontend MUST
-consume generated types from OpenAPI. Hand-maintained duplicate type
-definitions are prohibited. Rationale: a second, hand-written copy of a type
-drifts from the source the moment either side changes without the other.
+
+Pydantic models in the backend are the API contract. The frontend MUST consume types
+generated from OpenAPI. Hand-maintained duplicate type definitions are prohibited.
+
+**Rationale:** a second, hand-written copy of a type drifts the moment either side changes
+without the other.
+
+### VIII. The Design System Is The Source Of Visual Truth
+
+Every visual value — color, spacing, radius, type, motion, elevation — MUST come from
+`design/design-system.md`, read through a semantic token. Where that file is silent or
+contradicts itself, `docs/design-decisions.md` resolves it and is equally binding. No
+component may reference a raw hex or a magic pixel value.
+
+`design/prototype/` is reference material for understanding intent. **Code MUST NEVER be
+copied from it**, and nothing under `design/prototype/_scaffolding/` may appear in the
+product.
+
+Every screen MUST implement its loading, empty, error and offline states — these are
+specified, not optional. Accessibility is WCAG 2.1 AA: 44×44px minimum hit targets, a real
+`:focus-visible` ring, one `<h1>` per screen, focus moved on navigation, focus trapped and
+restored in overlays, and `prefers-reduced-motion` honoured by every animation.
+
+**Rationale:** the design system spells out states, copy and tokens precisely so they are
+not reinvented per screen. An invented value is indistinguishable from a bug six screens
+later, and the accessibility items listed are the ones the prototype demonstrably got wrong.
+
+### IX. One Codebase Serves Web And Installed PWA
+
+A single Next.js application serves the desktop web experience and the installed mobile PWA.
+Routes and destinations are **identical at every form factor**; only the chrome changes
+(bottom tab bar → icon rail → sidebar). There is no separate mobile build, no duplicated
+route tree, and no user-agent branching to decide what a user can reach.
+
+Behaviour additionally depends on browser-tab versus installed-standalone display mode, not
+only on viewport width. All four combinations MUST work.
+
+**Rationale:** two codebases for one product diverge immediately, and the divergence always
+lands on the platform with fewer users. Form factor changes the frame, never the map.
+
+### X. Documents Are Data, Not Code
+
+Source documents MUST NEVER be committed, and MUST NEVER be read from a path inside the
+repository. They live in object storage and are described in git by the tracked manifest
+`infra/corpus.yaml`, which together with the code MUST rebuild the index reproducibly in one
+command. Ingestion is a CLI entry point, never an HTTP endpoint, and is idempotent by
+content hash.
+
+Tracked as deliberate exceptions: the corpus manifest, prompts, eval datasets, recorded
+baselines, the small fixture corpus under `evals/fixtures/`, and database migrations.
+
+If an artifact can be regenerated by running a command, it does not belong in git.
+
+**Rationale:** the prototype committed 48 MB of source books, which is how a repository
+becomes permanently expensive to clone. The fixture-corpus exception exists so evals can run
+in CI, which has no object-storage credentials.
 
 ## Technology Constraints
 
-- Python 3.12, `uv`, FastAPI, LangGraph.
-- Postgres, auth, and image storage via Supabase, using the pooler connection
-  (port 6543).
-- Vector search via Qdrant, hybrid dense similarity plus metadata filtering.
-  Qdrant is kept; migration to pgvector is out of scope.
-- Redis and backend deployment on Railway.
-- LangSmith tracing on every LLM and retrieval call.
-- Frontend is Next.js on Vercel, built only after design is finalized.
-- Backend code lives in `backend/`, frontend in `frontend/`. Do not
-  restructure the repository layout.
+- **Backend:** Python 3.12, `uv`, FastAPI, LangGraph. Package is `backend/src/whattowear/`
+  using a src layout.
+- **AI modules are framework-free.** `pipeline/`, `retrieval/`, `scoring/`, `memory/` and
+  `ingest/` MUST NOT import `whattowear.api`, `whattowear.main`, or `fastapi`. Enforced in
+  CI by `lint-imports`, not by convention. Database access reaches them through a Protocol
+  defined in `ports.py`, never by importing a session factory.
+- **Prompts are files** under `prompts/`, loaded by name and versioned. Inline prompt
+  strings in Python are prohibited. Every eval row records the prompt version and model.
+- **Data:** Postgres, auth and object storage via Supabase, through the pooler (port 6543).
+  Schema lives in `infra/supabase/migrations/` — Supabase migrations only. **Alembic is not
+  used**; it cannot express RLS policies, storage buckets or auth configuration, and two
+  migration systems means two sources of truth.
+- **Vector search:** Qdrant. Migration to pgvector is out of scope.
+- **Frontend:** Next.js App Router, TypeScript, on Vercel. Service worker via Serwist.
+- **Backend deployment:** Railway.
+- **Tracing:** LangSmith on every LLM and retrieval call, with token count, latency and cost.
+- **Layout is fixed:** `frontend/`, `backend/`, `infra/`, `design/`, `docs/`. Do not
+  restructure.
 
 ## Quality Bar
 
 - Deterministic logic requires unit tests.
-- LLM-dependent paths require an entry in `data/golden_set.yaml`.
+- LLM-dependent paths require an entry in the golden set.
+- **CI MUST NOT make live LLM calls.** Recorded fixtures only — otherwise the suite is
+  flaky and bills real money on every push.
+- CI gates: backend `ruff`, `mypy`, `pytest`, `lint-imports`; frontend `eslint`,
+  `tsc --noEmit`, `next build`.
 - Retrieval output is inspected before generation output is trusted.
-- Simplicity over abstraction: this is a solo project. Repository patterns,
-  service layers, or abstract base classes are not introduced unless two
-  concrete implementations exist today.
+- **Simplicity over abstraction.** An interface, port, or layer is introduced only when
+  there are two concrete implementations today or a measured problem it solves. `ports.py`
+  qualifies on both counts: three retrieval strategies exist, and three AI modules currently
+  import a session factory that builds a database engine at import time, which makes the
+  pipeline unimportable without a database. Speculative abstraction remains prohibited.
+- No secrets in the repository. Only `.env.example` is tracked.
 
 ## Governance
 
-This constitution supersedes ad hoc practice for this project. Every
-`/speckit.plan` MUST include a Constitution Check gate, and any proposed
-violation MUST be recorded in that plan's Complexity Tracking table with the
-specific principle, the reason it cannot be satisfied, and why a simpler
-alternative was rejected — an unresolved violation blocks `/speckit.implement`.
+This constitution supersedes ad hoc practice. Every `/speckit-plan` MUST include a
+Constitution Check gate, and any proposed violation MUST be recorded in that plan's
+Complexity Tracking table with the specific principle, why it cannot be satisfied, and why a
+simpler alternative was rejected. An unresolved violation blocks `/speckit-implement`.
 
-Amendments are made by editing this file directly, updating the Sync Impact
-Report, and propagating any changed guidance into
-`.specify/templates/plan-template.md`, `.specify/templates/spec-template.md`,
-`.specify/templates/tasks-template.md`, and `docs/SDD-HANDOFF.md`. Versioning
-follows semantic versioning: MAJOR for backward-incompatible principle removal
-or redefinition, MINOR for a new principle or materially expanded guidance,
-PATCH for wording and clarification fixes.
+Amendments are made by editing this file, updating the Sync Impact Report above, and
+propagating changed guidance into `.specify/templates/`. Versioning is semantic: MAJOR for
+backward-incompatible principle removal or redefinition, MINOR for a new principle or
+materially expanded guidance, PATCH for wording fixes.
 
-Principles I ("Existing pipeline is authoritative") and III ("Style knowledge
-gates wardrobe retrieval") are the two clauses this project depends on most —
-any amendment touching them requires re-reading `docs/SDD-HANDOFF.md` first to
-confirm the change doesn't undercut the architecture it describes.
+Principles I, IV and VIII are the ones this project depends on most. Any amendment touching
+them requires re-reading `docs/legacy-ai-inventory.md` (for I and IV) or
+`design/design-system.md` together with `docs/design-decisions.md` (for VIII) first, to
+confirm the change does not undercut evidence already gathered.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-15 | **Last Amended**: 2026-07-15
+A principle that the code visibly violates MUST be amended or the code fixed — never left
+standing as aspiration. That failure mode is what produced this version.
+
+**Version**: 2.0.0 | **Ratified**: 2026-07-28 | **Last Amended**: 2026-07-28

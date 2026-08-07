@@ -1,0 +1,90 @@
+.wrapper {
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+/* design/design-system.md §5: stacked on mobile; 40% width photo on the
+   left, details on the right, from tablet up (handoff §5.5). */
+@media (min-width: 768px) {
+  .wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-lg);
+  }
+
+  .photo,
+  .noPhoto {
+    flex: 0 0 40%;
+    margin-bottom: 0;
+  }
+
+  .card {
+    flex: 1;
+  }
+}
+
+/* design/design-system.md § Image treatment specified a fixed 220px band;
+   it is a 1:1 square now (docs/design-decisions.md §31) so a photo is
+   framed identically here and in the closet grid. ItemPhoto owns the ratio,
+   border, radius and the detected-background letterbox — this is spacing
+   only. */
+.photo {
+  margin-bottom: var(--space-lg);
+}
+
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.fieldRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.fieldLabel {
+  color: var(--color-text-secondary);
+}
+
+.fieldValue {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.bar {
+  height: 14px;
+  border-radius: var(--radius-pill);
+}
+
+.bar60 {
+  width: 60%;
+}
+
+.bar40 {
+  width: 40%;
+}
+
+.bar80 {
+  width: 80%;
+}
+
+.stateBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-lg);
+  padding: var(--space-3xl) var(--space-lg);
+}
+
+.stateBody {
+  max-width: 32ch;
+  color: var(--color-text-secondary);
+}

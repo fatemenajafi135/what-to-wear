@@ -1,19 +1,30 @@
 """Stage 1: context assembler.
 
-Gather structured inputs, call the weather API, and normalize everything into one
-`Context`. Degrades gracefully: if weather lookup fails (no network / bad
-location), fall back to a caller-supplied `temp_c`, else leave weather unset.
+Gather structured inputs, call the weather API, and normalize everything
+into one `Context`. Degrades gracefully: if weather lookup fails (no
+network / bad location), fall back to a caller-supplied `temp_c`, else
+leave weather unset.
+
+DB coupling fix (specs/007-ai-port/research.md §1): `load_wardrobe` used
+to import `..db.SessionLocal` and `.. import crud` directly at function
+scope — the third of the three documented coupling defects
+(docs/legacy-ai-inventory.md §3). It now takes an injected
+`ports.ClosetRepository` instead.
 """
 
 from __future__ import annotations
 
 import re
-from typing import Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from langsmith import traceable
 
 from ..external.weather import month_to_season, temp_to_band
 from ..schema import FORMALITY_ORDER, Context, Formality, WardrobeItem
+
+if TYPE_CHECKING:
+    from ..ports import ClosetRepository
 
 # Fallback occasion -> default formality (mirrors the L4 occ entries). Used only
 # when the caller doesn't state a formality.
@@ -82,30 +93,31 @@ def infer_formality(occasion: str) -> Formality:
     return max(matches, key=lambda f: FORMALITY_ORDER[f])
 
 
-def load_wardrobe(user_id: str) -> list[WardrobeItem]:
-    """The requesting user's persisted closet (Feature 001: closet
-    persistence) — replaces the old JSON-fixture read. The fixture now only
-    serves as the one-time catalog seed source (crud.seed_catalog)."""
-    from .. import crud
-    from ..db import SessionLocal
-
-    with SessionLocal() as session:
-        return crud.list_wardrobe_items(session, user_id)
+def load_wardrobe(user_id: str, repo: ClosetRepository) -> list[WardrobeItem]:
+    """The requesting user's persisted closet, via the injected repository —
+    never a direct session import."""
+    return repo.list_wardrobe_items(user_id)
 
 
 @traceable(name="stage.context_assembler", run_type="chain")
 def assemble_context(
     occasion: str,
     *,
-    mood: Optional[str] = None,
-    formality: Optional[Formality] = None,
-    location: Optional[str] = None,
-    temp_c: Optional[float] = None,
-    wardrobe: Optional[list[WardrobeItem]] = None,
-    user_id: Optional[str] = None,
+    mood: str | None = None,
+    formality: Formality | None = None,
+    location: str | None = None,
+    temp_c: float | None = None,
+    wardrobe: list[WardrobeItem] | None = None,
+    user_id: str | None = None,
+    repo: ClosetRepository | None = None,
 ) -> Context:
     formality = formality or infer_formality(occasion)
-    wardrobe = wardrobe if wardrobe is not None else (load_wardrobe(user_id) if user_id else [])
+    if wardrobe is not None:
+        resolved_wardrobe = wardrobe
+    elif user_id and repo is not None:
+        resolved_wardrobe = load_wardrobe(user_id, repo)
+    else:
+        resolved_wardrobe = []
 
     condition = None
     temp_band = None
@@ -126,9 +138,7 @@ def assemble_context(
     if temp_band is None and temp_c is not None:
         temp_band = temp_to_band(temp_c)
     if season is None and temp_c is not None:
-        from datetime import datetime, timezone
-
-        season = month_to_season(datetime.now(timezone.utc).month)
+        season = month_to_season(datetime.now(UTC).month)
 
     return Context(
         occasion=occasion,
@@ -138,6 +148,6 @@ def assemble_context(
         condition=condition,
         temp_band=temp_band,
         season=season,
-        wardrobe=wardrobe,
+        wardrobe=resolved_wardrobe,
         user_id=user_id,
     )

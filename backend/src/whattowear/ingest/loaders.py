@@ -2,8 +2,16 @@
 citation metadata (`source, url, layer, rule_id`) already stamped where the
 loader can, deferring chunk-level `rule_id` to the chunkers.
 
-Legal note: `reference_only` sources are never loaded as text — they exist in the
-manifest for provenance only and their rules live in hand-distilled card files.
+Legal note: `reference_only` sources are never loaded as text — they exist
+in the manifest for provenance only and their rules live in hand-distilled
+card files.
+
+Every source path resolves relative to `CORPUS_LOCAL_DIR` (constitution
+Principle X: no document path lives inside the repo) — replacing the
+legacy `REPO_ROOT`-relative scheme entirely. Callers pass `corpus_dir`
+explicitly (from `ingest/cli.py`/`build_kb.py`, which read it from
+`core.config.Settings` once) rather than each loader reading the
+environment itself.
 """
 
 from __future__ import annotations
@@ -17,19 +25,15 @@ from ..logging_utils import get_logger
 
 log = get_logger(__name__)
 
-# repo root = two levels up from this file's package (src/whattowear/ingest/..)
-REPO_ROOT = Path(__file__).resolve().parents[3]
-CACHE_DIR = REPO_ROOT / "data" / "kb" / "cache"
-
-# Cap raw text pulled from long sources so a single 19th-c book / article doesn't
-# flood the store (handoff corpus target: a few hundred stable chunks).
+# Cap raw text pulled from long sources so a single 19th-c book / article
+# doesn't flood the store.
 EPUB_MAX_CHARS = 30_000
 WIKI_MAX_CHARS = 18_000
 
 
-def load_cards(source: dict) -> list[Document]:
+def load_cards(source: dict, corpus_dir: Path) -> list[Document]:
     """Distilled/own content: one JSONL line = one atomic, pre-tagged chunk."""
-    path = REPO_ROOT / source["path"]
+    path = corpus_dir / source["path"]
     docs: list[Document] = []
     with open(path, encoding="utf-8") as fh:
         for line in fh:
@@ -51,31 +55,34 @@ def load_cards(source: dict) -> list[Document]:
     return docs
 
 
-def load_wikipedia(source: dict) -> list[Document]:
-    """Fetch (and cache) Wikipedia article text. Cached so rebuilds are fast and
-    reproducible offline."""
+def load_wikipedia(source: dict, corpus_dir: Path) -> list[Document]:
+    """Fetch (and cache) Wikipedia article text. Cached under
+    `corpus_dir/kb/cache/` so rebuilds are fast and reproducible offline —
+    not committed (constitution Principle X; the cache is regenerable, per
+    inventory §Q1-Q3)."""
     from langchain_community.document_loaders import WikipediaLoader
 
+    cache_dir = corpus_dir / "kb" / "cache"
     queries = [source["query"]] + list(source.get("extra_queries", []))
     docs: list[Document] = []
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
     for q in queries:
         slug = q.lower().replace(" ", "_").replace("/", "_").replace("(", "").replace(")", "")
-        cache_file = CACHE_DIR / f"wiki_{slug}.txt"
+        cache_file = cache_dir / f"wiki_{slug}.txt"
         if cache_file.exists():
             text = cache_file.read_text(encoding="utf-8")
         else:
             try:
-                loaded = WikipediaLoader(
-                    query=q, load_max_docs=1, doc_content_chars_max=WIKI_MAX_CHARS
-                ).load()
+                loaded = WikipediaLoader(query=q, load_max_docs=1, doc_content_chars_max=WIKI_MAX_CHARS).load()
                 text = loaded[0].page_content if loaded else ""
                 if text.strip():
                     cache_file.write_text(text, encoding="utf-8")
             except Exception as exc:  # noqa: BLE001 - offline/sandbox: skip, don't crash
                 log.warning(
                     "Wikipedia fetch failed for %r (%s); skipping. Re-run with network, "
-                    "or use wiki_refine.py to ingest a locally-saved page instead.", q, exc,
+                    "or use wiki_refine.py to ingest a locally-saved page instead.",
+                    q,
+                    exc,
                 )
                 text = ""
         if text.strip():
@@ -93,15 +100,16 @@ def load_wikipedia(source: dict) -> list[Document]:
     return docs
 
 
-def load_wiki_md(source: dict) -> list[Document]:
-    """A refined Wikipedia page (see wiki_refine.py): a local .md file, already
-    cleaned of chrome (See also/References/edit links/etc). No live-fetch
-    dependency — reproducible, reviewable, diffable."""
-    path = REPO_ROOT / source["path"]
+def load_wiki_md(source: dict, corpus_dir: Path) -> list[Document]:
+    """A refined Wikipedia page (see wiki_refine.py): a local .md file,
+    already cleaned of chrome (See also/References/edit links/etc). No
+    live-fetch dependency — reproducible, reviewable, diffable."""
+    path = corpus_dir / source["path"]
     if not path.exists():
         log.warning(
             "wiki_md source not found: %s (save the page, then run "
-            "`python -m whattowear.ingest.wiki_refine <html>` to produce it)", path,
+            "`python -m whattowear.ingest.wiki_refine <html>` to produce it)",
+            path,
         )
         return []
     text = path.read_text(encoding="utf-8")
@@ -121,13 +129,13 @@ def load_wiki_md(source: dict) -> list[Document]:
     ]
 
 
-def load_epub(source: dict) -> list[Document]:
+def load_epub(source: dict, corpus_dir: Path) -> list[Document]:
     """Public-domain EPUB → bounded plain text (front matter skipped heuristically)."""
     import ebooklib
     from bs4 import BeautifulSoup
     from ebooklib import epub
 
-    path = REPO_ROOT / source["path"]
+    path = corpus_dir / source["path"]
     if not path.exists():
         log.warning("epub source not found: %s", path)
         return []
@@ -165,12 +173,12 @@ LOADERS = {
 }
 
 
-def load_source(source: dict) -> list[Document]:
-    """Dispatch a manifest source entry to its loader. Non-ingestable / reference
-    -only / want-later entries return nothing."""
+def load_source(source: dict, corpus_dir: Path) -> list[Document]:
+    """Dispatch a manifest source entry to its loader. Non-ingestable /
+    reference-only / want-later entries return nothing."""
     if not source.get("ingest"):
         return []
     loader = source.get("loader")
     if loader not in LOADERS:
         return []
-    return LOADERS[loader](source)
+    return LOADERS[loader](source, corpus_dir)

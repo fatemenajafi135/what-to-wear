@@ -1,62 +1,34 @@
-"""Integration test for GET /health (Feature 005, FR-012).
-
-A `/speckit.analyze` finding: the spec's own Edge Case ("backend can't reach
-the database or vector store... surfaced as a clear health-check failure")
-had no FR/task until this feature closed it. `_db_reachable`/
-`_vector_store_reachable` are mocked here (they hit the real DB/Qdrant
-directly, not through a FastAPI dependency) — this test is about the
-endpoint's status-code/body contract, not connectivity itself (which is
-already exercised for real by every other test in this suite that needs a
-live DB).
+"""Integration test for `GET /health` (contracts/health.md under
+specs/002-backend-foundation/). Runs against a real local Supabase database —
+no mocked database layer (research.md §8). Requires `DATABASE_URL` in the
+environment, pointed at a running local Supabase stack (see quickstart.md:
+`npx supabase start` from `infra/`).
 """
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
-from whattowear import api
+import whattowear.main as main_module
+from whattowear.main import app
 
 
-def test_healthy_when_both_dependencies_reachable(mocker):
-    mocker.patch.object(api, "_db_reachable", return_value=True)
-    mocker.patch.object(api, "_vector_store_reachable", return_value=True)
-    client = TestClient(api.app)
+def test_health_reports_ok_when_database_reachable() -> None:
+    with TestClient(app) as client:
+        response = client.get("/health")
 
-    r = client.get("/health")
-
-    assert r.status_code == 200
-    assert r.json() == {"status": "ok"}
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
 
 
-def test_unhealthy_when_database_unreachable(mocker):
-    mocker.patch.object(api, "_db_reachable", return_value=False)
-    mocker.patch.object(api, "_vector_store_reachable", return_value=True)
-    client = TestClient(api.app)
+def test_health_reports_unhealthy_when_database_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The whole reason `/health` reports dependency state instead of just
+    returning 200 — contracts/health.md's 503 shape."""
+    monkeypatch.setattr(main_module, "_database_reachable", lambda: False)
 
-    r = client.get("/health")
+    with TestClient(app) as client:
+        response = client.get("/health")
 
-    assert r.status_code == 503
-    assert r.json() == {"status": "unhealthy", "failed_dependencies": ["database"]}
-
-
-def test_unhealthy_when_vector_store_unreachable(mocker):
-    mocker.patch.object(api, "_db_reachable", return_value=True)
-    mocker.patch.object(api, "_vector_store_reachable", return_value=False)
-    client = TestClient(api.app)
-
-    r = client.get("/health")
-
-    assert r.status_code == 503
-    assert r.json()["failed_dependencies"] == ["vector_store"]
-
-
-def test_real_dependencies_reachable_in_this_dev_environment():
-    """Not mocked -- confirms the real probes work against this session's
-    actual configured DB/Qdrant, not just that the endpoint wires mocks
-    correctly above."""
-    client = TestClient(api.app)
-
-    r = client.get("/health")
-
-    assert r.status_code == 200
-    assert r.json() == {"status": "ok"}
+    assert response.status_code == 503
+    assert response.json() == {"status": "unhealthy", "failed_dependencies": ["database"]}

@@ -1,0 +1,49 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+  font-size: var(--font-size-sm);
+}
+
+.offline {
+  background-color: var(--color-surface-sunken);
+  color: var(--color-text-primary);
+}
+
+.info {
+  background-color: var(--color-accent-soft);
+  color: var(--color-on-accent-soft);
+}
+
+/*
+ * Error and offline are both --color-surface-sunken in the design system
+ * despite being distinct, simultaneously-visible states — resolved in
+ * docs/design-decisions.md §10: error keeps the same fill but gets a 3px
+ * inline-start border in --color-error so the two are distinguishable
+ * without adding a new color.
+ */
+.error {
+  background-color: var(--color-surface-sunken);
+  color: var(--color-text-primary);
+  border-inline-start: 3px solid var(--color-error);
+}
+
+.action {
+  composes: control hitArea from global;
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+@media (hover: hover) {
+  .action:hover {
+    opacity: 0.7;
+  }
+}

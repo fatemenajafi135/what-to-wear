@@ -1,0 +1,9 @@
+.noPhoto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background-color: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+}

@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 
 import pandas as pd
-
 from common import discover_strategies, load_runs, ragas_judge_llm
 
 
@@ -32,24 +31,30 @@ async def _score_rows(rows: list[dict], judge) -> list[dict]:
     ce = ContextEntityRecall(llm=judge)
     ns = NoiseSensitivity(llm=judge, mode="relevant")
 
+    async def _safe(coro, case_id: str):
+        try:
+            return (await coro).value
+        except Exception as exc:  # noqa: BLE001
+            print(f"  [warn] metric failed for {case_id}: {exc}")
+            return None
+
     out = []
     for r in rows:
         rec = {"case_id": r["case_id"]}
         ui, rc, ref, resp = (
-            r["user_input"], r["retrieved_contexts"], r["reference"], r["response"],
+            r["user_input"],
+            r["retrieved_contexts"],
+            r["reference"],
+            r["response"],
         )
-        async def _safe(coro):
-            try:
-                return (await coro).value
-            except Exception as exc:  # noqa: BLE001
-                print(f"  [warn] metric failed for {r['case_id']}: {exc}")
-                return None
 
-        rec["context_recall"] = await _safe(cr.ascore(user_input=ui, retrieved_contexts=rc, reference=ref))
-        rec["faithfulness"] = await _safe(fa.ascore(user_input=ui, response=resp, retrieved_contexts=rc))
-        rec["context_entity_recall"] = await _safe(ce.ascore(reference=ref, retrieved_contexts=rc))
+        rec["context_recall"] = await _safe(
+            cr.ascore(user_input=ui, retrieved_contexts=rc, reference=ref), r["case_id"]
+        )
+        rec["faithfulness"] = await _safe(fa.ascore(user_input=ui, response=resp, retrieved_contexts=rc), r["case_id"])
+        rec["context_entity_recall"] = await _safe(ce.ascore(reference=ref, retrieved_contexts=rc), r["case_id"])
         rec["noise_sensitivity"] = await _safe(
-            ns.ascore(user_input=ui, response=resp, reference=ref, retrieved_contexts=rc)
+            ns.ascore(user_input=ui, response=resp, reference=ref, retrieved_contexts=rc), r["case_id"]
         )
         out.append(rec)
     return out

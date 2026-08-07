@@ -1,0 +1,34 @@
+.boot {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  background-color: var(--color-background);
+}
+
+.mark {
+  width: 32px;
+  height: 32px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mark {
+    animation: bootPulse var(--motion-duration-slow) var(--motion-easing-standard) infinite;
+  }
+}
+
+@keyframes bootPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.wordmark {
+  color: var(--color-text-primary);
+}

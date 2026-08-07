@@ -1,0 +1,104 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+}
+
+.scroll {
+  overflow-y: auto;
+}
+
+.calendarContextRow {
+  display: flex;
+  justify-content: center;
+}
+
+/* design-system.md § Screen anatomy → Recommend, items 4-6: the calendar-
+   context line, "Start styling", and the pinned composer form one compact
+   footer group, genuinely fixed to the bottom of the viewport (not merely
+   pushed there by flex, and not sticky-only-once-content-overflows) so the
+   composer is always reachable regardless of conversation length — the
+   behavior of every mainstream chat UI, and what "should be down" plainly
+   means. `left`/`max-width`/`margin-inline` mirror .screen's own
+   breakpoints exactly, since a fixed element doesn't inherit its normal-flow
+   parent's centering. `bottom` (not internal padding) clears the fixed
+   mobile tab bar so the two stack instead of overlapping — both stick to
+   the viewport edge otherwise. The mobile bottom bar's own Create action is
+   a 56px FAB translated up -18px above the bar's regular items (TabBar.
+   module.css .barCreate) — measured in a real browser, its top edge sits
+   ~74px above the viewport bottom, not the bar's own ~56px, so clearance
+   has to account for the FAB's poke-up too or the footer covers it. The
+   scrollable message list gets a matching `padding-bottom` set from this
+   element's measured height (RecommendChat.tsx, ResizeObserver) so the last
+   message is never hidden behind it. */
+.footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(56px + 18px + var(--space-sm) + env(safe-area-inset-bottom, 22px));
+  z-index: var(--z-sticky);
+  background-color: var(--color-background);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg) var(--space-md);
+}
+
+@media (min-width: 768px) {
+  .footer {
+    left: 76px;
+    bottom: 0;
+    max-width: 480px;
+    margin-inline: auto;
+    padding-bottom: var(--space-lg);
+  }
+}
+
+@media (min-width: 1024px) {
+  .footer {
+    left: 240px;
+    max-width: 560px;
+  }
+}
+
+.loadingSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--space-lg);
+}
+
+.skeletonBarWide {
+  width: 70%;
+  height: 56px;
+  border-radius: 14px;
+}
+
+.skeletonBarNarrow {
+  width: 45%;
+  height: 32px;
+  border-radius: 14px;
+}
+
+.errorCard {
+  margin: 0 var(--space-lg) var(--space-lg);
+  padding: var(--space-lg);
+  background-color: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+@media (min-width: 768px) {
+  .screen {
+    max-width: 480px;
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .screen {
+    max-width: 560px;
+  }
+}

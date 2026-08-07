@@ -1,4 +1,12 @@
-"""Load the hand-assembled golden test set."""
+"""Load the hand-assembled golden test set.
+
+`GOLDEN_PATH` resolves to `backend/evals/golden_set.yaml` — a tracked file
+(constitution Principle X carve-out: eval datasets are a deliberate
+exception), not a path under `ingest.loaders.REPO_ROOT/data/` the way the
+legacy version had it. That also means this module has no dependency on
+`ingest/` (which doesn't land until specs/007-ai-port Phase 11) — a leaf
+in this feature's own port order, same as it always should have been.
+"""
 
 from __future__ import annotations
 
@@ -7,9 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from ..ingest.loaders import REPO_ROOT
-
-GOLDEN_PATH = REPO_ROOT / "data" / "golden_set.yaml"
+GOLDEN_PATH = Path(__file__).parent.parent.parent.parent / "evals" / "golden_set.yaml"
 
 
 @dataclass

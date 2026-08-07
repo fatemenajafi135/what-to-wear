@@ -3,11 +3,11 @@
 There is no single query. From the normalized context we build:
 - a **naive NL query** (used by the baseline retriever, over all chunks),
 - an **L3 NL query** (synthesized string, embedded for dense trend search),
-- a **router** decision: which layers to hit (rules, not an LLM — for the demo).
+- a **router** decision: which layers to hit (rules, not an LLM).
 
-Router rules (handoff §3): L1 + L4 always; L3 only if season known; L2 never
-(no user coloring captured yet). Keeping `route()` as a function is the seam for
-a future agentic router.
+Router rules: L1 + L4 always; L3 only if season known; L2 never (no user
+coloring captured yet). Keeping `route()` as a function is the seam for a
+future agentic router.
 """
 
 from __future__ import annotations
@@ -37,10 +37,9 @@ def naive_query(ctx: Context) -> str:
 
 
 def l3_query(ctx: Context) -> str:
-    """Synthesized NL string for the L3 dense trend search (handoff §3).
-
-    This is the fiddly step where retrieval quality most easily slips — kept
-    explicit so it can be tuned/measured."""
+    """Synthesized NL string for the L3 dense trend search — the fiddly
+    step where retrieval quality most easily slips, kept explicit so it
+    can be tuned/measured."""
     season = ctx.season or ""
     mood = f"{ctx.mood} tone" if ctx.mood else ""
     band = f"{ctx.temp_band} weather" if ctx.temp_band else ""

@@ -1,0 +1,10 @@
+.wrap {
+  /* Horizontal/bottom spacing now comes from the shared .footer container
+     in RecommendChat.module.css — this class stays only so the component
+     keeps a stable outer element to attach to. */
+}
+
+.caption {
+  text-align: center;
+  margin: var(--space-xs) 0 0;
+}

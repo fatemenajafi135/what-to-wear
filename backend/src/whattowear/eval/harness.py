@@ -1,19 +1,27 @@
 """Eval harness (core, needs the gateway).
 
-Runs the compiled graph (pipeline/graph.py) over the golden set for each
-strategy — not the retired linear `pipeline.run.run_pipeline` (Feature 002
-Phase 3, T032a: one entrypoint, not two to keep in sync). Computes:
-- **verifiable checks** (owned-only, cites-grounded, every-choice-cites, and the
-  outfit-property checks),
-- **retrieval recall** (relevant rule_ids ∩ retrieved) — the crisp retrieval
-  metric that shows baseline < hybrid < advanced, and
-- **scoring/ranking checks** (SC-003 outfit count, SC-005 all-four-dimensions) —
-  what actually measures the graph's `/suggest`-shaped output, not just
-  asserts it.
+Runs the compiled graph (`pipeline/graph.py`) over the golden set for each
+strategy. Computes:
+- **verifiable checks** (owned-only, cites-grounded, every-choice-cites, and
+  the outfit-property checks),
+- **retrieval recall** (relevant rule_ids ∩ retrieved) — the crisp
+  retrieval metric that shows baseline < hybrid < advanced, and
+- **scoring/ranking checks** (outfit count in range, all-four-dimensions) —
+  what actually measures the graph's suggestion output, not just asserts it.
 
 It writes per-strategy JSONL run artifacts (user_input / reference /
-reference_contexts / response / retrieved_contexts + checks) that the isolated
-`evals/` project scores with RAGAS + LLM-judge, and prints the comparison table.
+reference_contexts / response / retrieved_contexts + checks) that the
+isolated `backend/evals/` project scores with RAGAS + LLM-judge, and
+prints the comparison table.
+
+DB coupling fix (specs/007-ai-port/research.md §1 and §5): the legacy
+version imported `EVAL_BASELINE_USER_ID` from `crud` and relied on that
+user's wardrobe/catalog having been seeded into Postgres beforehand. This
+version takes an injected `ports.ClosetRepository`, defaulting to
+`adapters.closet_fixture.FixtureClosetRepository` — no database required.
+`EVAL_BASELINE_USER_ID` is now a plain constant (no uuid5 derivation
+needed — that existed to give Postgres seeding a stable row key, which no
+longer applies).
 """
 
 from __future__ import annotations
@@ -21,21 +29,25 @@ from __future__ import annotations
 import json
 import uuid
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
-from ..crud import EVAL_BASELINE_USER_ID
-from ..ingest.loaders import REPO_ROOT
-from ..kb import get_kb
+from ..adapters.closet_fixture import FixtureClosetRepository
 from ..pipeline import cite
 from ..pipeline.generator import GenOutput
 from ..pipeline.graph import get_compiled_graph
-from .golden_set import GoldenCase, load_cases
+from .golden_set import GOLDEN_PATH, GoldenCase, load_cases
 from .judge import format_outfit_for_judge, judge_outfit
 from .properties import check_outfit
 
-ARTIFACTS_DIR = REPO_ROOT / "artifacts" / "eval_runs"
+if TYPE_CHECKING:
+    from ..ports import ClosetRepository
+
+EVAL_BASELINE_USER_ID = "eval-baseline-user"
+
+ARTIFACTS_DIR = GOLDEN_PATH.parent.parent / "artifacts" / "eval_runs"
 STRATEGIES = ["baseline", "hybrid", "advanced"]
 
-# SC-003: 3-5 complete outfits when the closet can support them.
+# 3-5 complete outfits when the closet can support them.
 _MIN_EXPECTED_OUTFITS = 3
 _MAX_EXPECTED_OUTFITS = 5
 
@@ -47,19 +59,34 @@ def _user_input(case: GoldenCase) -> str:
 
 
 def _rule_text_map() -> dict[str, str]:
+    from ..kb import get_kb  # lazy: kb.py lands in specs/007-ai-port Phase 11
+
     return {c.metadata["rule_id"]: c.page_content for c in get_kb().chunks}
 
 
 def run_case(
-    case: GoldenCase, strategy: str, rule_text: dict[str, str], judge: bool = False, approach: str = "grounded"
+    case: GoldenCase,
+    strategy: str,
+    rule_text: dict[str, str],
+    judge: bool = False,
+    approach: str = "grounded",
+    repo: ClosetRepository | None = None,
+    prompt_versions: dict[str, int] | None = None,
 ) -> dict:
-    """`approach` (Feature 010, WP2) selects which selection path the graph
-    routes through — orthogonal to `strategy` (retrieval). Every eval case
-    is a genuinely fresh, single-turn thread (a new random `thread_id`
-    every call, never continued), so there's no refinement-turn "sticky
-    approach" concern here the way there is in api.py — `approach` is
-    simply included on every invoke, matching how `strategy` already is."""
-    graph = get_compiled_graph()
+    """`approach` selects which selection path the graph routes through —
+    orthogonal to `strategy` (retrieval). Every eval case is a genuinely
+    fresh, single-turn thread (a new random `thread_id` every call, never
+    continued), so there's no refinement-turn "sticky approach" concern
+    here — `approach` is simply included on every invoke, matching how
+    `strategy` already is.
+
+    `prompt_versions` (specs/007-ai-port/data-model.md): which prompt
+    file/version produced this row, recorded on the JSONL output so a
+    quality change can be attributed to a prompt edit rather than
+    guessed at — additive to the row shape, no existing key's computation
+    changes."""
+    repo = repo or FixtureClosetRepository()
+    graph = get_compiled_graph(repo)
     thread_id = str(uuid.uuid4())
     final_state = graph.invoke(
         {
@@ -69,7 +96,7 @@ def run_case(
             "temp_c": case.temp_c,
             "strategy": strategy,
             "thread_id": thread_id,
-            "user_id": str(EVAL_BASELINE_USER_ID),
+            "user_id": EVAL_BASELINE_USER_ID,
             "approach": approach,
         },
         config={"configurable": {"thread_id": thread_id}},
@@ -97,15 +124,15 @@ def run_case(
     top = scored[0].items if scored else []
     props = check_outfit(top, wardrobe, case.expected)
 
-    # scoring/ranking checks (Phase 3) — SC-003, SC-005
+    # scoring/ranking checks
     outfit_count_in_range = _MIN_EXPECTED_OUTFITS <= len(scored) <= _MAX_EXPECTED_OUTFITS
     all_have_four_scores = all(len(o.scores) == 4 for o in scored) if scored else True
     ranked_descending = [o.rank_score for o in scored] == sorted((o.rank_score for o in scored), reverse=True)
 
-    # optional reported-only LLM judge score (Phase 4, T046, FR-010) — never
-    # computed by default (an extra LLM call per case would slow/flake the
-    # mandatory no-regression gate); opt in with --judge. Attached to the row
-    # for reporting only, never fed back into rank_score/ordering above.
+    # optional reported-only LLM judge score — never computed by default
+    # (an extra LLM call per case would slow/flake the mandatory
+    # no-regression gate); opt in with --judge. Attached to the row for
+    # reporting only, never fed back into rank_score/ordering above.
     judge_score = judge_outfit(_user_input(case), format_outfit_for_judge(scored[0])) if judge and scored else None
 
     return {
@@ -131,22 +158,29 @@ def run_case(
         "num_outfits": len(scored),
         "top_rank_score": scored[0].rank_score if scored else None,
         "judge_score": judge_score,
+        "prompt_versions": prompt_versions or {},
     }
 
 
 def run_strategy(
-    cases: list[GoldenCase], strategy: str, rule_text: dict[str, str], judge: bool = False, approach: str = "grounded"
+    cases: list[GoldenCase],
+    strategy: str,
+    rule_text: dict[str, str],
+    judge: bool = False,
+    approach: str = "grounded",
+    repo: ClosetRepository | None = None,
 ) -> list[dict]:
+    repo = repo or FixtureClosetRepository()
     rows = []
     for case in cases:
         try:
-            rows.append(run_case(case, strategy, rule_text, judge=judge, approach=approach))
+            rows.append(run_case(case, strategy, rule_text, judge=judge, approach=approach, repo=repo))
         except Exception as exc:  # noqa: BLE001
             print(f"  [error] {case.id}/{strategy}: {exc}")
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-    # Feature 010: a non-default approach gets a distinct filename so an
-    # engine-approach run never clobbers the existing grounded-path artifact
-    # the no-regression gate compares against.
+    # A non-default approach gets a distinct filename so an engine-approach
+    # run never clobbers the existing grounded-path artifact the
+    # no-regression gate compares against.
     suffix = "" if approach == "grounded" else f"-{approach}"
     out = ARTIFACTS_DIR / f"{strategy}{suffix}.jsonl"
     with open(out, "w", encoding="utf-8") as fh:
@@ -175,7 +209,7 @@ def summarize(rows_by_strategy: dict[str, list[dict]]) -> None:
     print("-" * len(header))
     for key in check_keys:
         line = f"{key:<22}"
-        for strat, rows in rows_by_strategy.items():
+        for _strat, rows in rows_by_strategy.items():
             if not rows:
                 line += f"{'-':>12}"
                 continue
@@ -201,9 +235,14 @@ def summarize(rows_by_strategy: dict[str, list[dict]]) -> None:
 
 
 def main(
-    strategies: list[str] | None = None, limit: int | None = None, judge: bool = False, approach: str = "grounded"
+    strategies: list[str] | None = None,
+    limit: int | None = None,
+    judge: bool = False,
+    approach: str = "grounded",
+    repo: ClosetRepository | None = None,
 ) -> None:
     strategies = strategies or STRATEGIES
+    repo = repo or FixtureClosetRepository()
     cases = load_cases()
     if limit:
         cases = cases[:limit]
@@ -211,7 +250,7 @@ def main(
     rows_by_strategy: dict[str, list[dict]] = defaultdict(list)
     for strat in strategies:
         print(f"\nRunning strategy: {strat} ({len(cases)} cases, approach={approach})")
-        rows_by_strategy[strat] = run_strategy(cases, strat, rule_text, judge=judge, approach=approach)
+        rows_by_strategy[strat] = run_strategy(cases, strat, rule_text, judge=judge, approach=approach, repo=repo)
     summarize(rows_by_strategy)
 
 
@@ -224,16 +263,16 @@ if __name__ == "__main__":
     ap.add_argument(
         "--judge",
         action="store_true",
-        help="also compute the optional reported-only LLM judge score (FR-010) — one extra "
+        help="also compute the optional reported-only LLM judge score — one extra "
         "LLM call per case, off by default so it doesn't slow/flake the no-regression gate",
     )
     ap.add_argument(
         "--approach",
         default="grounded",
         choices=["direct", "grounded", "engine", "agentic", "compare"],
-        help="Feature 010: which graph selection path to route through (default: grounded, "
-        "today's existing pre-Feature-010 behavior). Non-grounded runs write to a "
-        "distinctly-suffixed artifact file rather than overwriting the grounded baseline.",
+        help="which graph selection path to route through (default: grounded). "
+        "Non-grounded runs write to a distinctly-suffixed artifact file rather "
+        "than overwriting the grounded baseline.",
     )
     args = ap.parse_args()
     main(strategies=args.strategies, limit=args.limit, judge=args.judge, approach=args.approach)

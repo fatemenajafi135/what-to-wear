@@ -1,0 +1,10 @@
+/* A styling_reply turn can carry more than one outfit (the live pager's
+   own 1-4+ range) — chatStyles.assistantGroup has no gap of its own (its
+   only prior use ever held exactly one bubble), so multiple citation-
+   badged bubbles from the same turn need their own spacing here rather
+   than touching edge-to-edge. */
+.outfitGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}

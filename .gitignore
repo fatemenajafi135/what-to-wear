@@ -1,29 +1,111 @@
+# --- Local scratch (never commit) ---
+notes/
+.claude/settings.local.json
+
+# --- Node / Next.js ---
+node_modules/
+# NOTE: frontend/lib/api/schema.d.ts is generated from the backend's live OpenAPI
+# schema (feature 013) but is deliberately TRACKED, not ignored. `next build`
+# type-checks against it and deploy hosts have no backend to generate it from —
+# ignoring it failed the first Vercel build with "Cannot find module
+# '@/lib/api/schema'". CI regenerates it against a real backend and fails on any
+# difference, so the committed copy cannot drift (Constitution VII).
+# Regenerate with `npm run generate:api-types`; never hand-edit.
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/versions
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+.turbo/
+.vercel/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Service worker artifacts (Serwist — feature 014)
+# Rooted at frontend/, not repo root: a slash-containing pattern in this
+# top-level .gitignore is anchored to THIS file's directory, so an
+# unprefixed "public/sw.js" silently never matched frontend/public/sw.js
+# (found while implementing 014 — `git status` showed it as untracked).
+frontend/public/sw.js
+frontend/public/sw.js.map
+frontend/public/swe-worker-*.js
+frontend/public/workbox-*.js
+
+# Playwright artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# --- Python / uv ---
 __pycache__/
-*.pyc
-.claude/settings.json
+*.py[cod]
+*$py.class
+*.so
 .venv/
-.env
+venv/
+.uv/
+*.egg-info/
+.eggs/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# --- Data, corpora and built artifacts (see notes/data-and-file-rules.md) ---
+# Documents are data, not code: they live in Supabase Storage and are described
+# by infra/corpus.yaml. If a command can regenerate it, it does not belong here.
+data/
+.cache/
+tmp/
+storage/
+outputs/
+*.faiss
+*.index
+*.pkl
+
+# eval.harness's raw JSONL run output (feature 007) — regenerable by
+# running the harness. A specific run gets promoted to a tracked
+# docs/eval-baselines/ snapshot deliberately, by hand; the working
+# directory itself is never tracked (matches ../app-legacy's own
+# precedent: docs/eval-baselines/ is tracked, backend/artifacts/ is not).
 backend/artifacts/
-# backend/data/ is gitignored by default (mostly scratch/large source
-# material), but the KB actually needs a few specific files present at
-# runtime (get_kb() -> ingest_all() -> load_epub()/load_wiki_md() run on
-# every cold start, not just a manual rebuild) -- a fresh clone/sandbox
-# missing them silently 500s /suggest. golden_set.yaml and kb/ are already
-# tracked (force-added separately); these three are the remaining gap.
-# The staircase (un-ignore dir, re-ignore its contents, carve out the
-# pattern actually needed) is required because git won't apply a negation
-# to a file whose parent directory is itself excluded.
-backend/data/*
-!backend/data/books/
-backend/data/books/*
-!backend/data/books/*.epub
-!backend/data/wikipedia/
-backend/data/wikipedia/*
-!backend/data/wikipedia/*.md
-!backend/data/fixtures/
-backend/data/fixtures/*
-!backend/data/fixtures/wardrobe.json
+*.npy
+*.parquet
+*.db
+*.sqlite
+*.sqlite3
+# The one exception: the tiny, license-clean fixture corpus used by tests and CI.
+!evals/fixtures/**
+
+# --- Env files (commit only .env.example) ---
+# `.env` alone does NOT match `legacy.env`, `prod.env`, `local.env` — a real
+# secret leak got through on exactly that gap. `*.env` catches every variant.
+.env
+.env.*
+*.env
+!.env.example
+!*.env.example
+
+# --- OS / editor ---
 .DS_Store
-docs/**-report.md
-design/screenshots/
-design/uploads/
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

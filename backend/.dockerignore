@@ -1,0 +1,44 @@
+# Environment secrets — never include in image
+.env
+legacy.env
+
+# Virtual environment and caches
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.import_linter_cache/
+
+# Tests — the suite runs in CI, never inside the runtime image.
+tests/
+
+# Development and build artifacts
+node_modules/
+dist/
+build/
+
+# Large evaluation datasets — not needed at runtime
+evals/
+
+# IDE and git
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test and type-checking outputs
+.coverage
+htmlcov/
+
+# Pre-commit hooks
+.pre-commit-config.yaml

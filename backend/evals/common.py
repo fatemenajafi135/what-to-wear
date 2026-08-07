@@ -1,8 +1,11 @@
 """Shared gateway wiring for the isolated evals project.
 
-Everything routes through the Vercel AI Gateway (same as the main package and the
-course sessions 5/6): one endpoint for the RAGAS judge, the embedding model, and
-the openevals LLM judge.
+Everything routes through the Vercel AI Gateway (same as the main
+package): one endpoint for the RAGAS judge, the embedding model, and the
+openevals LLM judge. This project deliberately never imports from
+`whattowear` (specs/007-ai-port/research.md §9's isolation) — its own
+env reads via `python-dotenv` are correct here, not a regression of the
+main package's `core.config.Settings` consolidation.
 """
 
 from __future__ import annotations
@@ -27,9 +30,7 @@ ARTIFACTS_DIR = Path(__file__).resolve().parents[1] / "artifacts" / "eval_runs"
 def _require_langsmith() -> None:
     """Tracing is mandatory (not optional), mirroring the main package's policy."""
     if not os.environ.get("LANGSMITH_API_KEY"):
-        raise RuntimeError(
-            "LANGSMITH_API_KEY is required — tracing is mandatory. Set it in ../.env"
-        )
+        raise RuntimeError("LANGSMITH_API_KEY is required — tracing is mandatory. Set it in ../.env")
     os.environ.setdefault("LANGSMITH_TRACING", "true")
     os.environ.setdefault("LANGSMITH_PROJECT", "whattowear-rag")
 
@@ -43,12 +44,12 @@ def gateway_key() -> str:
 
 
 def gateway_openai_client():
-    """Async OpenAI client pointed at the gateway, wrapped for LangSmith tracing
-    (RAGAS calls this client directly, bypassing LangChain's automatic
-    instrumentation, so we wrap it explicitly). Must be AsyncOpenAI: RAGAS's
-    collections-API metrics (score_ragas.py) call .ascore(), which needs an
-    async-capable client — a sync client raises "Cannot use agenerate() with a
-    synchronous client" on every single call."""
+    """Async OpenAI client pointed at the gateway, wrapped for LangSmith
+    tracing (RAGAS calls this client directly, bypassing LangChain's
+    automatic instrumentation, so we wrap it explicitly). Must be
+    AsyncOpenAI: RAGAS's collections-API metrics (score_ragas.py) call
+    .ascore(), which needs an async-capable client — a sync client raises
+    "Cannot use agenerate() with a synchronous client" on every call."""
     import openai
     from langsmith.wrappers import wrap_openai
 
@@ -58,12 +59,14 @@ def gateway_openai_client():
 
 def ragas_judge_llm():
     import instructor
-
     from ragas.llms import llm_factory
 
     return llm_factory(
-        JUDGE_MODEL, provider="openai", client=gateway_openai_client(),
-        mode=instructor.Mode.TOOLS, max_tokens=4096,
+        JUDGE_MODEL,
+        provider="openai",
+        client=gateway_openai_client(),
+        mode=instructor.Mode.TOOLS,
+        max_tokens=4096,
     )
 
 

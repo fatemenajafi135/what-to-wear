@@ -1,15 +1,14 @@
 """Hand-built test-user personas with distinct, deliberately constrained
-wardrobes — for manually exercising `recommend()` against edge cases the
-default 40-item `data/fixtures/wardrobe.json` doesn't surface (a near-complete
+wardrobes — for manually exercising the compiled graph against edge cases
+the default 40-item fixture wardrobe doesn't surface (a near-complete
 wardrobe rarely stress-tests "what if the user owns almost nothing
 appropriate for this request"). Not part of the golden-set eval harness
 (`eval/golden_set.py`/`eval/harness.py`) — these are for ad hoc, manual
 checking of a specific persona + occasion.
 
-Nothing in this module is executed at import time. Get a persona, optionally
-seed their preferences into memory, and invoke the compiled graph
-(`pipeline.graph.get_compiled_graph()`) yourself — or run this file
-directly (see the __main__ block at the bottom).
+Nothing in this module is executed at import time. Get a persona and
+invoke the compiled graph (`pipeline.graph.get_compiled_graph()`) yourself
+— or run this file directly (see the `__main__` block at the bottom).
 """
 
 from __future__ import annotations
@@ -24,8 +23,8 @@ def _item(
     id: str, category: str, colors: list[str], formality: Formality, warmth: int, season: list[Season]
 ) -> WardrobeItem:
     """Author items by color NAME for readability; converts to the hex the
-    schema actually requires (colors.py: hex is the source of truth, names are
-    never stored)."""
+    schema actually requires (colors.py: hex is the source of truth, names
+    are never stored)."""
     return WardrobeItem(
         id=id,
         category=category,
@@ -42,12 +41,12 @@ class TestUser:
     name: str
     description: str
     wardrobe: list[WardrobeItem]
-    # Descriptive only, for a human reading this file -- as of Feature 004
-    # (preference-memory), the profile is derived exclusively from real
-    # recorded feedback (memory.store.get_profile() aggregates Postgres
-    # suggestion_feedback rows); there's no longer a way to inject an
-    # arbitrary preference string directly, so this dict is no longer
-    # threaded into memory (see seed_test_user_memory's docstring below).
+    # Descriptive only, for a human reading this file — the profile is
+    # derived exclusively from real recorded feedback
+    # (memory.store.get_profile() aggregates persisted suggestion_feedback
+    # rows via the injected ClosetRepository); there's no way to inject an
+    # arbitrary preference string directly, so this dict is never threaded
+    # into memory.
     preferences: dict[str, str] = field(default_factory=dict)
 
 
@@ -58,7 +57,7 @@ MAYA = TestUser(
     description=(
         "Minimalist capsule wardrobe for a conservative office job. Deliberately "
         "owns no black-tie/gown pieces and no beachwear — good for testing what "
-        "recommend() does when a request has no well-matching items at all."
+        "the pipeline does when a request has no well-matching items at all."
     ),
     preferences={
         "color_preference": "navy, charcoal, cream — avoids bright/saturated colors",
@@ -143,6 +142,7 @@ if __name__ == "__main__":
     import argparse
     import uuid
 
+    from ..adapters.closet_fixture import FixtureClosetRepository
     from ..pipeline.graph import get_compiled_graph
 
     ap = argparse.ArgumentParser(description=__doc__)
@@ -154,13 +154,11 @@ if __name__ == "__main__":
     args = ap.parse_args()
 
     user = get_test_user(args.user_id)
-    # Profile seeding is no longer available here (Feature 004: the profile
-    # is derived only from real recorded feedback, via /preferences/feedback
-    # -> memory.store.get_profile()) -- this persona's `preferences` dict is
-    # descriptive only. To exercise profile_note()'s effect manually, record
-    # real feedback for this user_id through the API first.
+    # Profile seeding is not available here — the profile is derived only
+    # from real recorded feedback via the injected ClosetRepository, so
+    # this persona's `preferences` dict is descriptive only.
     thread_id = str(uuid.uuid4())
-    final_state = get_compiled_graph().invoke(
+    final_state = get_compiled_graph(FixtureClosetRepository()).invoke(
         {
             "occasion": args.occasion,
             "mood": args.mood,

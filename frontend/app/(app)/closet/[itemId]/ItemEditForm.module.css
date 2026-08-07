@@ -1,0 +1,27 @@
+/* docs/design-decisions.md §1 field anatomy: --space-lg between fields. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.chipGroupLabel {
+  color: var(--color-text-secondary);
+}
+
+.chipGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.errorText {
+  color: var(--color-error);
+}

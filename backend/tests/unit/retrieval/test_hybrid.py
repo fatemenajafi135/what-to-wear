@@ -135,7 +135,7 @@ class TestRetrieveL3Live:
 
         mock_search.assert_called_once_with("autumn office trends", max_results=5)
         assert len(docs) == 2
-        for d, r in zip(docs, fake_results):
+        for d, r in zip(docs, fake_results, strict=True):
             assert d.page_content == r["content"]
             assert d.metadata["url"] == r["url"]
             assert d.metadata["layer"] == "L3"

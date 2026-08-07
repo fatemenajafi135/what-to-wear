@@ -2,15 +2,15 @@
 
 Real color-theory classification of core items' colors (neutral-anchored,
 analogous, complementary, triadic) — not raw WCAG contrast. Contrast only
-measures lightness distance, never hue relationship, so it rewarded bold
-clashes (e.g. tomato red + emerald green) over elegant tonal pairings (e.g.
-navy + charcoal). See `docs/eval-baselines/pre-009/NOTES.md` and
-`specs/009-scoring-fixes/research.md` Decision 1 for the verified bug and
-the exact rule table this implements. The value-contrast bonus step below
-uses HSL lightness (a simpler, different axis than WCAG contrast) — the old
-`contrast_ratio` helper in `colors.py` is untouched and still public, just
-no longer consumed here; the WCAG math itself wasn't wrong, using it as the
-*entire* harmony signal was.
+measures lightness distance, never hue relationship, so an earlier version
+of this scorer rewarded bold clashes (e.g. tomato red + emerald green) over
+elegant tonal pairings (e.g. navy + charcoal); this is the corrected,
+evaluated version (`../app-legacy/docs/eval-baselines/` — carried forward
+unchanged, constitution Principle I). The value-contrast bonus step below
+uses HSL lightness (a simpler, different axis than WCAG contrast) —
+`colors.contrast_ratio` is untouched and still public, just not consumed
+here; the WCAG math itself wasn't wrong, using it as the *entire* harmony
+signal was.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from ..schema import Context, DimensionScore, WardrobeItem
 # section of FASHION_COLOR_PALETTE) always count as neutral regardless of
 # their computed HSL — several (oatmeal, camel, cream) don't clear the
 # numeric thresholds below on their own; the named list is load-bearing, not
-# a redundant belt-and-suspenders check (verified directly, see research.md).
+# a redundant belt-and-suspenders check.
 _NAMED_NEUTRAL_NAMES = frozenset(
     {
         "black",
@@ -61,11 +61,7 @@ _LIGHTNESS_BONUS = 0.1
 
 # 40-150 deg (equivalently 210-320 deg uncircularized) is neither analogous
 # nor a genuine ~180 deg complementary pairing — no organizing hue
-# relationship at all. Originally proposed at 0.4; revised to 0.3 during
-# implementation after the spec's own required test case (tomato red +
-# emerald green, <0.45) failed arithmetic at 0.4 once run against the real
-# palette hexes (0.4 base + 0.1 lightness-contrast bonus = 0.5). See
-# research.md Decision 1 addendum for the full verification.
+# relationship at all.
 _SCORE_NEUTRAL_ANCHOR = 0.9
 _SCORE_ANALOGOUS = 0.85
 _SCORE_COMPLEMENTARY_ACCENTED = 0.75

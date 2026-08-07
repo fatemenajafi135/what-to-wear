@@ -1,0 +1,40 @@
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-3xl) var(--space-lg) var(--space-xl);
+  gap: var(--space-xs);
+}
+
+.mark {
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+}
+
+.wordmark {
+  margin: 0;
+}
+
+.greeting {
+  margin: 0 0 var(--space-lg);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.welcomeBubble {
+  align-self: flex-start;
+  text-align: start;
+  background-color: var(--color-surface-sunken);
+  border-radius: 14px 14px 14px 4px;
+  padding: var(--space-md) var(--space-lg);
+  max-width: 90%;
+}
+
+.chips {
+  align-self: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
