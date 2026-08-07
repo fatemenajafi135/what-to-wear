@@ -45,6 +45,7 @@ from ..core.config import get_settings
 from . import preferences as preference_derivation
 
 if TYPE_CHECKING:
+    from ..core.config import Settings
     from ..ports import ClosetRepository
 
 _store = InMemoryStore()
@@ -65,6 +66,31 @@ def _reachable(url: str | None, timeout: float = 5.0) -> bool:
             return True
     except psycopg.OperationalError:
         return False
+
+
+def _init_postgres_saver(url: str, settings: Settings, mode: str) -> PostgresSaver:
+    """Initialize PostgresSaver with the given database URL.
+
+    Raises RuntimeError if initialization fails.
+    """
+    try:
+        pool: ConnectionPool[Connection[dict[str, object]]] = ConnectionPool(
+            conninfo=url,
+            min_size=1,
+            max_size=settings.wtw_checkpointer_pool_max,
+            kwargs={"autocommit": True, "prepare_threshold": None, "row_factory": dict_row},
+            check=ConnectionPool.check_connection,
+            open=True,
+        )
+        _checkpointer_stack.callback(pool.close)
+        saver = PostgresSaver(pool)
+        saver.setup()
+        _harden_checkpointer_tables(pool)
+        return saver
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to initialize PostgresSaver in '{mode}' mode. Check your database URL configuration: {e}"
+        ) from e
 
 
 def _harden_checkpointer_tables(pool: ConnectionPool[Connection[dict[str, object]]]) -> None:
@@ -111,55 +137,71 @@ def _harden_checkpointer_tables(pool: ConnectionPool[Connection[dict[str, object
 
 def get_checkpointer() -> InMemorySaver | PostgresSaver:
     """Lazy singleton (mirrors kb.get_kb()/graph.get_compiled_graph()).
-    Prefers `database_url_direct` (session-mode, port 5432) over
-    `database_url` (the Supavisor transaction pooler, port 6543). If no URL
-    is configured, uses `InMemorySaver` (e.g. local dev without a
-    checkpointer-capable Postgres). If a URL is configured but unreachable,
-    fails loudly to catch configuration errors early.
+
+    Behavior is controlled by wtw_checkpointer_mode (Settings):
+    - "memory": explicitly use InMemorySaver (development/testing without Postgres)
+    - "auto" (default): use Postgres if DATABASE_URL is reachable; otherwise
+      InMemorySaver (for local dev without Postgres)
+    - "postgres": require DATABASE_URL to be set and reachable; fail if missing
+      (prevents silent fallback to RAM when a cloud service forgets DATABASE_URL)
+
+    When using Postgres, prefers `database_url_direct` (session-mode, port 5432)
+    over `database_url` (the Supavisor transaction pooler, port 6543).
 
     Backed by a `ConnectionPool`, NOT a single long-lived connection. The
-    process-wide graph singleton reuses one checkpointer across every
-    request; a lone connection to the Supabase pooler gets closed on the
-    server side after an idle period, so the FIRST invoke would work and
-    the NEXT one would raise `OperationalError: the connection is closed`
-    from inside `graph.invoke` (checkpointer.get_tuple). The pool checks a
-    connection's liveness on checkout (`check=ConnectionPool.
-    check_connection`) and transparently discards+replaces a dead one, so
-    an idle drop can never surface as a request failure.
+    process-wide graph singleton reuses one checkpointer across every request;
+    a lone connection to the Supabase pooler gets closed on the server side
+    after an idle period, so the FIRST invoke would work and the NEXT one would
+    raise `OperationalError: the connection is closed` from inside
+    `graph.invoke` (checkpointer.get_tuple). The pool checks a connection's
+    liveness on checkout (`check=ConnectionPool.check_connection`) and
+    transparently discards+replaces a dead one, so an idle drop can never
+    surface as a request failure.
 
     Pool connections use `prepare_threshold=None` rather than
     `PostgresSaver.from_conn_string`'s hardcoded `prepare_threshold=0`
-    (prepare on first use): that reproduces the documented "prepared
-    statement does not exist" failure even against the direct URL, not
-    only the pooler — the same mitigation `core/db.py`'s SQLAlchemy engine
-    uses applies here too."""
+    (prepare on first use): that reproduces the documented "prepared statement
+    does not exist" failure even against the direct URL, not only the pooler —
+    the same mitigation `core/db.py`'s SQLAlchemy engine uses applies here too.
+    """
     global _checkpointer
     if _checkpointer is not None:
         return _checkpointer
 
     settings = get_settings()
+    mode = settings.wtw_checkpointer_mode.lower()
+
+    # Explicit memory mode: always use InMemorySaver
+    if mode == "memory":
+        _checkpointer = InMemorySaver()
+        return _checkpointer
+
+    # Find the best database URL (prefer direct session-mode connection)
     url = settings.database_url_direct if _reachable(settings.database_url_direct) else settings.database_url
 
-    if not url:
-        _checkpointer = InMemorySaver()
-    else:
-        try:
-            pool: ConnectionPool[Connection[dict[str, object]]] = ConnectionPool(
-                conninfo=url,
-                min_size=1,
-                max_size=settings.wtw_checkpointer_pool_max,
-                kwargs={"autocommit": True, "prepare_threshold": None, "row_factory": dict_row},
-                check=ConnectionPool.check_connection,
-                open=True,
+    # "auto" mode: use Postgres if available, fallback to memory
+    if mode == "auto":
+        if url:
+            _checkpointer = _init_postgres_saver(url, settings, mode)
+        else:
+            logger.info(
+                "No database URL configured; using InMemorySaver. Set wtw_checkpointer_mode='memory' to silence this."
             )
-            _checkpointer_stack.callback(pool.close)
-            saver = PostgresSaver(pool)
-            saver.setup()
-            _harden_checkpointer_tables(pool)
-            _checkpointer = saver
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize PostgresSaver. Check your database URL configuration: {e}") from e
-    return _checkpointer
+            _checkpointer = InMemorySaver()
+        return _checkpointer
+
+    # "postgres" mode: require database URL and it must be reachable
+    if mode == "postgres":
+        if not url:
+            raise RuntimeError(
+                "wtw_checkpointer_mode is 'postgres' but no DATABASE_URL is configured. "
+                "Set DATABASE_URL or change wtw_checkpointer_mode to 'auto' or 'memory'."
+            )
+        _checkpointer = _init_postgres_saver(url, settings, mode)
+        return _checkpointer
+
+    # Unknown mode
+    raise ValueError(f"Invalid wtw_checkpointer_mode='{mode}'. Must be 'auto', 'memory', or 'postgres'.")
 
 
 def _history_ns(user_id: str) -> tuple[str, str]:

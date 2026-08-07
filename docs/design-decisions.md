@@ -2643,3 +2643,234 @@ wording once given, in that one file, and remove the draft flag comment when it'
 | (b) Poll + visibility-triggered detection (the more "robust" industry-standard combination) | Explicitly declined when asked directly — the design owner chose the simpler reload-triggered behavior over proactive detection while a tab stays open. |
 | (c) Toast reappears on next in-app navigation after a dismiss | Doesn't fit reload-triggered detection: in-app (client-side) navigation never re-checks the service worker, so there is no new information to justify re-showing it before the next real reload. |
 | (d) Treat this like §51's exception and let a model draft the copy per-occurrence | Wrong category of copy — this is one fixed system message, not a reply to unpredictable input; §51's own "What this does not license" section says as much. |
+
+## 54. Feature 017 (Deployment readiness) — CORS origins configuration
+
+**Status: decided.** CORS allowlist is configured via the `wtw_cors_origins` environment variable, parsed through the `Settings` class (not bare `os.getenv` at module level).
+
+### Default and parsing
+
+- **Development (default):** If `wtw_cors_origins` is unset or empty, defaults to `["http://localhost:3000", "http://localhost:3100", "http://127.0.0.1:3000", "http://127.0.0.1:3100"]`.
+- **Staging/production:** Set to a comma-separated list (e.g., `https://app.example.com,https://staging.example.com`).
+- **Parsing:** Each origin is `.strip()`'d of leading/trailing whitespace; empty entries are filtered. A string of only commas and whitespace reverts to defaults.
+
+This prevents the silent failure mode where `"https://app.example.com, https://staging.example.com"` (note the leading space on the second origin) passes configuration validation but the second origin is never matched — the space becomes part of the origin string, no browser's `Origin` header includes it, and requests from that origin are silently rejected.
+
+### Amendment (found in review, before merge): the variable was inert, and this section's own reasoning is why
+
+**Status: supersedes the "Why Settings, not bare os.getenv" argument originally recorded
+here.** As first implemented, `wtw_cors_origins` and its six unit tests existed, and
+`render.yaml` set `WTW_CORS_ORIGINS` — but `main.py` still passed a hardcoded localhost
+list to `CORSMiddleware`. **Nothing read the parsed value.** Every request from a
+deployed frontend would have been rejected by CORS.
+
+The sequence that produced it is worth recording, because the reasoning looked sound at
+each step:
+
+1. `allow_origins=get_settings().cors_allowed_origins` was wired in, correctly.
+2. That broke `test_import_safety.py` — `Settings` requires `DATABASE_URL`, middleware
+   registers at import time, and `whattowear.main` is named in that test's module list.
+3. The conflict was resolved by reverting to the hardcoded list, leaving the mechanism
+   in place but disconnected.
+
+Step 3 is the error, and this section's original claim — that bare `os.getenv` "breaks
+the import-safety contract" — is what made it look like the only option. **It does not.**
+`os.getenv` returns `None` for a missing variable; it never raises. The contract forbids
+*requiring configuration at import*, not *reading the environment at import*.
+
+**Resolution:** parsing moved to a module-level pure function,
+`core.config.parse_cors_origins(raw: str | None)`. `main.py` calls
+`parse_cors_origins(os.getenv("WTW_CORS_ORIGINS"))` — no `Settings`, contract intact —
+and `Settings.cors_allowed_origins` delegates to the same function for any caller that
+does hold a `Settings`. One parser, two entry points, no possible drift.
+
+**Why no test caught it:** `test_config.py` exercised the parser in isolation, and every
+test in `test_cors.py` used a localhost origin — which is allowed whether the wiring
+exists or not. Green suite, broken deployment. This is the fifth defect on this project
+with the identical shape: *a value is accepted, then silently dropped before it is used.*
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — module-level `parse_cors_origins()`, called from `main.py` via `os.getenv` and from `Settings.cors_allowed_origins` | — |
+| (b) `get_settings()` in `main.py` | Genuinely breaks the zero-env-vars import contract; this part of the original reasoning was right. |
+| (c) `Settings` field with no call site in `main.py` | What shipped and was reverted — the mechanism exists and does nothing. |
+| (d) App factory (`create_app()` + `uvicorn --factory`) | Clean, and would allow `get_settings()` — but changes the ASGI target referenced by the Dockerfile, CI, the e2e config and every `TestClient(app)` import. Disproportionate to the problem. |
+| (e) Duplicating the parsing inline in `main.py` | Two implementations of the stripping rules, free to diverge — the failure this section already exists to prevent. |
+
+### Test coverage
+
+`tests/unit/test_config.py` covers the parser: unset, whitespace stripping, empty-entry
+filtering, whitespace-only and empty-string input.
+
+`tests/integration/test_cors.py::test_a_configured_deployment_origin_is_allowed` covers
+the **wiring** — that a configured origin reaches the running app, that an entry
+following a comma-space is matched, and that configuring origins *replaces* the local
+defaults rather than extending them. Verified to fail against the hardcoded list and
+pass against the fix.
+
+---
+
+## 55. Feature 017 (Deployment readiness) — Checkpointer initialization modes
+
+**Status: decided.** Checkpointer initialization is controlled by the `wtw_checkpointer_mode` setting ("auto" | "memory" | "postgres"), preventing silent fallback to RAM when a cloud service misconfigures or forgets `DATABASE_URL`.
+
+### Three modes
+
+- **"auto" (default):** Use Postgres if `DATABASE_URL` is reachable; otherwise use `InMemorySaver`. Suitable for local development with or without Postgres.
+- **"memory":** Explicitly use `InMemorySaver` (development, testing, or deployments that don't need persistence).
+- **"postgres":** `DATABASE_URL` must be set and reachable; fail at boot if missing (catches misconfiguration on cloud services).
+
+### The problem solved
+
+When `DATABASE_URL` is unset on a cloud service, the original code silently used `InMemorySaver`, and everything appeared to work until the first pod restart — then all active conversation threads vanished from RAM without warning. This is a load-bearing failure: conversations are the app's primary state, and losing them silently is worse than failing loudly at boot.
+
+The fix requires an **explicit signal** to distinguish:
+- Local development with no Postgres (valid, intentional, common) → "auto" or "memory"
+- Staging/production where DATABASE_URL was forgotten (misconfiguration, dangerous) → "postgres" mode + error at boot
+
+### Why not just raise when `DATABASE_URL` is missing?
+
+Local development often runs without Postgres (Supabase, checkpointer, and knowledge base can be optional depending on what you're testing). The `"auto"` default preserves that capability while `"postgres"` mode catches cloud misconfiguration.
+
+**Rejected alternatives:**
+- **(a) chosen** — Three-mode system with "auto" default — Backward compatible, explicit signal for prod, silent fallback still works locally.
+- (b) Always require `DATABASE_URL` — Breaks local dev; doesn't distinguish intentional (memory mode) from misconfiguration (forgot the env var).
+- (c) Environment-specific detection (check if `ENVIRONMENT=staging` to decide whether to fail) — Assumes the environment setting is correct, which is the same problem we're trying to catch.
+- (d) Add a separate `REQUIRE_POSTGRES` boolean — Redundant with the three modes; less clear than a named mode.
+
+### Test coverage
+
+`tests/unit/test_checkpointer_init.py` covers: memory mode (always InMemorySaver), auto mode with no DB (falls back to InMemory), postgres mode with no DB (raises RuntimeError), invalid mode (raises ValueError), and singleton behavior.
+
+---
+
+## 56. Feature 017 (Deployment readiness) — Docker image build strategy
+
+**Status: decided.** Docker image builds use `uv sync --frozen --no-dev` for reproducible, pinned dependency installation from `uv.lock`. `.dockerignore` explicitly excludes secrets (`.env`, `legacy.env`), large build artifacts (`.venv`, `evals/`), and development files.
+
+### Reproducibility and security
+
+- **`uv sync --frozen --no-dev`:** Installs exact versions from `uv.lock` (not `uv pip install -e .`, which ignores the lockfile and rebuilds from `pyproject.toml`). Guarantees every build is identical.
+- **`.dockerignore` exclusions:**
+  - `.env` and `legacy.env` — secrets never baked into images
+  - `.venv/` (531 MB) — no sense shipping the host's virtualenv; the image gets its own
+  - `evals/` (698 MB) — evaluation datasets not needed at runtime
+  - `.git/`, `__pycache__/`, `.pytest_cache/` — not needed at runtime
+  
+Without `.dockerignore`, the build context was ~1.2 GB (mostly `.venv` and `evals/`), and secrets were copied directly into the image layers.
+
+### Non-root user and $PORT
+
+The Dockerfile runs the app as a non-root user (`appuser`, UID 1000) for security. The `$PORT` environment variable is respected at runtime (defaults to `8000`), allowing hosting platforms (Render, Cloud Run) to inject their own port.
+
+**Rejected alternatives:**
+- **(a) chosen** — uv sync --frozen, .dockerignore, non-root user, $PORT env var — Production-ready, secure, reproducible, platform-flexible.
+- (b) `uv pip install -e .` — Ignores uv.lock; not reproducible.
+- (c) Hardcoded port 8000 in CMD — Inflexible; standard platforms inject PORT.
+- (d) Run as root — Security risk; Render and other platforms default to non-root anyway.
+
+### Image size
+
+Final image is ~1.27 GB (Python 3.12 slim + FastAPI + LangChain + Qdrant client). This is reasonable for this dependency footprint; optimization opportunities (e.g., multi-stage build, Debian packaging) are deferred.
+
+---
+
+## 57. Feature 017 (Deployment readiness) — Hosting plan and cold-start tradeoff
+
+**Status: decided.** Backend is deployed on Render's **free tier** (`plan: free`), accepting cold-start downtime in exchange for zero cost during development/staging.
+
+### The cold-start cost
+
+Render's free tier spins down on inactivity. A cold start means:
+1. Container spins up (takes 10-30 seconds typically)
+2. Python boots (instantiates uv dependencies)
+3. App startup runs (calls `get_engine()`, `get_compiled_graph()`, `PostgresSaver.setup()`, checkpointer RLS hardening)
+
+Total: ~20-60 seconds before the first request is answered. This is visible to the user.
+
+### Staging: acceptable. Production: not.
+
+**Staging/testing:** Free tier is fine. Infrequent requests, tolerable latency.
+
+**Production:** Should upgrade to Render's paid tier or an equivalent always-on service. Cold starts on user-facing endpoints are unacceptable.
+
+The `render.yaml` currently specifies `plan: free`. When moving to production, change this to `plan: starter` (~$7/month) or higher to eliminate cold starts.
+
+**Rejected alternatives:**
+- **(a) chosen** — Free tier for staging, cost upgrade for prod — Covers both use cases correctly without premature spending.
+- (b) Paid tier always — Wastes money during development.
+- (c) Serverless (e.g., Cloud Run) — Different cold-start behavior; still slow for the LLM bootstrap. Revisit if scaling demands it.
+
+---
+
+## 58. Feature 017 (Deployment readiness) — corrections found in review
+
+**Status: decided.** Four defects found reviewing 017 before merge, each verified by
+running it rather than reading it. Recorded together because they share a cause: config
+that is *written* is not config that is *in effect*, and none of these were observable
+from the source alone.
+
+### 58.1 `render.yaml` — `scope: "secret"` is not a Render field
+
+Six variables were marked `scope: "secret"`, which Render does not recognise on an env
+var; it makes nothing secret and may fail blueprint validation. Render's actual
+mechanism is `sync: false` — "prompt me in the dashboard, never store this in git."
+Corrected, and `WTW_CORS_ORIGINS` moved to `sync: false` as well: the real Vercel URL
+isn't known until the frontend deploys, and a guessed value silently rejects every API
+call from the actual one.
+
+### 58.2 `render.yaml` — no `branch`, so Render would have deployed the legacy app
+
+`rebuild` is not this repository's default branch; `main` still is, and `main` is the
+legacy prototype. A blueprint with no `branch:` deploys the default branch — so Render
+would have built the old application from a blueprint written for the new one, with the
+new environment variables. Pinned `branch: rebuild`, with a note to change it at cutover.
+
+### 58.3 `render.yaml` — `dockerfilePath` doubled the path, and `PORT` was overridden
+
+`rootDir: backend` sets the build context, and `dockerfilePath` resolves relative to it —
+so `./backend/Dockerfile` looks for `backend/backend/Dockerfile`. Corrected to
+`./Dockerfile`.
+
+`PORT` was also pinned to `8000` in `envVars`. Render injects its own `PORT` and
+health-checks the port it assigned; overriding it makes the service listen where the
+platform is not looking. Removed — the Dockerfile's `ENV PORT=8000` remains as a default
+for local `docker run`, and the CMD reads `${PORT}` at container start either way.
+
+### 58.4 The image was ~500 MB larger than it needed to be
+
+`RUN useradd && chown -R appuser:appuser /app`, placed after the dependency install,
+rewrites every file it touches into a new image layer — so the ~500 MB dependency tree
+was stored twice. Measured: **1.27 GB**, with 68 s spent in the chown step alone.
+
+Creating the user first, chowning `/app` while it is still empty, and using
+`COPY --chown` gives an identical result with no duplicate layer: **776 MB**, and build
+time down from 1m43s to 39s. `tests/`, `.ruff_cache/` and `.import_linter_cache/` were
+also added to `.dockerignore` — none are needed at runtime.
+
+`/app` must be chowned explicitly before `WORKDIR`: `WORKDIR` creates the directory
+root-owned, and `COPY --chown` sets ownership on the files it copies, not on the
+directory containing them, so `uv venv` fails with `Permission denied` without it.
+Found by building, not by reading.
+
+### 58.5 The runbook would have produced a broken Supabase project
+
+The runbook is what the repo owner follows without a developer present, so its errors
+are the most expensive kind. Corrected:
+
+| Wrong | Actual |
+|---|---|
+| Migrations in `backend/migrations/`, named `0001.sql` | `infra/supabase/migrations/`, named `0001_init.sql` … `0012_conversational_turns.sql`. `backend/migrations/` does not exist, and the documented `printf "%04d"` loop matched nothing. |
+| Storage bucket named `photos` | **`wardrobe-photos`** — hardcoded in `0006_wardrobe_photos.sql`'s RLS policy and in every signed URL. Any other name leaves uploads 404ing while the app looks fine. |
+| Create bucket RLS policies by hand | `0006_wardrobe_photos.sql` already creates `wardrobe_photos_owner_rw` and its grant. The hand-written SQL given was not valid policy syntax and cited a `0013_storage_rls.sql` that does not exist. Replaced with a verification query. |
+| `DATABASE_URL` shaped like `postgres.pooler-dev@db.<ref>.supabase.co:6543` | That username is the **local** Supabase CLI's pooler emulation. A hosted project's pooler host and username differ; the runbook now says to copy the string from the dashboard rather than hand-write it. |
+
+Also added: `supabase db push` as the primary migration path (the repo is already set up
+for it), `ON_ERROR_STOP=1` on the psql fallback so a failure cannot leave a half-applied
+schema, and a note that `DATABASE_URL_DIRECT` is best left unset on Render — Supabase's
+direct connection is IPv6-only without the IPv4 add-on, and the checkpointer already
+falls back to the pooler.
+
+---

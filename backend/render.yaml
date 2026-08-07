@@ -1,5 +1,0 @@
-services:
-  - type: web
-    name: w2w-backend-staging
-    runtime: docker
-    plan: free

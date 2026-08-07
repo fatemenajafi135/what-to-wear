@@ -21,21 +21,11 @@ from whattowear.api.v1.routes.profile import router as profile_router
 from whattowear.api.v1.routes.recommend import router as recommend_router
 from whattowear.api.v1.routes.taxonomy import router as taxonomy_router
 from whattowear.api.v1.routes.whoami import router as whoami_router
+from whattowear.core.config import parse_cors_origins
 from whattowear.core.db import get_engine
 from whattowear.core.logging import configure_logging
 from whattowear.pipeline.graph import get_compiled_graph
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
-
-_CORS_ALLOWED_ORIGINS = (
-    os.getenv("CORS_ORIGINS", "").split(",")
-    if os.getenv("CORS_ORIGINS")
-    else [
-        "http://localhost:3000",
-        "http://localhost:3100",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3100",
-    ]
-)
 
 logger = logging.getLogger(__name__)
 
@@ -63,13 +53,30 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="What to Wear — backend foundation", lifespan=lifespan)
+
 # Feature 004 is the first slice where a browser calls this API directly
 # (003's /whoami was never called from the UI) — without this, every
 # request from the Next.js dev server is blocked by the browser's CORS
 # preflight before it ever reaches a route.
+#
+# `os.getenv`, NOT `get_settings()`: middleware has to be registered at import
+# time, and `Settings` requires `DATABASE_URL`, so calling it here would break
+# the zero-env-vars import contract `test_import_safety.py` enforces on this
+# exact module. `os.getenv` never raises. The parsing (and the local defaults,
+# with the reason both host spellings are listed) lives in
+# `core.config.parse_cors_origins`, which `Settings.cors_allowed_origins` also
+# delegates to — one implementation, so the deployed path and the Settings path
+# cannot drift.
+#
+# This wiring is what makes `WTW_CORS_ORIGINS` do anything at all. It was
+# briefly reverted to a hardcoded list while resolving the import-contract
+# conflict above, which left the env var, its tests and `render.yaml`'s entry
+# all inert — every request from a deployed frontend would have been rejected
+# by CORS. `test_cors.py::test_a_configured_deployment_origin_is_allowed`
+# exists to catch that regression; do not inline this list again.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_CORS_ALLOWED_ORIGINS,
+    allow_origins=parse_cors_origins(os.getenv("WTW_CORS_ORIGINS")),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -26,6 +26,48 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# BOTH `localhost` and `127.0.0.1` are listed deliberately. To a browser they
+# are different origins even though they resolve to the same machine, and this
+# project sends you to both: Supabase's `site_url` is `http://127.0.0.1:3000`
+# and `next.config.ts`'s `allowedDevOrigins` allows 127.0.0.1 (feature 003
+# needed that for OAuth), while Playwright and most people typing a URL use
+# `localhost`. Listing only one produced a 400 on every preflight from the
+# other, which surfaced as the closet's generic "Couldn't load your closet."
+# error — invisible to the whole test suite, because Playwright runs on the
+# host that happened to work. Ports 3000 (`npm run dev`) and 3100 (the e2e
+# suite's own dev server) are both real local origins.
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3100",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3100",
+]
+
+
+def parse_cors_origins(raw: str | None) -> list[str]:
+    """Parse a comma-separated origin list, falling back to local defaults.
+
+    Module-level and pure, taking the raw string rather than a `Settings`,
+    because `main.py` has to add `CORSMiddleware` at import time and cannot
+    call `get_settings()` there: `Settings` requires `DATABASE_URL`, so that
+    would break the zero-env-vars import contract `test_import_safety.py`
+    exists to enforce (which lists `whattowear.main` explicitly). `main.py`
+    reads `os.getenv("WTW_CORS_ORIGINS")` — which never raises — and hands the
+    string here, so the parsing rules live in exactly one place and the
+    deployed path and the `Settings` path cannot drift apart.
+
+    Each entry is stripped: `"a.com, b.com"` after a comma-space would
+    otherwise yield `" b.com"`, which never matches a browser's `Origin`
+    header and fails silently — no error anywhere, just rejected requests.
+    An empty or whitespace-only value falls back to the defaults rather than
+    producing an empty allow-list, which would reject everything including
+    local development.
+    """
+    if not raw:
+        return list(DEFAULT_CORS_ORIGINS)
+    origins = [origin.strip() for origin in raw.split(",")]
+    return [origin for origin in origins if origin] or list(DEFAULT_CORS_ORIGINS)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -90,6 +132,14 @@ class Settings(BaseSettings):
 
     # --- LangGraph checkpointer pool (memory/store.py) ------------------------
     wtw_checkpointer_pool_max: int = 5
+    # Mode for checkpointer initialization. Prevents silent fallback to RAM on
+    # misconfiguration (e.g., forgetting DATABASE_URL on a cloud service).
+    # Options:
+    #   "auto" (default): use Postgres if DATABASE_URL is set and reachable;
+    #     otherwise use InMemorySaver (for local dev).
+    #   "memory": explicitly use InMemorySaver (no Postgres).
+    #   "postgres": require DATABASE_URL to be set and reachable; fail if missing.
+    wtw_checkpointer_mode: str = "auto"
 
     # --- Closet (feature 004) --------------------------------------------------
     wtw_closet_page_size: int = 20
@@ -118,6 +168,22 @@ class Settings(BaseSettings):
     # Lifetime per thread, not reset by a "Start styling" tap (design-decisions.md
     # §48) — counted from existing `messages` rows, not a separate counter.
     wtw_conversation_turn_cap: int = 6
+
+    # --- CORS (feature 017) — deployment readiness --------------------------------
+    # Comma-separated list of allowed origins. Optional; unset means the local
+    # development defaults. Parsing lives in the module-level
+    # `parse_cors_origins()` below, NOT here — see that function's docstring for
+    # why `main.py` cannot reach this field.
+    wtw_cors_origins: str | None = None
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        """The parsed allow-list, for any caller that already holds a `Settings`.
+
+        `main.py` deliberately does NOT use this — it has no `Settings` at
+        import time. Both paths share `parse_cors_origins()` so they can never
+        disagree."""
+        return parse_cors_origins(self.wtw_cors_origins)
 
     @property
     def judge_model(self) -> str:

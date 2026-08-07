@@ -1,0 +1,78 @@
+# Render Blueprint. Must live at the REPOSITORY ROOT — Render only reads
+# `render.yaml` from there, which is why this is not in `backend/` next to the
+# Dockerfile it points at.
+#
+# See docs/017-deployment-runbook.md for the values to supply and the order to
+# create things in.
+services:
+  - type: web
+    name: w2w-backend-staging
+    runtime: docker
+
+    # `rebuild` is NOT this repository's default branch — `main` is still the
+    # legacy prototype. Without this line Render deploys the default branch,
+    # which would build and serve the OLD app from a blueprint written for the
+    # new one. Update this at cutover, when `rebuild` becomes `main`.
+    branch: rebuild
+
+    # `rootDir` sets the build context, which is what `backend/Dockerfile`'s
+    # own `COPY . .` copies (and what `backend/.dockerignore` filters).
+    # `dockerfilePath` is then resolved relative to that root — so it is
+    # `./Dockerfile`, NOT `./backend/Dockerfile`, which would look for
+    # `backend/backend/Dockerfile`.
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+
+    # Free instances spin down after ~15 minutes idle. This backend's cold
+    # start is expensive — it imports LangChain and LiteLLM, loads the
+    # knowledge base, compiles the LangGraph graph, and runs
+    # `PostgresSaver.setup()` plus the checkpointer RLS hardening — so the
+    # first request after an idle period is slow rather than merely delayed.
+    # Acceptable for staging, where the alternative is paying for an instance
+    # nobody is using. Revisit before real users (docs/design-decisions.md).
+    plan: free
+
+    healthCheckPath: /health
+
+    envVars:
+      # `sync: false` means "prompt me in the dashboard, never store it in
+      # git." It is Render's mechanism for secrets; `scope:` is not a field
+      # Render recognises on an env var and does not make anything secret.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_DIRECT
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: AI_GATEWAY_API_KEY
+        sync: false
+      - key: WTW_QDRANT_URL
+        sync: false
+      - key: WTW_QDRANT_API_KEY
+        sync: false
+
+      # The frontend's deployed origin(s), comma-separated. `sync: false`
+      # because the real Vercel URL is not known until the frontend deploys,
+      # and hardcoding a guess here silently rejects every API call from the
+      # actual one. Must be the exact origin — scheme and host, no trailing
+      # slash, no path.
+      - key: WTW_CORS_ORIGINS
+        sync: false
+
+      # Non-secret, safe to keep in git.
+      - key: SUPABASE_JWT_AUD
+        value: authenticated
+      # "postgres" makes a missing or unreachable DATABASE_URL a hard startup
+      # failure. Without it the checkpointer silently falls back to in-memory
+      # storage, and conversations would vanish on every redeploy while the
+      # service still reported healthy.
+      - key: WTW_CHECKPOINTER_MODE
+        value: postgres
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ENVIRONMENT
+        value: staging
+      # PORT is deliberately NOT set. Render injects its own and health-checks
+      # the port it assigned; overriding it here makes the service listen
+      # somewhere Render is not looking. The Dockerfile defaults to 8000 only
+      # for local `docker run`.
