@@ -125,6 +125,16 @@ class Settings(BaseSettings):
 
     # --- Corpus ingestion (constitution X: no absolute path, no `~`) ---------
     corpus_local_dir: str | None = None
+    # How `kb.get_kb()` obtains the knowledge base (feature 017 — deployment).
+    #   "corpus"    — read CORPUS_LOCAL_DIR from disk, then build or reconnect
+    #                 against Qdrant. The original, evaluated behaviour.
+    #   "reconnect" — attach to an already-populated Qdrant collection and
+    #                 rebuild the chunk list from stored payloads. Never reads
+    #                 the corpus, so a deployed instance does not need it.
+    #   "auto"      — "corpus" when CORPUS_LOCAL_DIR is set, else "reconnect".
+    # Explicit modes rather than a silent fallback, for the same reason
+    # `wtw_checkpointer_mode` has them (docs/design-decisions.md §55).
+    wtw_kb_mode: str = "auto"
     wtw_chunk_size: int = 900
     wtw_chunk_overlap: int = 120
     wtw_qdrant_timeout: int = 120

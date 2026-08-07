@@ -82,6 +82,16 @@ services:
       # service still reported healthy.
       - key: WTW_CHECKPOINTER_MODE
         value: postgres
+      # The corpus lives outside the repository (CORPUS_LOCAL_DIR points at a
+      # sibling directory) and is not in the image, so this instance can never
+      # build the knowledge base itself. "reconnect" attaches to the existing
+      # Qdrant collection and rebuilds the chunk list from stored payloads, and
+      # fails at startup if that collection is missing or empty rather than
+      # serving an empty KB and producing ungrounded styling output.
+      # Populate the collection first from a machine that has the corpus:
+      #   uv run python -m whattowear.ingest.cli
+      - key: WTW_KB_MODE
+        value: reconnect
       - key: LOG_LEVEL
         value: INFO
       - key: ENVIRONMENT
