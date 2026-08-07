@@ -202,9 +202,22 @@ Render prompts for them instead. The service won't run correctly until they're s
    | `DATABASE_URL` | Supabase → **Connect** (or Settings → Database) → copy the **Transaction pooler** string verbatim, then substitute your password |
    | `SUPABASE_URL` | Supabase → Settings → API → "Project URL" |
    | `AI_GATEWAY_API_KEY` | Your Vercel AI Gateway key |
+   | `LANGSMITH_API_KEY` | **Required.** smith.langchain.com → Settings → API Keys. Tracing is mandatory in this project, and the check runs *before* every gateway call — see the warning below. |
+   | `WTW_TOKEN_ENCRYPTION_KEY` | Required for the calendar feature. Generate: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
    | `WTW_QDRANT_URL` | Qdrant Cloud → cluster details |
    | `WTW_QDRANT_API_KEY` | Qdrant Cloud → API keys |
    | `WTW_CORS_ORIGINS` | Your Vercel URL — **you won't have this until Part 4.** Leave it blank now and come back. |
+
+   ⚠️ **`LANGSMITH_API_KEY` is not optional, and its absence is invisible.**
+   `_require_langsmith()` runs before every gateway call, so without it *every*
+   LLM, embedding, vision and rerank call raises — while `/health` still returns
+   200 and the service looks completely fine. The symptoms are indirect: adding a
+   photo appears to work but the scan pre-fills nothing and you have to type every
+   attribute by hand, and styling requests never produce an outfit. If you see
+   either, check this key before anything else.
+
+   Optional, and safe to leave unset for now: `COHERE_API_KEY` (improves retrieval
+   reranking) and `TAVILY_API_KEY` (trend lookups). Both degrade gracefully.
 
    ⚠️ **Copy the connection string from the dashboard; do not hand-write it.** A hosted
    project's pooler host and username are not the same shape as the local stack's — the
