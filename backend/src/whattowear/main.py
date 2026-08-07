@@ -7,6 +7,7 @@ it exists to prove JWT verification works end to end.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -20,6 +21,7 @@ from whattowear.api.v1.routes.profile import router as profile_router
 from whattowear.api.v1.routes.recommend import router as recommend_router
 from whattowear.api.v1.routes.taxonomy import router as taxonomy_router
 from whattowear.api.v1.routes.whoami import router as whoami_router
+from whattowear.core.config import parse_cors_origins
 from whattowear.core.db import get_engine
 from whattowear.core.logging import configure_logging
 from whattowear.pipeline.graph import get_compiled_graph
@@ -57,26 +59,24 @@ app = FastAPI(title="What to Wear — backend foundation", lifespan=lifespan)
 # request from the Next.js dev server is blocked by the browser's CORS
 # preflight before it ever reaches a route.
 #
-# CORS origins default to localhost (see Settings.cors_allowed_origins for
-# how to override via wtw_cors_origins env var). BOTH `localhost` and
-# `127.0.0.1` are included in defaults deliberately: to a browser, they are
-# different origins even though they resolve to the same machine. Supabase's
-# `site_url` is `http://127.0.0.1:3000`, and `next.config.ts`'s
-# `allowedDevOrigins` allows 127.0.0.1 (feature 003 needed that for OAuth),
-# while Playwright and most developers typing a URL use `localhost`. Listing
-# only one produces a 400 on every preflight from the other, surfacing as the
-# closet's generic "Couldn't load your closet." error — invisible to the whole
-# test suite because Playwright runs on the host that happens to work. There is
-# no security cost to allowing both locally; a deployed frontend gets a single
-# explicit origin from configuration.
+# `os.getenv`, NOT `get_settings()`: middleware has to be registered at import
+# time, and `Settings` requires `DATABASE_URL`, so calling it here would break
+# the zero-env-vars import contract `test_import_safety.py` enforces on this
+# exact module. `os.getenv` never raises. The parsing (and the local defaults,
+# with the reason both host spellings are listed) lives in
+# `core.config.parse_cors_origins`, which `Settings.cors_allowed_origins` also
+# delegates to — one implementation, so the deployed path and the Settings path
+# cannot drift.
+#
+# This wiring is what makes `WTW_CORS_ORIGINS` do anything at all. It was
+# briefly reverted to a hardcoded list while resolving the import-contract
+# conflict above, which left the env var, its tests and `render.yaml`'s entry
+# all inert — every request from a deployed frontend would have been rejected
+# by CORS. `test_cors.py::test_a_configured_deployment_origin_is_allowed`
+# exists to catch that regression; do not inline this list again.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3100",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3100",
-    ],
+    allow_origins=parse_cors_origins(os.getenv("WTW_CORS_ORIGINS")),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
