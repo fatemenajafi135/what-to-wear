@@ -21,7 +21,7 @@ export function HeroState({ onSuggestionTap }: HeroStateProps) {
   return (
     <div className={styles.hero}>
       {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset, not optimizable content */}
-      <img src="/mark.svg" alt="" width={60} height={60} className={styles.mark} />
+      <img src="/mark.svg" alt="" width={60} height={60} className={`${styles.mark} brandMark`} />
       <p className={`textDisplay ${styles.wordmark}`}>What to Wear</p>
       <p className={styles.greeting}>{greeting}</p>
 
