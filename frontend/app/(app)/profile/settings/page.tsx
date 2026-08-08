@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
-import { IconButton } from "@/components/ui/IconButton/IconButton";
 import { Button } from "@/components/ui/Button/Button";
 import { getProfile, type ProfileResponse } from "@/lib/api/profile";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
@@ -61,6 +60,8 @@ export default function SettingsPage() {
     setMobileShowingList(false);
   }
 
+  const activeSectionLabel = SECTIONS.find((section) => section.key === activeSection)?.label ?? "";
+
   function renderSection(profile: ProfileResponse) {
     switch (activeSection) {
       case "style":
@@ -78,7 +79,14 @@ export default function SettingsPage() {
 
   return (
     <>
-      <TopHeader title="Settings" backHref="/profile" />
+      <div className={!mobileShowingList ? styles.hideBelowDesktop : undefined}>
+        <TopHeader title="Settings" backHref="/profile" />
+      </div>
+      {!mobileShowingList && (
+        <div className={styles.mobileDetailHeader}>
+          <TopHeader title={activeSectionLabel} subtitle="Settings" onBack={() => setMobileShowingList(true)} />
+        </div>
+      )}
 
       {loadState === "loading" && (
         <div className={styles.skeletonStack}>
@@ -121,10 +129,6 @@ export default function SettingsPage() {
           </div>
 
           <div className={`${styles.detailPane} ${mobileShowingList ? styles.hideBelowDesktop : ""}`}>
-            <div className={styles.backToList}>
-              <IconButton icon="back" onClick={() => setMobileShowingList(true)} label="Back to sections" />
-              <span className="textBody">Sections</span>
-            </div>
             {renderSection(profile)}
           </div>
         </div>

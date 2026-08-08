@@ -95,15 +95,12 @@
   padding: 0 var(--space-lg) var(--space-lg);
 }
 
-.backToList {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-md);
+.mobileDetailHeader {
+  display: block;
 }
 
 @media (min-width: 1024px) {
-  .backToList {
+  .mobileDetailHeader {
     display: none;
   }
 }
