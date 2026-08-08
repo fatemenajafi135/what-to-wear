@@ -37,3 +37,16 @@
   gap: var(--space-sm);
   align-items: center;
 }
+
+/*
+ * BodyShapePicker.tsx's own docstring: "the read-only display renders it
+ * at 26x36" — the picker's own 64x84 option boxes size the glyph via
+ * `.option svg` (BodyShapePicker.module.css), which doesn't apply outside
+ * the picker. Without this, the unconstrained SVG expands to the width of
+ * its container (issue #30).
+ */
+.bodyShapeGlyphSmall {
+  width: 26px;
+  height: 36px;
+  flex-shrink: 0;
+}

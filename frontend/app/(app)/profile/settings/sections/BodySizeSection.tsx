@@ -148,7 +148,7 @@ export function BodySizeSection({ profile, disabled, onSaved }: Props) {
           />
         ) : draft.bodyShape ? (
           <div className={styles.chipRowCentered}>
-            <BodyShapeGlyph shape={draft.bodyShape} />
+            <BodyShapeGlyph shape={draft.bodyShape} className={styles.bodyShapeGlyphSmall} />
             <p className="textBody">{BODY_SHAPE_LABELS[draft.bodyShape]}</p>
           </div>
         ) : (
