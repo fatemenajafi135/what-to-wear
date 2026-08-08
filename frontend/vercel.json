@@ -1,1 +1,1 @@
-{ "git": { "deploymentEnabled": { "rebuild": true } } }
+{ "git": { "deploymentEnabled": { "main": true, "legacy-main": false } } }

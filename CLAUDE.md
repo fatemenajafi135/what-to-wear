@@ -1,12 +1,19 @@
-# What to Wear — rebuild
+# What to Wear
 
-A from-scratch rebuild of the fashion/wardrobe PWA. `rebuild` is an orphan branch and
-shares no history with `main`. Spec Kit will extend this file in Phase 4.
+The from-scratch rebuild of the fashion/wardrobe PWA. **Cutover is done** (2026-08-08):
+`main` is the rebuild and is the default branch. Work happens here.
 
 ## Ground rules
 
-- `main` stays live and untouched. Never rebase or force-push it.
-- `rebuild` is an orphan branch with no shared history with `main`. It becomes `main` at cutover.
+- `main` is the trunk and is deployed. Never rebase or force-push it.
+- The prototype this replaced is preserved at the `prototype-final` tag and on the
+  `legacy-main` branch. Neither is deployed; nothing builds from them.
+- **`main`'s history contains the prototype's 155 commits as an unrelated second parent**
+  (merge `41c593b`, `-s ours` — it changed no files). The rebuild was developed as an
+  orphan branch, and that history was grafted on at cutover so GitHub would keep
+  attributing the prototype's commits. Practical consequence: `git bisect` on the trunk
+  can wander into a codebase that shares nothing with this one. Bound it —
+  `git bisect start HEAD <a-rebuild-era-commit>`.
 - One Next.js codebase serves the desktop web experience **and** the installed mobile PWA.
   Routes are identical across form factors; only the chrome changes. There is no second app.
 - `design/design-system.md`, plus `docs/design-decisions.md` where it is silent or
@@ -27,8 +34,10 @@ shares no history with `main`. Spec Kit will extend this file in Phase 4.
 
 ## Repositories and directories
 
-- `../app-legacy` — a git worktree of the live prototype (`main` branch). **Read-only.**
-  Read it to understand the old AI code. Never modify, move or delete anything in it.
+- `../app-legacy` — **no longer present.** It was a read-only worktree of the prototype,
+  removed at cutover. The code is not lost: `git worktree add ../app-legacy legacy-main`
+  recreates it from the `legacy-main` branch (or the `prototype-final` tag) if a question
+  about the old AI code comes up. If you recreate it, it stays read-only.
 - `frontend/` — Next.js App Router + TypeScript.
 - `backend/` — FastAPI + `uv`. Internal layout is **not settled** — it is decided in the
   Phase 4 constitution. Do not assume a structure before then.
@@ -61,10 +70,14 @@ The spec directory keeps Spec Kit's own name (`specs/003-auth/`) — only the br
 prefixed. Renaming is safe: Spec Kit resolves the feature directory from
 `.specify/feature.json`, never by parsing the branch name.
 
-- **Code** — feature and fix work — branches off `rebuild` and merges back by PR.
-- **Docs-only changes** may be committed straight to `rebuild`; a branch and a PR for a
+- **Code** — feature and fix work — branches off `main` and merges back by PR. This holds
+  during incidents too. Several 017 fixes went straight to the trunk mid-deploy because
+  each felt urgent; "we're mid-incident" is when landing unreviewed code on a deploying
+  branch matters *most*, not least.
+- **Docs-only changes** may be committed straight to `main`; a branch and a PR for a
   markdown file is ceremony without benefit.
+- Unnumbered infra/config work that fits no feature uses `chore/slug`.
 - **Never `git push` from an agent session.** The human pushes. Local `pull.rebase true` is
   what keeps history linear when they pull after a PR merge — without it, unpushed commits
-  on `rebuild` produce duplicate merge commits.
+  on `main` produce duplicate merge commits.
 - Never rename or delete any branch you did not create.

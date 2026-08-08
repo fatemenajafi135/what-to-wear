@@ -9,11 +9,10 @@ services:
     name: w2w-backend-staging
     runtime: docker
 
-    # `rebuild` is NOT this repository's default branch — `main` is still the
-    # legacy prototype. Without this line Render deploys the default branch,
-    # which would build and serve the OLD app from a blueprint written for the
-    # new one. Update this at cutover, when `rebuild` becomes `main`.
-    branch: rebuild
+    # Pinned rather than left to default. `main` is the trunk since cutover
+    # (2026-08-08); before that this said `rebuild`, and leaving it stale would
+    # have kept staging on a side branch that no longer receives work.
+    branch: main
 
     # `rootDir` sets the build context, which is what `backend/Dockerfile`'s
     # own `COPY . .` copies (and what `backend/.dockerignore` filters).
