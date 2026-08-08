@@ -37,9 +37,3 @@
   gap: var(--space-sm);
   align-items: center;
 }
-
-/* docs/design-decisions.md §5: opacity 0.5 + the disabled attribute is the
-   one disabled convention — no separate disabled color. */
-.inertAction {
-  opacity: 0.5;
-}

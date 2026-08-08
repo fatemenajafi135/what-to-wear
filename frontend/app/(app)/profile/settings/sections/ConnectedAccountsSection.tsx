@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/Badge/Badge";
+import { Button } from "@/components/ui/Button/Button";
 import { useCalendarConnection } from "@/lib/calendar/useCalendarConnection";
 import styles from "./sections.module.css";
 
@@ -33,20 +34,20 @@ export function ConnectedAccountsSection() {
           // Fail closed while the real state is unknown, matching how the
           // Google sign-in button gates itself (design-decisions.md §15):
           // never offer an action that is about to be rejected.
-          <button type="button" className={`control ${styles.inertAction}`} disabled>
-            <span className="textBody">Connect</span>
-          </button>
+          <Button variant="outline" width="intrinsic" disabled>
+            Connect
+          </Button>
         ) : connected ? (
           <span className={styles.rowBetween}>
             <Badge tone="status">Connected</Badge>
-            <button type="button" className="control" onClick={() => void disconnect()}>
-              <span className="textBody">Disconnect</span>
-            </button>
+            <Button variant="outline" width="intrinsic" onClick={() => void disconnect()}>
+              Disconnect
+            </Button>
           </span>
         ) : (
-          <button type="button" className="control" onClick={() => void connect()}>
-            <span className="textBody">Connect</span>
-          </button>
+          <Button variant="outline" width="intrinsic" onClick={() => void connect()}>
+            Connect
+          </Button>
         )}
       </div>
 
