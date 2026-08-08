@@ -20,8 +20,8 @@
 }
 
 .forgotLink {
-  align-self: flex-end;
-  margin-top: calc(var(--space-lg) * -1 + var(--space-xs));
+  text-align: right;
+  margin-top: var(--space-xs);
 }
 .forgotLink a {
   color: var(--color-primary);
