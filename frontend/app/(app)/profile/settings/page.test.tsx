@@ -65,7 +65,7 @@ describe("SettingsPage", () => {
     );
   });
 
-  it("renders all five sections in the switcher", async () => {
+  it("renders all six sections in the switcher", async () => {
     render(<SettingsPage />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Account" })).toBeInTheDocument());
 
@@ -74,5 +74,6 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("button", { name: "Account" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connected accounts" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Notifications" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Appearance" })).toBeInTheDocument();
   });
 });
