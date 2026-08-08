@@ -2828,6 +2828,12 @@ legacy prototype. A blueprint with no `branch:` deploys the default branch — s
 would have built the old application from a blueprint written for the new one, with the
 new environment variables. Pinned `branch: rebuild`, with a note to change it at cutover.
 
+**Amended 2026-08-08 — cutover happened.** `main` is now the rebuild and the default
+branch; `branch: main` is pinned instead. The paragraph above is left as written because
+it records why the line existed, which is still the reason it is pinned at all rather
+than left to default. The prototype is preserved at the `prototype-final` tag and on
+`legacy-main`, neither of which is deployed.
+
 ### 58.3 `render.yaml` — `dockerfilePath` doubled the path, and `PORT` was overridden
 
 `rootDir: backend` sets the build context, and `dockerfilePath` resolves relative to it —
