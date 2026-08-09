@@ -2912,7 +2912,7 @@ the source documents on disk.
 |---|---|
 | `corpus` | Read `CORPUS_LOCAL_DIR`, then build or reconnect. **The original, evaluated path, unchanged.** |
 | `reconnect` | Attach to an existing Qdrant collection; rebuild `chunks` by scrolling the stored payloads. Never reads the corpus. |
-| `auto` (default) | `corpus` when `CORPUS_LOCAL_DIR` is set, else `reconnect`. |
+| `auto` (default) | Same as `corpus`. **Does not** fall back to `reconnect` — see the correction below. |
 
 `QdrantVectorStore.from_documents` writes each Document under langchain-qdrant's default
 payload keys (`page_content`, `metadata`) — verified by scrolling a real point from the
@@ -2923,6 +2923,32 @@ identically on reconstructed chunks.
 Verified against the real staging cluster with `CORPUS_LOCAL_DIR` unset: 391 chunks
 rebuilt from 391 points, `by_layer("L1")` → 197, `by_layer("L4")` → 65, L1-atomic → 15,
 and a live `similarity_search` through the gateway returning correctly ranked results.
+
+### Correction (2026-08-08): `auto` briefly fell back to `reconnect`, and that was wrong
+
+As first written, `auto` reconnected whenever `CORPUS_LOCAL_DIR` was unset. That is a
+silent fallback of exactly the kind this section's next heading argues against, and it
+shipped anyway.
+
+The consequence: a local process with no corpus configured would quietly attach to
+whatever collection its Qdrant settings pointed at — in practice the deployed one — and
+serve it as if it had built the knowledge base itself. No error, no warning, someone
+else's knowledge base.
+
+It was caught by `tests/unit/test_kb.py`'s pre-existing contract test, which had asserted
+since feature 007 that a missing `CORPUS_LOCAL_DIR` raises. That test was not run when
+the change was made — only the new `test_kb_modes.py` was — and the full-suite run that
+did cover it passed only because that machine's Qdrant had no matching collection at the
+time. The bug was therefore invisible until the same suite ran against a populated cloud
+cluster.
+
+Two lessons worth keeping: **a new test file does not replace the module's existing one**,
+and a passing suite proves less than it appears when behaviour depends on reachable
+external state.
+
+`auto` now means `corpus`. Reconnecting reads a collection the process cannot verify
+against the corpus that produced it, so it is an operational choice and must be asked
+for. `render.yaml` sets `WTW_KB_MODE=reconnect` explicitly, which was always the intent.
 
 ### Every reconnect failure is loud
 

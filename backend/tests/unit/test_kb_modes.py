@@ -130,7 +130,7 @@ class TestModeDispatch:
             kb_module.get_kb()
         kb_module.get_kb.cache_clear()
 
-    def test_corpus_mode_without_a_corpus_points_at_reconnect(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_corpus_mode_without_a_corpus_points_at_reconnect(self, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: E501
         """The message a deployed instance hits must say what to do about it —
         the original named only CORPUS_LOCAL_DIR, which is unactionable on a
         host that will never have the corpus."""
@@ -141,18 +141,29 @@ class TestModeDispatch:
         assert "WTW_KB_MODE=reconnect" in str(exc.value)
         kb_module.get_kb.cache_clear()
 
-    def test_auto_reconnects_when_no_corpus_is_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_auto_does_not_silently_reconnect_when_no_corpus_is_configured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The regression this file's own first version shipped.
+
+        `auto` briefly fell back to `reconnect` when CORPUS_LOCAL_DIR was
+        unset. A local process with no corpus then quietly attached to
+        whatever collection its Qdrant config pointed at — in practice the
+        deployed one — and served it as if it had built the KB itself. No
+        error, no warning. Reconnecting reads a collection this process cannot
+        verify against the corpus that produced it, so it must be asked for.
+        """
         kb_module.get_kb.cache_clear()
         monkeypatch.setattr(kb_module, "get_settings", lambda: _Settings(mode="auto", corpus=None))
-        called: list[bool] = []
 
-        def _fake_reconnect(_s: Any) -> Any:
-            called.append(True)
-            return "kb"
+        def _must_not_run(_s: Any) -> Any:
+            raise AssertionError("auto must never reconnect implicitly")
 
-        monkeypatch.setattr(kb_module, "_reconnect_kb", _fake_reconnect)
-        assert kb_module.get_kb() == "kb"
-        assert called == [True]
+        monkeypatch.setattr(kb_module, "_reconnect_kb", _must_not_run)
+        with pytest.raises(RuntimeError) as exc:
+            kb_module.get_kb()
+        assert "CORPUS_LOCAL_DIR" in str(exc.value)
+        assert "WTW_KB_MODE=reconnect" in str(exc.value)
         kb_module.get_kb.cache_clear()
 
     def test_auto_prefers_the_corpus_when_one_is_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
