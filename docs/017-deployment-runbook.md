@@ -263,6 +263,37 @@ Re-run the ingest whenever the corpus changes. The deployed instance never will 
 
 ---
 
+## Part 2b: Google Cloud Console — Calendar OAuth
+
+Skip only if you don't want the calendar feature. Without it the app is healthy and
+"Connect calendar" simply never works — `_require_client_credentials()` fails closed,
+and only when a user actually taps Connect, so nothing surfaces at startup.
+
+You already have an OAuth client from local development
+(`docs/handoffs/012-calendar.md` §2). You are **adding** the deployed URI to it, not
+creating a second client.
+
+1. Google Cloud Console → **APIs & Services** → **Credentials** → your OAuth 2.0 client.
+2. Under **Authorized redirect URIs**, add — keeping the existing local one:
+
+   ```
+   https://YOUR-APP.vercel.app/calendar/callback
+   ```
+
+3. Save. Google can take a few minutes to apply the change.
+4. Copy the **Client ID** and **Client secret** for Part 3.
+
+⚠️ **The redirect URI is your FRONTEND origin, not the backend's Render URL.** The
+callback is an app route (`frontend/app/calendar/callback/route.ts`), never a
+provider-hosted page — `docs/design-decisions.md` §12. Pointing it at
+`w2w-backend-staging.onrender.com` produces a `redirect_uri_mismatch` from Google
+*before* your app is ever reached, so no log of yours will show the cause.
+
+The value here, the value in Render's `GOOGLE_OAUTH_REDIRECT_URI`, and the entry in
+Google's list must be the **same string** — no trailing slash.
+
+---
+
 ## Part 3: Render Backend Deployment
 
 ### Step 1: Connect your GitHub repo to Render
@@ -302,6 +333,9 @@ Render prompts for them instead. The service won't run correctly until they're s
    | `WTW_QDRANT_URL` | Qdrant Cloud → cluster details |
    | `WTW_QDRANT_API_KEY` | Qdrant Cloud → API keys |
    | `WTW_CORS_ORIGINS` | Your Vercel URL — **you won't have this until Part 4.** Leave it blank now and come back. |
+   | `GOOGLE_OAUTH_CLIENT_ID` | Google Cloud Console → the OAuth client (Part 2b) |
+   | `GOOGLE_OAUTH_CLIENT_SECRET` | Same client |
+   | `GOOGLE_OAUTH_REDIRECT_URI` | Your **frontend** URL + `/calendar/callback` (Part 2b) — blank until Part 4. |
 
    ⚠️ **`LANGSMITH_API_KEY` is not optional, and its absence is invisible.**
    `_require_langsmith()` runs before every gateway call, so without it *every*
@@ -486,6 +520,14 @@ WTW_CORS_ORIGINS=https://YOUR-APP.vercel.app
 WTW_QDRANT_URL=https://QDRANT_CLUSTER.eu-0.qdrant.io:6333
 WTW_QDRANT_API_KEY=YOUR_QDRANT_KEY
 AI_GATEWAY_API_KEY=YOUR_GATEWAY_KEY
+LANGSMITH_API_KEY=YOUR_LANGSMITH_KEY
+WTW_TOKEN_ENCRYPTION_KEY=YOUR_FERNET_KEY
+
+# Google Calendar connect (feature 012). All three, or the feature is inert.
+GOOGLE_OAUTH_CLIENT_ID=...apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=...
+# FRONTEND origin, not the backend's Render URL:
+GOOGLE_OAUTH_REDIRECT_URI=https://YOUR-APP.vercel.app/calendar/callback
 ```
 
 `AI_GATEWAY_API_KEY` is optional only in the sense that the app boots without it —
