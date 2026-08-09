@@ -14,7 +14,7 @@ type ExtractedAttributes = components["schemas"]["ExtractedAttributes"];
 
 type FlowState =
   | { step: "dropzone" }
-  | { step: "scanning" }
+  | { step: "scanning"; photoUrl: string }
   | {
       step: "review";
       photoUrl: string;
@@ -43,7 +43,8 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
   const [saveError, setSaveError] = useState(false);
 
   const handleFileSelected = async (file: File) => {
-    setState({ step: "scanning" });
+    const photoUrl = URL.createObjectURL(file);
+    setState({ step: "scanning", photoUrl });
     try {
       const formData = new FormData();
       formData.append("photo", file);
@@ -59,7 +60,6 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
         setState({ step: "error" });
         return;
       }
-      const photoUrl = URL.createObjectURL(file);
       if (data.extraction_ok) {
         setState({
           step: "review",
@@ -114,7 +114,16 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
   }
 
   if (state.step === "scanning") {
-    return <div className={styles.scanning} aria-live="polite">Scanning…</div>;
+    return (
+      <div className={styles.stateBlock} aria-live="polite">
+        <div className={styles.scanningPhotoWrap}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset */}
+          <img src={state.photoUrl} alt="" className={styles.photo} />
+          <div className={`skeleton ${styles.scanningOverlay}`} />
+        </div>
+        <p className={`textBody ${styles.stateBody}`}>Scanning…</p>
+      </div>
+    );
   }
 
   if (state.step === "empty") {

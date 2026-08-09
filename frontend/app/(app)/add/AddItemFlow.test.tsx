@@ -70,6 +70,28 @@ describe("AddItemFlow", () => {
     expect(screen.getByRole("button", { name: "Warmth 2 — Mild" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("shows the uploaded photo while scanning, not just plain text (issue #31)", async () => {
+    let resolvePost!: (value: unknown) => void;
+    mockedPost.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePost = resolve;
+      }) as never
+    );
+
+    render(<AddItemFlow onClose={vi.fn()} />);
+    await selectFile();
+
+    expect(await screen.findByText("Scanning…")).toBeInTheDocument();
+    const photo = document.querySelector("img");
+    expect(photo).toHaveAttribute("src", "blob:fake-url");
+
+    resolvePost({
+      data: { photo_path: "user-a/x.jpg", extraction_ok: false, extracted: {}, color_names: [] },
+      error: undefined,
+      response: new Response(),
+    });
+  });
+
   it("shows the empty state (not an error) when no garment is found", async () => {
     mockedPost.mockResolvedValueOnce({
       data: {

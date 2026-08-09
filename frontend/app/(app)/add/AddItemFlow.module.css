@@ -1,9 +1,20 @@
-.scanning {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 220px;
-  color: var(--color-text-secondary);
+/* issue #31: the photo box the scanning shimmer sits over. Same rounded
+   rect as .photo below — overflow: hidden clips the overlay to match
+   rather than needing its own border-radius. */
+.scanningPhotoWrap {
+  position: relative;
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Reuses globals.css's .skeleton unchanged (same pulse animation, same
+   prefers-reduced-motion gating) — its own opaque background-color plus
+   fluctuating element opacity (0.55-1) is what produces the shimmer
+   directly over the photo beneath it. */
+.scanningOverlay {
+  position: absolute;
+  inset: 0;
 }
 
 .stateBlock {

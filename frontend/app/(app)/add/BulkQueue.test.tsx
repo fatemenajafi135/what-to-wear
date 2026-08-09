@@ -54,6 +54,23 @@ const TAXONOMY = {
 };
 
 describe("BulkQueue", () => {
+  it("shows the uploaded photo while scanning, not just plain text (issue #31)", async () => {
+    let resolveFirst!: (value: unknown) => void;
+    mockedPost.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFirst = resolve;
+      }) as never
+    );
+
+    render(<BulkQueue files={makeFiles(1)} onClose={vi.fn()} />);
+
+    expect(await screen.findByText("Scanning…")).toBeInTheDocument();
+    const photo = document.querySelector("img");
+    expect(photo).toHaveAttribute("src", "blob:fake-url");
+
+    resolveFirst(extractResponse("user-a/0.jpg", "top"));
+  });
+
   it("scans every photo upfront and shows the first card with an announced position", async () => {
     mockedPost
       .mockResolvedValueOnce(extractResponse("user-a/0.jpg", "top"))

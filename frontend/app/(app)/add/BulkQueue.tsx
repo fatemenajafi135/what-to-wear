@@ -153,8 +153,21 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
     advance();
   };
 
-  if (!current || current.status === "scanning") {
+  if (!current) {
     return <div aria-live="polite">Scanning…</div>;
+  }
+
+  if (current.status === "scanning") {
+    return (
+      <div className={styles.scanningBlock} aria-live="polite">
+        <div className={styles.scanningPhotoWrap}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset */}
+          <img src={current.photoUrl} alt="" className={styles.scanningPhoto} />
+          <div className={`skeleton ${styles.scanningOverlay}`} />
+        </div>
+        <p className={`textBody ${styles.scanningCaption}`}>Scanning…</p>
+      </div>
+    );
   }
 
   if (current.status === "upload-error") {
