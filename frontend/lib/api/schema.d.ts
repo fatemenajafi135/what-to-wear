@@ -450,6 +450,12 @@ export interface paths {
          *     feature 010. Always `200`, `outfits: []` for the true empty case (no
          *     separate empty response shape, matching 009's `outfits[]` convention
          *     for the pager).
+         *
+         *     Paginated the same way `closet.py`'s `list_closet_items` is (gh-28):
+         *     `outfit_repository.list_outfits` still returns every row for `sort`,
+         *     sliced here in Python so the same `sort` keeps producing a stable,
+         *     continuable order across pages — only the current page's rows ever
+         *     reach the signing call below, which is the actual cost this fixes.
          */
         get: operations["list_outfits_api_v1_recommend_outfits_get"];
         put?: never;
@@ -923,6 +929,10 @@ export interface components {
         OutfitSummaryListResponse: {
             /** Outfits */
             outfits: components["schemas"]["OutfitSummary"][];
+            /** Total */
+            total: number;
+            /** Has More */
+            has_more: boolean;
         };
         /**
          * PhotoExtractionView
@@ -1951,6 +1961,7 @@ export interface operations {
         parameters: {
             query?: {
                 sort?: "date" | "favorite" | "most_worn";
+                offset?: number;
             };
             header?: never;
             path?: never;

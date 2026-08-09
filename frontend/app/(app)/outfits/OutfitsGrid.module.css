@@ -175,3 +175,26 @@
   max-width: 32ch;
   color: var(--color-text-secondary);
 }
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.loadMoreButton {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+}
+
+.loadMoreButton:focus-visible {
+  box-shadow: var(--shadow-focus-ring);
+  outline: none;
+  border-radius: var(--radius-sm);
+}
