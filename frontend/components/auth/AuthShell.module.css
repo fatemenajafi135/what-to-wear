@@ -29,9 +29,14 @@
   }
 }
 
+/* Per review feedback: was 32px, matching the boot screen's own tiny
+   transient glyph (app/loading.tsx) — an implementation oversight, not a
+   deliberate auth-specific size (never documented anywhere). Matches
+   Recommend's hero mark (60px) instead, an existing precedented size for
+   a similarly spacious, non-transient screen. */
 .mark {
-  width: 32px;
-  height: 32px;
+  width: 60px;
+  height: 60px;
 }
 
 .wordmark {
