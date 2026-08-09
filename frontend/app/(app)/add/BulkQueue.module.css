@@ -4,10 +4,6 @@
   gap: var(--space-lg);
 }
 
-.position {
-  margin: 0;
-}
-
 /* research.md §7: the progress bar animates between steps (not an instant
    jump), gated by prefers-reduced-motion (design-system.md §8). */
 .progressTrack {
@@ -30,12 +26,10 @@
   }
 }
 
-/* A photo whose UPLOAD failed (no photo_path came back), so its card can
-   never be saved. Mirrors AddItemFlow's own error block rather than
-   inventing a second treatment — same 150px review-card photo box
-   (design-system.md § Image treatment), same centred column, same
-   secondary-colour body. */
-.uploadError {
+/* issue #31: same layout as .uploadError below (mirrored, not shared,
+   since it's a distinct non-error state) — centred column,
+   OrientationAwarePhoto (issue #33), secondary-colour caption. */
+.scanningBlock {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -45,11 +39,38 @@
   padding: var(--space-xl) 0;
 }
 
-.errorPhoto {
+.scanningPhotoWrap {
+  position: relative;
   width: 100%;
-  height: 150px;
   border-radius: 16px;
-  object-fit: cover;
+  overflow: hidden;
+}
+
+/* Reuses globals.css's .skeleton unchanged (same pulse animation, same
+   prefers-reduced-motion gating) — its own opaque background-color plus
+   fluctuating element opacity (0.55-1) is what produces the shimmer
+   directly over the photo beneath it. */
+.scanningOverlay {
+  position: absolute;
+  inset: 0;
+}
+
+.scanningCaption {
+  color: var(--color-text-secondary);
+}
+
+/* A photo whose UPLOAD failed (no photo_path came back), so its card can
+   never be saved. Mirrors AddItemFlow's own error block rather than
+   inventing a second treatment — same OrientationAwarePhoto treatment
+   (issue #33), same centred column, same secondary-colour body. */
+.uploadError {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-lg);
+  padding: var(--space-xl) 0;
 }
 
 .errorBody {

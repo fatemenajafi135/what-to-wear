@@ -16,9 +16,9 @@ export const BODY_SHAPE_OPTIONS: { value: BodyShape; label: string }[] = [
  * questions" entry on this. viewBox 32x44; the read-only display renders it
  * at 26x36, the picker option box at 64x84 (sized by the parent via CSS).
  */
-export function BodyShapeGlyph({ shape }: { shape: BodyShape }) {
+export function BodyShapeGlyph({ shape, className }: { shape: BodyShape; className?: string }) {
   return (
-    <svg viewBox="0 0 32 44" fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 32 44" fill="currentColor" aria-hidden="true" className={className}>
       <circle cx="16" cy="6" r="5" />
       {shape === "hourglass" && (
         <>

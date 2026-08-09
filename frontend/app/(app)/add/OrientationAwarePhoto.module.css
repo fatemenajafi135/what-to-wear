@@ -1,0 +1,20 @@
+/* issue #33 — see OrientationAwarePhoto.tsx for the orientation logic. */
+.photo {
+  display: block;
+  width: 100%;
+  border-radius: 16px;
+  background-color: var(--color-surface-sunken);
+}
+
+/* Portrait: centered in a square, letterboxed rather than cropped — the
+   whole photo stays visible, with empty space left/right instead of
+   losing the top/bottom of the garment. */
+.portrait {
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+/* Landscape or square: natural aspect ratio, no cropping. */
+.natural {
+  height: auto;
+}

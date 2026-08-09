@@ -42,6 +42,29 @@ svg {
 }
 
 /*
+ * Brand mark theme swap — issue #27. `/mark.svg` (light) is the base
+ * asset in markup; `light-dark()` can't be used here since it's typed as
+ * <color> only (styles/themes.css), so this swaps via `content: url()`
+ * instead, keyed off the same `data-theme` resolution as every other
+ * themed value — not a bare `prefers-color-scheme` media query, which
+ * would ignore an explicit Light/Dark override from Settings > Appearance
+ * (issue #26) and desync from the rest of the UI. Used on app/loading.tsx,
+ * components/recommend/HeroState.tsx, and components/auth/AuthShell.tsx's
+ * marks, alongside each one's own module-scoped sizing class.
+ */
+.brandMark {
+  content: url("/mark.svg");
+}
+:root[data-theme="dark"] .brandMark {
+  content: url("/mark-dark.svg");
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] .brandMark {
+    content: url("/mark-dark.svg");
+  }
+}
+
+/*
  * True :focus-visible rule — docs/design-decisions.md §4. Replaces the
  * retired --shadow-focus-ring box-shadow recipe (which rendered flush /
  * invisible against --color-primary) with a real outline + offset, so the

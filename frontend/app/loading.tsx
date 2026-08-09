@@ -12,7 +12,7 @@ export default function Loading() {
   return (
     <div className={styles.boot}>
       {/* eslint-disable-next-line @next/next/no-img-element -- static SVG mark, no next/image optimization needed for a 32px inline glyph */}
-      <img src="/mark.svg" alt="" width={32} height={32} className={styles.mark} />
+      <img src="/mark.svg" alt="" width={32} height={32} className={`${styles.mark} brandMark`} />
       <p className={`textDisplay ${styles.wordmark}`}>What to Wear</p>
     </div>
   );

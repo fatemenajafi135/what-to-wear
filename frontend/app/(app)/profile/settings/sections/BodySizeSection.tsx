@@ -128,14 +128,6 @@ export function BodySizeSection({ profile, disabled, onSaved }: Props) {
     <section>
       <div className={styles.header}>
         <h2 className="textSectionTitle">Body &amp; size</h2>
-        <Button
-          variant="secondary"
-          width="intrinsic"
-          disabled={disabled || saving || Boolean(birthDateError)}
-          onClick={editing ? done : startEdit}
-        >
-          {editing ? "Done" : "Edit"}
-        </Button>
       </div>
 
       <div className={styles.field}>
@@ -148,7 +140,7 @@ export function BodySizeSection({ profile, disabled, onSaved }: Props) {
           />
         ) : draft.bodyShape ? (
           <div className={styles.chipRowCentered}>
-            <BodyShapeGlyph shape={draft.bodyShape} />
+            <BodyShapeGlyph shape={draft.bodyShape} className={styles.bodyShapeGlyphSmall} />
             <p className="textBody">{BODY_SHAPE_LABELS[draft.bodyShape]}</p>
           </div>
         ) : (
@@ -253,6 +245,17 @@ export function BodySizeSection({ profile, disabled, onSaved }: Props) {
             </div>
           </>
         )}
+      </div>
+
+      <div className={styles.editAction}>
+        <Button
+          variant="secondary"
+          width="stretch"
+          disabled={disabled || saving || Boolean(birthDateError)}
+          onClick={editing ? done : startEdit}
+        >
+          {editing ? "Done" : "Edit"}
+        </Button>
       </div>
     </section>
   );

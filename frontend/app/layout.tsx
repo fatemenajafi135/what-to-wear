@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { instrumentSans } from "@/lib/fonts";
 import { ServiceWorkerRegistration } from "@/components/shell/ServiceWorkerRegistration";
 import { UpdateToast } from "@/components/shell/UpdateToast";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 import "@/styles/tokens.css";
 import "@/styles/themes.css";
 import "@/styles/globals.css";
@@ -26,19 +28,29 @@ export const viewport: Viewport = {
 };
 
 /**
- * No `data-theme` is set here — there is no override source yet (no theme
- * toggle ships in this slice). Boot theme resolves entirely in CSS via
- * `light-dark()` against the OS's `prefers-color-scheme`
- * (styles/themes.css), which is why this can stay a plain, static
- * component: no cookies(), no per-request work, so `next build` emits
- * these stub routes as ○ (Static) rather than ƒ (Dynamic).
+ * issue #26: `data-theme` is now set by a `beforeInteractive` boot script
+ * (THEME_BOOT_SCRIPT, lib/theme.ts) reading localStorage — before first
+ * paint, so still nothing to flash, but the *default* (no stored
+ * preference) is Light rather than System. `suppressHydrationWarning` on
+ * `<html>` is required because that script runs before React hydrates and
+ * sets an attribute the server-rendered markup can't have known about
+ * (localStorage isn't readable server-side) — this is the same pattern
+ * `next-themes` uses, not a real mismatch to fix.
+ *
+ * This does cost the previous "no per-request work" property in spirit —
+ * `beforeInteractive` still ships as static HTML (no cookies, no server
+ * read), it just adds one small render-blocking script tag. Routes stay
+ * ○ (Static) in `next build`.
  */
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={instrumentSans.variable}>
+    <html lang="en" className={instrumentSans.variable} suppressHydrationWarning>
       <body>
+        <Script id="theme-boot" strategy="beforeInteractive">
+          {THEME_BOOT_SCRIPT}
+        </Script>
         <ServiceWorkerRegistration />
         <UpdateToast />
         {children}

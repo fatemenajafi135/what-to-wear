@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
 import { IconButton } from "@/components/ui/IconButton/IconButton";
 import { Button } from "@/components/ui/Button/Button";
 import { createClient } from "@/lib/supabase/client";
@@ -28,11 +29,13 @@ const GENDER_LABELS: Record<string, string> = {
 };
 
 /**
- * design/design-system.md §8: Profile has no TopHeader, so its <h1> is
- * visually hidden. Three <h2>-headed summary cards — Account, Style
- * preferences, Body & size — per specs/013-profile-settings/research.md §4
- * (design-system.md names "three cards" but never their contents; this is
- * the recorded decision).
+ * Deviates from design-system.md §8, which specified no TopHeader here (a
+ * visually-hidden <h1> instead) — per user request, Profile now gets a
+ * real visible TopHeader like every other primary destination, sticky by
+ * the same app-wide fix as the rest of them. Three <h2>-headed summary
+ * cards — Account, Style preferences, Body & size — per
+ * specs/013-profile-settings/research.md §4 (design-system.md names
+ * "three cards" but never their contents; this is the recorded decision).
  */
 export default function ProfilePage() {
   const router = useRouter();
@@ -71,12 +74,10 @@ export default function ProfilePage() {
 
   return (
     <>
-      <div className={styles.header}>
-        <h1 className="visuallyHidden" tabIndex={-1}>
-          Profile
-        </h1>
-        <IconButton icon="settings" href="/profile/settings" />
-      </div>
+      <TopHeader
+        title="Profile"
+        rightSlot={{ kind: "custom", node: <IconButton icon="settings" href="/profile/settings" /> }}
+      />
 
       {state === "loading" && (
         <div className={styles.cards}>

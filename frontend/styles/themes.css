@@ -2,17 +2,19 @@
  * Semantic tokens — design/design-system.md §1.2. Components read only
  * these names, never a literal hex value.
  *
- * Boot theme (docs/handoffs/001-app-shell-fix-theme.md): every themed token
- * is a color(), so `light-dark()` picks the right branch from the OS's
- * `prefers-color-scheme` before first paint — no script, no cookie, no
- * server call, so nothing can flash. `color-scheme: light dark` on :root
- * opts the whole page into that resolution. An explicit `data-theme` on
- * <html> (set by a future toggle — none ships in this slice) still wins in
- * both directions by forcing `color-scheme` to a single value, which is
- * what `light-dark()` actually resolves against per spec.
+ * Boot theme (docs/handoffs/001-app-shell-fix-theme.md, revised by issue
+ * #26): every themed token is a color(), so `light-dark()` picks the right
+ * branch purely from the `color-scheme` property — no per-token JS. The
+ * default (no `data-theme` yet) is now `color-scheme: light`, since #26's
+ * product decision is Light-by-default for anyone who hasn't chosen,
+ * *not* System. A blocking boot script (`lib/theme.ts`'s
+ * THEME_BOOT_SCRIPT, run via `beforeInteractive` in app/layout.tsx) sets
+ * `data-theme` from localStorage before first paint, so this default only
+ * actually shows in a no-JS environment — there is still nothing to flash
+ * for JS-enabled clients, since the script runs before paint either way.
  */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
   --color-primary: light-dark(#4b2e52, #c9a6d6);
   --color-primary-hover: light-dark(#3a2440, #d9bee2);
@@ -45,13 +47,17 @@
 /*
  * Forcing color-scheme to a single value makes every light-dark() above
  * resolve to that branch regardless of prefers-color-scheme — this is the
- * override a future theme toggle will set client-side via `data-theme`.
- * Nothing in this slice writes this attribute yet (no toggle exists), but
- * the CSS contract is ready for one.
+ * override Settings > Appearance writes via `data-theme` (issue #26).
+ * "system" restores light-dark()'s original OS-tracking behavior for users
+ * who explicitly opted back into it (as opposed to the unset-attribute
+ * default above, which is a fixed Light, not System).
  */
 [data-theme="light"] {
   color-scheme: light;
 }
 [data-theme="dark"] {
   color-scheme: dark;
+}
+[data-theme="system"] {
+  color-scheme: light dark;
 }

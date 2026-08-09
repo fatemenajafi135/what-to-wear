@@ -106,13 +106,15 @@ export function ClosetGrid({ selectedItemId }: ClosetGridProps) {
 
   return (
     <>
-      <TopHeader title="Closet" subtitle={subtitle} />
-      <div className={styles.chipRow}>
-        {CHIPS.map((chip) => (
-          <Chip key={chip.label} active={category === chip.value} onClick={() => setCategory(chip.value)}>
-            {chip.label}
-          </Chip>
-        ))}
+      <div className={styles.stickyHeader}>
+        <TopHeader title="Closet" subtitle={subtitle} />
+        <div className={styles.chipRow}>
+          {CHIPS.map((chip) => (
+            <Chip key={chip.label} active={category === chip.value} onClick={() => setCategory(chip.value)}>
+              {chip.label}
+            </Chip>
+          ))}
+        </div>
       </div>
 
       {loading && (

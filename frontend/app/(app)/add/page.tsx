@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
 import { CloseAddOverlay } from "./CloseAddOverlay";
 import { AddItemFlow } from "./AddItemFlow";
 import { BulkChoiceSheet } from "./BulkChoiceSheet";
-import { BulkQueue } from "./BulkQueue";
+import { BulkQueue, type BulkQueuePosition } from "./BulkQueue";
+import { addItemCopy } from "@/lib/add-item-copy";
 import styles from "./page.module.css";
 
 const MAX_BULK_PHOTOS = 20; // research.md §6 addendum
@@ -30,7 +31,14 @@ type EntryState = { mode: "choice" } | { mode: "single" } | { mode: "bulk"; file
 export default function AddItemPage() {
   const router = useRouter();
   const [entry, setEntry] = useState<EntryState>({ mode: "choice" });
+  const [bulkPosition, setBulkPosition] = useState<BulkQueuePosition | null>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
+
+  // Stable identity — BulkQueue's own effect that calls this depends on it,
+  // and a new function every render would re-fire that effect every render.
+  const handleBulkPosition = useCallback((position: BulkQueuePosition | null) => {
+    setBulkPosition(position);
+  }, []);
 
   const handleClose = () => {
     if (window.history.length > 1) {
@@ -54,10 +62,19 @@ export default function AddItemPage() {
 
   return (
     <>
-      <TopHeader title="Add item" rightSlot={{ kind: "custom", node: <CloseAddOverlay /> }} />
+      <div className={styles.stickyHeader}>
+        <TopHeader title="Add item" rightSlot={{ kind: "custom", node: <CloseAddOverlay /> }} />
+        {entry.mode === "bulk" && bulkPosition && (
+          <h2 className={`textSectionTitle ${styles.bulkPosition}`} aria-live="polite">
+            {addItemCopy.review.position(bulkPosition.current, bulkPosition.total)}
+          </h2>
+        )}
+      </div>
       <div className={styles.content}>
         {entry.mode === "single" && <AddItemFlow onClose={handleClose} />}
-        {entry.mode === "bulk" && <BulkQueue files={entry.files} onClose={handleClose} />}
+        {entry.mode === "bulk" && (
+          <BulkQueue files={entry.files} onClose={handleClose} onPositionChange={handleBulkPosition} />
+        )}
       </div>
 
       <BulkChoiceSheet

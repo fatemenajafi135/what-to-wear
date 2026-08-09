@@ -21,8 +21,8 @@ export function AuthShell({ children }: AuthShellProps) {
   return (
     <div role="main" className={styles.main}>
       <div className={styles.panel}>
-        {/* eslint-disable-next-line @next/next/no-img-element -- static SVG mark, no next/image optimization needed for a 32px inline glyph */}
-        <img src="/mark.svg" alt="" width={32} height={32} className={styles.mark} />
+        {/* eslint-disable-next-line @next/next/no-img-element -- static SVG mark, no next/image optimization needed for a 60px inline glyph */}
+        <img src="/mark.svg" alt="" width={60} height={60} className={`${styles.mark} brandMark`} />
         <h1 tabIndex={-1} className={`textDisplay ${styles.wordmark}`}>
           What to Wear
         </h1>

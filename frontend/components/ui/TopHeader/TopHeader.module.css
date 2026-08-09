@@ -1,3 +1,11 @@
+/* issue #36: sticky app-wide, not just /add (#32) — every page's header
+   scrolled away with its content before this. Safe with two-pane layouts
+   (Closet, Outfits at 1024px+) since each pane's header sticks
+   independently within its own grid column, not overlapping the other.
+   Harmlessly redundant on /add, which already wraps this in its own
+   sticky container (#32) to keep the bulk-flow position indicator stuck
+   alongside it — nesting doesn't double-offset since this header is that
+   wrapper's first child, already sitting at its own top edge. */
 .header {
   display: flex;
   align-items: center;
@@ -5,6 +13,9 @@
   padding: var(--space-md) var(--space-lg);
   padding-top: calc(var(--space-md) + env(safe-area-inset-top));
   background-color: var(--color-background);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
 }
 
 .titleGroup {

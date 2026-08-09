@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/Badge/Badge";
+import { Button } from "@/components/ui/Button/Button";
 import { useCalendarConnection } from "@/lib/calendar/useCalendarConnection";
 import styles from "./sections.module.css";
 
@@ -9,6 +10,11 @@ import styles from "./sections.module.css";
  * status Badge when linked and a "Connect" text action when not. Weather
  * services is "Coming soon" and not interactive. No Edit/Done — nothing here
  * is a draft; each action commits immediately.
+ *
+ * Per review feedback, the "Connected" Badge sits next to the service's own
+ * name (not next to the Disconnect button) — reads as "this service is
+ * connected," not "this button is." Same pattern to reuse for any future
+ * connected service, not just Google Calendar.
  *
  * Both this row and `/calendar`'s own connect action read and write the same
  * state through `useCalendarConnection`, never a second independent fetch —
@@ -28,25 +34,25 @@ export function ConnectedAccountsSection() {
       </div>
 
       <div className={`${styles.field} ${styles.rowBetween}`}>
-        <p className="textBody">Google Calendar</p>
+        <span className={styles.chipRowCentered}>
+          <p className="textBody">Google Calendar</p>
+          {connected && <Badge tone="status">Connected</Badge>}
+        </span>
         {isLoading ? (
           // Fail closed while the real state is unknown, matching how the
           // Google sign-in button gates itself (design-decisions.md §15):
           // never offer an action that is about to be rejected.
-          <button type="button" className={`control ${styles.inertAction}`} disabled>
-            <span className="textBody">Connect</span>
-          </button>
+          <Button variant="outline" width="intrinsic" disabled>
+            Connect
+          </Button>
         ) : connected ? (
-          <span className={styles.rowBetween}>
-            <Badge tone="status">Connected</Badge>
-            <button type="button" className="control" onClick={() => void disconnect()}>
-              <span className="textBody">Disconnect</span>
-            </button>
-          </span>
+          <Button variant="outline" width="intrinsic" onClick={() => void disconnect()}>
+            Disconnect
+          </Button>
         ) : (
-          <button type="button" className="control" onClick={() => void connect()}>
-            <span className="textBody">Connect</span>
-          </button>
+          <Button variant="outline" width="intrinsic" onClick={() => void connect()}>
+            Connect
+          </Button>
         )}
       </div>
 

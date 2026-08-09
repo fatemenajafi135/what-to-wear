@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { ReviewCard, type ReviewCardFields } from "./ReviewCard";
+import { OrientationAwarePhoto } from "./OrientationAwarePhoto";
 import { buildFromUploadBody } from "./fromUploadBody";
 import { apiClient } from "@/lib/api/client";
 import { addItemCopy } from "@/lib/add-item-copy";
@@ -20,9 +21,20 @@ interface QueueEntry {
   extracted?: ExtractedAttributes | null;
 }
 
+export interface BulkQueuePosition {
+  current: number;
+  total: number;
+}
+
 export interface BulkQueueProps {
   files: File[];
   onClose: () => void;
+  /** issue #32: the "Reviewing item X of Y" indicator moved up to the page's
+   * sticky header, since it needs to stay fixed alongside it — this reports
+   * it upward instead of rendering it inline. Fires with `null` whenever
+   * the indicator shouldn't show (the same "scanning" gate the inline
+   * version used). */
+  onPositionChange?: (position: BulkQueuePosition | null) => void;
 }
 
 /**
@@ -56,7 +68,7 @@ export interface BulkQueueProps {
  * card shows Button's Error treatment in place; already-saved cards are
  * unaffected; the queue does not advance past it until retried.
  */
-export function BulkQueue({ files, onClose }: BulkQueueProps) {
+export function BulkQueue({ files, onClose, onPositionChange }: BulkQueueProps) {
   const [entries, setEntries] = useState<QueueEntry[]>(() =>
     files.map((file) => ({ file, photoUrl: URL.createObjectURL(file), status: "scanning" }))
   );
@@ -120,6 +132,10 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
   const isLast = currentIndex === total - 1;
   const savedCount = entries.filter((e) => e.status === "saved").length;
 
+  useEffect(() => {
+    onPositionChange?.(current && current.status !== "scanning" ? { current: currentIndex + 1, total } : null);
+  }, [current, currentIndex, total, onPositionChange]);
+
   const advance = () => {
     if (isLast) {
       onClose();
@@ -153,19 +169,27 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
     advance();
   };
 
-  if (!current || current.status === "scanning") {
+  if (!current) {
     return <div aria-live="polite">Scanning…</div>;
+  }
+
+  if (current.status === "scanning") {
+    return (
+      <div className={styles.scanningBlock} aria-live="polite">
+        <div className={styles.scanningPhotoWrap}>
+          <OrientationAwarePhoto src={current.photoUrl} />
+          <div className={`skeleton ${styles.scanningOverlay}`} />
+        </div>
+        <p className={`textBody ${styles.scanningCaption}`}>Scanning…</p>
+      </div>
+    );
   }
 
   if (current.status === "upload-error") {
     return (
       <div className={styles.queue}>
-        <h2 className={`textSectionTitle ${styles.position}`} aria-live="polite">
-          {addItemCopy.review.position(currentIndex + 1, total)}
-        </h2>
         <div className={styles.uploadError} role="alert">
-          {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset */}
-          <img src={current.photoUrl} alt="" className={styles.errorPhoto} />
+          <OrientationAwarePhoto src={current.photoUrl} />
           <p className={`textBody ${styles.errorBody}`}>{addItemCopy.error.body}</p>
           <Button width="intrinsic" onClick={() => void scanEntry(currentIndex, current.file)}>
             {addItemCopy.error.cta}
@@ -183,9 +207,6 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
 
   return (
     <div className={styles.queue}>
-      <h2 className={`textSectionTitle ${styles.position}`} aria-live="polite">
-        {addItemCopy.review.position(currentIndex + 1, total)}
-      </h2>
       <div className={styles.progressTrack} aria-hidden="true">
         <div className={styles.progressFill} style={{ width: `${((savedCount + 1) / total) * 100}%` }} />
       </div>
