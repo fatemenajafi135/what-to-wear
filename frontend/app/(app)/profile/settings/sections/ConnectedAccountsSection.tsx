@@ -11,6 +11,11 @@ import styles from "./sections.module.css";
  * services is "Coming soon" and not interactive. No Edit/Done — nothing here
  * is a draft; each action commits immediately.
  *
+ * Per review feedback, the "Connected" Badge sits next to the service's own
+ * name (not next to the Disconnect button) — reads as "this service is
+ * connected," not "this button is." Same pattern to reuse for any future
+ * connected service, not just Google Calendar.
+ *
  * Both this row and `/calendar`'s own connect action read and write the same
  * state through `useCalendarConnection`, never a second independent fetch —
  * the "two entry points, one state" requirement in
@@ -29,7 +34,10 @@ export function ConnectedAccountsSection() {
       </div>
 
       <div className={`${styles.field} ${styles.rowBetween}`}>
-        <p className="textBody">Google Calendar</p>
+        <span className={styles.chipRowCentered}>
+          <p className="textBody">Google Calendar</p>
+          {connected && <Badge tone="status">Connected</Badge>}
+        </span>
         {isLoading ? (
           // Fail closed while the real state is unknown, matching how the
           // Google sign-in button gates itself (design-decisions.md §15):
@@ -38,12 +46,9 @@ export function ConnectedAccountsSection() {
             Connect
           </Button>
         ) : connected ? (
-          <span className={styles.rowBetween}>
-            <Badge tone="status">Connected</Badge>
-            <Button variant="outline" width="intrinsic" onClick={() => void disconnect()}>
-              Disconnect
-            </Button>
-          </span>
+          <Button variant="outline" width="intrinsic" onClick={() => void disconnect()}>
+            Disconnect
+          </Button>
         ) : (
           <Button variant="outline" width="intrinsic" onClick={() => void connect()}>
             Connect
