@@ -247,16 +247,14 @@ export function BodySizeSection({ profile, disabled, onSaved }: Props) {
         )}
       </div>
 
-      <div className={styles.editAction}>
-        <Button
-          variant="secondary"
-          width="stretch"
-          disabled={disabled || saving || Boolean(birthDateError)}
-          onClick={editing ? done : startEdit}
-        >
-          {editing ? "Done" : "Edit"}
-        </Button>
-      </div>
+      <Button
+        variant="secondary"
+        width="stretch"
+        disabled={disabled || saving || Boolean(birthDateError)}
+        onClick={editing ? done : startEdit}
+      >
+        {editing ? "Done" : "Edit"}
+      </Button>
     </section>
   );
 }
