@@ -118,9 +118,11 @@ export function StylePreferencesSection({ profile, disabled, onSaved }: Props) {
         )}
       </div>
 
-      <Button variant="secondary" width="stretch" disabled={disabled || saving} onClick={editing ? done : startEdit}>
-        {editing ? "Done" : "Edit"}
-      </Button>
+      <div className={styles.editAction}>
+        <Button variant="secondary" width="stretch" disabled={disabled || saving} onClick={editing ? done : startEdit}>
+          {editing ? "Done" : "Edit"}
+        </Button>
+      </div>
     </section>
   );
 }
