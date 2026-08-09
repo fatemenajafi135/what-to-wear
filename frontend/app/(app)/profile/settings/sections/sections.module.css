@@ -63,3 +63,19 @@
   height: 36px;
   flex-shrink: 0;
 }
+
+/*
+ * The Edit/Done button (Style preferences, Body & size, Account) is full
+ * width — right for mobile's narrow column, but stretched thin and
+ * awkward across the much wider desktop detail pane. Caps the wrapper at
+ * 336px on desktop instead of shrinking to the button's own text (too
+ * small) — the sign-in button's own effective width at the same
+ * breakpoint (AuthShell's 400px panel minus its --space-2xl padding on
+ * each side, docs/design-decisions.md §13), confirmed by direct
+ * measurement rather than assumed from the panel's own max-width alone.
+ */
+@media (min-width: 1024px) {
+  .editAction {
+    max-width: 336px;
+  }
+}
