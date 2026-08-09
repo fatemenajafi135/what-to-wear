@@ -45,8 +45,12 @@ interface OutfitsGridProps {
 export function OutfitsGrid({ selectedOutfitId }: OutfitsGridProps) {
   const router = useRouter();
   const [outfits, setOutfits] = useState<OutfitSummary[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
   const [sort, setSort] = useState<OutfitSort>("date");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
@@ -63,7 +67,7 @@ export function OutfitsGrid({ selectedOutfitId }: OutfitsGridProps) {
     setError(false);
     try {
       const { data, error: fetchError } = await apiClient.GET("/api/v1/recommend/outfits", {
-        params: { query: { sort: nextSort } },
+        params: { query: { sort: nextSort, offset: 0 } },
       });
       if (thisRequest !== requestId.current) return;
       if (fetchError || !data) {
@@ -71,7 +75,14 @@ export function OutfitsGrid({ selectedOutfitId }: OutfitsGridProps) {
         return;
       }
       setOutfits(data.outfits);
+      setTotal(data.total);
+      setHasMore(data.has_more);
+      setOffset(data.outfits.length);
     } catch {
+      // A dropped connection rejects the fetch promise outright (distinct
+      // from a non-2xx response, which openapi-fetch returns as `error`
+      // above) — most commonly hit while offline, where this resolves to
+      // the same suppressed-error state `showError` already handles.
       if (thisRequest === requestId.current) setError(true);
     } finally {
       if (thisRequest === requestId.current) setLoading(false);
@@ -81,6 +92,24 @@ export function OutfitsGrid({ selectedOutfitId }: OutfitsGridProps) {
   useEffect(() => {
     load(sort);
   }, [sort, load]);
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const { data, error: fetchError } = await apiClient.GET("/api/v1/recommend/outfits", {
+        params: { query: { sort, offset } },
+      });
+      if (fetchError || !data) return;
+      setOutfits((prev) => [...prev, ...data.outfits]);
+      setHasMore(data.has_more);
+      setOffset((prev) => prev + data.outfits.length);
+    } catch {
+      // Offline/dropped connection — "Load more" simply stays available to
+      // retry; no dedicated error state exists for this secondary action.
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const showError = error && isOnline; // offline suppresses the screen-level error (design-system §6)
 
@@ -126,6 +155,7 @@ export function OutfitsGrid({ selectedOutfitId }: OutfitsGridProps) {
     });
     if (response.ok) {
       setOutfits((prev) => prev.filter((o) => o.id !== outfitId));
+      setTotal((prev) => (prev !== null ? prev - 1 : prev));
       if (selectedOutfitId === outfitId) router.push("/outfits");
     }
   }
@@ -133,10 +163,7 @@ export function OutfitsGrid({ selectedOutfitId }: OutfitsGridProps) {
   return (
     <>
       <div className={styles.stickyHeader}>
-        <TopHeader
-          title="Outfits"
-          subtitle={loading ? undefined : `${outfits.length} outfit${outfits.length === 1 ? "" : "s"}`}
-        />
+        <TopHeader title="Outfits" subtitle={total === null ? undefined : `${total} outfit${total === 1 ? "" : "s"}`} />
         <div className={styles.toolbar}>
           <SortSheetTrigger onOpen={() => setSortSheetOpen(true)} />
         </div>
@@ -173,89 +200,107 @@ export function OutfitsGrid({ selectedOutfitId }: OutfitsGridProps) {
       )}
 
       {!loading && !error && outfits.length > 0 && (
-        <div className={styles.list}>
-          {outfits.map((outfit) => {
-            const extra = outfit.item_count - 3;
-            const visibleThumbnails = outfit.item_count > 4 ? outfit.item_thumbnails.slice(0, 3) : outfit.item_thumbnails;
+        <>
+          <div className={styles.list}>
+            {outfits.map((outfit) => {
+              const extra = outfit.item_count - 3;
+              const visibleThumbnails =
+                outfit.item_count > 4 ? outfit.item_thumbnails.slice(0, 3) : outfit.item_thumbnails;
 
-            return (
-              <div
-                key={outfit.id}
-                className={[styles.card, outfit.id === selectedOutfitId && styles.cardSelected]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                <div className={styles.header}>
-                  {editingId === outfit.id ? (
-                    <>
-                      <input
-                        className={styles.titleInput}
-                        value={draftTitle}
-                        onChange={(e) => setDraftTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") commitRename(outfit.id);
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                        ref={(el) => el?.focus()}
-                        aria-label="Outfit title"
-                      />
-                      <button
-                        type="button"
-                        className={`control ${styles.doneButton}`}
-                        onClick={() => commitRename(outfit.id)}
-                      >
-                        Done
+              return (
+                <div
+                  key={outfit.id}
+                  className={[styles.card, outfit.id === selectedOutfitId && styles.cardSelected]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <div className={styles.header}>
+                    {editingId === outfit.id ? (
+                      <>
+                        <input
+                          className={styles.titleInput}
+                          value={draftTitle}
+                          onChange={(e) => setDraftTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitRename(outfit.id);
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                          ref={(el) => el?.focus()}
+                          aria-label="Outfit title"
+                        />
+                        <button
+                          type="button"
+                          className={`control ${styles.doneButton}`}
+                          onClick={() => commitRename(outfit.id)}
+                        >
+                          Done
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" className={styles.titleButton} onClick={() => startEditing(outfit)}>
+                        {outfit.title}
                       </button>
-                    </>
-                  ) : (
-                    <button type="button" className={styles.titleButton} onClick={() => startEditing(outfit)}>
-                      {outfit.title}
-                    </button>
-                  )}
-                  <span className={styles.pill}>{MATCH_LABEL_TEXT[outfit.match_label]}</span>
-                  <span className={styles.spacer} />
-                  <IconButton
-                    icon={outfit.favorite ? "heartFilled" : "heart"}
-                    label={outfit.favorite ? "Unsave outfit" : "Save outfit"}
-                    disabled={!isOnline}
-                    onClick={() => handleToggleFavorite(outfit)}
+                    )}
+                    <span className={styles.pill}>{MATCH_LABEL_TEXT[outfit.match_label]}</span>
+                    <span className={styles.spacer} />
+                    <IconButton
+                      icon={outfit.favorite ? "heartFilled" : "heart"}
+                      label={outfit.favorite ? "Unsave outfit" : "Save outfit"}
+                      disabled={!isOnline}
+                      onClick={() => handleToggleFavorite(outfit)}
+                    />
+                    <IconButton icon="dots" label="More options" onClick={() => setMenuOpenFor(outfit.id)} />
+                  </div>
+                  <p className={styles.date}>{formatOutfitDate(outfit.created_at)}</p>
+
+                  <div className={styles.itemRow}>
+                    {visibleThumbnails.map((item) => (
+                      <Link key={item.id} href={`/closet/${item.id}`} className={styles.thumb}>
+                        <ItemPhoto
+                          src={item.photo_url}
+                          backgroundColor={item.photo_background_color}
+                          className={styles.thumbPhoto}
+                          radius={8}
+                        />
+                      </Link>
+                    ))}
+                    {outfit.item_count > 4 && (
+                      <Link href={`/outfits/${outfit.id}`} className={`${styles.thumb} ${styles.overflowChip}`}>
+                        +{extra}
+                      </Link>
+                    )}
+                  </div>
+
+                  <Link
+                    href={`/outfits/${outfit.id}`}
+                    className={styles.cardLink}
+                    aria-label={`Open ${outfit.title}`}
                   />
-                  <IconButton icon="dots" label="More options" onClick={() => setMenuOpenFor(outfit.id)} />
+
+                  <OutfitOverflowSheet
+                    open={menuOpenFor === outfit.id}
+                    onClose={() => setMenuOpenFor(null)}
+                    isOnline={isOnline}
+                    onLogWorn={() => handleLogWorn(outfit.id)}
+                    onEditTitle={() => startEditing(outfit)}
+                    onDelete={() => setDeleteTarget(outfit)}
+                  />
                 </div>
-                <p className={styles.date}>{formatOutfitDate(outfit.created_at)}</p>
-
-                <div className={styles.itemRow}>
-                  {visibleThumbnails.map((item) => (
-                    <Link key={item.id} href={`/closet/${item.id}`} className={styles.thumb}>
-                      <ItemPhoto
-                        src={item.photo_url}
-                        backgroundColor={item.photo_background_color}
-                        className={styles.thumbPhoto}
-                        radius={8}
-                      />
-                    </Link>
-                  ))}
-                  {outfit.item_count > 4 && (
-                    <Link href={`/outfits/${outfit.id}`} className={`${styles.thumb} ${styles.overflowChip}`}>
-                      +{extra}
-                    </Link>
-                  )}
-                </div>
-
-                <Link href={`/outfits/${outfit.id}`} className={styles.cardLink} aria-label={`Open ${outfit.title}`} />
-
-                <OutfitOverflowSheet
-                  open={menuOpenFor === outfit.id}
-                  onClose={() => setMenuOpenFor(null)}
-                  isOnline={isOnline}
-                  onLogWorn={() => handleLogWorn(outfit.id)}
-                  onEditTitle={() => startEditing(outfit)}
-                  onDelete={() => setDeleteTarget(outfit)}
-                />
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          {hasMore && (
+            <div className={styles.loadMore}>
+              {loadingMore ? (
+                <p className="textCaption">Loading more outfits…</p>
+              ) : (
+                <button type="button" className={styles.loadMoreButton} onClick={loadMore}>
+                  Load more
+                </button>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       <DeleteOutfitDialog

@@ -31,7 +31,7 @@ from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import datetime
 from typing import Literal, NamedTuple
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
 
@@ -232,6 +232,8 @@ class OutfitSummary(BaseModel):
 
 class OutfitSummaryListResponse(BaseModel):
     outfits: list[OutfitSummary]
+    total: int
+    has_more: bool
 
 
 class DimensionScoreView(BaseModel):
@@ -784,6 +786,7 @@ def _build_rationale_with_citations(
 @router.get("/recommend/outfits")
 def list_outfits(
     sort: Sort = "date",
+    offset: int = Query(default=0, ge=0),  # noqa: B008
     user_id: str = Depends(get_current_user_id),  # noqa: B008
     repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
     access_token: str = Depends(get_current_access_token),  # noqa: B008
@@ -792,9 +795,21 @@ def list_outfits(
     """The Outfits gallery (design-system.md § Outfits (gallery)) —
     feature 010. Always `200`, `outfits: []` for the true empty case (no
     separate empty response shape, matching 009's `outfits[]` convention
-    for the pager)."""
+    for the pager).
+
+    Paginated the same way `closet.py`'s `list_closet_items` is (gh-28):
+    `outfit_repository.list_outfits` still returns every row for `sort`,
+    sliced here in Python so the same `sort` keeps producing a stable,
+    continuable order across pages — only the current page's rows ever
+    reach the signing call below, which is the actual cost this fixes.
+    """
     rows = outfit_repository.list_outfits(user_id, sort=sort)
     wardrobe_by_id = {item.id: item for item in repository.list_wardrobe_items(user_id)}
+
+    total = len(rows)
+    page_size = get_settings().wtw_closet_page_size
+    page = rows[offset : offset + page_size]
+    has_more = offset + page_size < total
 
     # `item_ids` comes back from Postgres as a list of UUID objects, not
     # strings — `wardrobe_by_id` is keyed by `WardrobeItem.id: str`, so every
@@ -803,18 +818,19 @@ def list_outfits(
     def _item_ids(row: object) -> list[str]:
         return [str(item_id) for item_id in (row.item_ids or [])]  # type: ignore[attr-defined]
 
-    # Sign every row's first-4 thumbnail photo paths in one batched call
-    # rather than one call per row.
-    all_photo_paths = [
+    # Sign only the current page's first-4 thumbnail photo paths, in one
+    # batched call rather than one call per row (gh-28: this is the part
+    # that must not run over the full, unpaginated set).
+    page_photo_paths = [
         item.photo_path
-        for row in rows
+        for row in page
         for item_id in _item_ids(row)[:4]
         if (item := wardrobe_by_id.get(item_id)) is not None and item.photo_path is not None
     ]
-    signed_urls = storage.create_signed_urls(access_token, all_photo_paths)
+    signed_urls = storage.create_signed_urls(access_token, page_photo_paths)
 
     summaries = []
-    for row in rows:
+    for row in page:
         item_ids = _item_ids(row)
         thumbnails = [
             RecommendItemView.from_wardrobe_item(
@@ -835,7 +851,7 @@ def list_outfits(
                 item_count=len(item_ids),
             )
         )
-    return OutfitSummaryListResponse(outfits=summaries)
+    return OutfitSummaryListResponse(outfits=summaries, total=total, has_more=has_more)
 
 
 @router.get("/recommend/outfits/{outfit_id}")
