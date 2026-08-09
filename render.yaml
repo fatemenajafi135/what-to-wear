@@ -59,6 +59,24 @@ services:
       #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
       - key: WTW_TOKEN_ENCRYPTION_KEY
         sync: false
+      # Google Calendar connect (feature 012). `_require_client_credentials()`
+      # in adapters/google_calendar.py fails closed if ANY of the three is
+      # unset — but only when a user actually taps Connect, so the service
+      # stays healthy and the feature is simply inert until then.
+      #
+      # ⚠️ GOOGLE_OAUTH_REDIRECT_URI is the deployed FRONTEND origin plus
+      # /calendar/callback — e.g. https://your-app.vercel.app/calendar/callback
+      # — NOT this backend's own Render URL. The callback is an app route
+      # (frontend/app/calendar/callback/route.ts), never a provider-hosted
+      # page (docs/design-decisions.md §12). The same URI must also be added
+      # to the OAuth client's "Authorized redirect URIs" in Google Cloud
+      # Console, or Google rejects the request before the app is reached.
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        sync: false
       - key: WTW_QDRANT_URL
         sync: false
       - key: WTW_QDRANT_API_KEY
