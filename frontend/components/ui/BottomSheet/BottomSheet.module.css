@@ -5,11 +5,17 @@
    ignoring the bottom anchor below. Freeing inset-block-start lets the
    browser compute it from the other three, which is what produces the
    slide-up-from-bottom sheet on mobile. */
+/* issue #34 follow-up: <dialog>'s UA stylesheet also caps width at
+   calc(100% - 34px) by default (Chromium's own :modal safety margin) —
+   never overridden, so the sheet fell 34px short of full width with an
+   empty gap on the right. Desktop's own max-width: 420px below already
+   overrides this, so only mobile ever showed the gap. */
 .dialog {
   border: none;
   padding: 0;
   margin: 0;
   width: 100%;
+  max-width: none;
   max-height: 85dvh;
   background-color: var(--color-surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
