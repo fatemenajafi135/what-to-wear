@@ -59,6 +59,14 @@ jobs:
 
       - name: Run tests
         working-directory: backend
+        env:
+          # Settings requires `supabase_url` and there is no .env in CI, so
+          # without this every test that constructs Settings() dies with
+          # "ValidationError: supabase_url Field required". This was latent:
+          # the job never got this far, dying at `supabase db reset` first, so
+          # fixing the reset is what surfaced it. The local stack's real URL —
+          # the same value the pwa-e2e job already passes to its backend.
+          SUPABASE_URL: "http://127.0.0.1:54321"
         run: uv run pytest
 
       - name: Lint (ruff)
