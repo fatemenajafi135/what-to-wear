@@ -33,6 +33,7 @@ export function AppearanceSection() {
       </div>
 
       <div className={styles.field}>
+        <p className={`textLabel ${styles.fieldLabel}`}>Theme</p>
         <SegmentedControl options={OPTIONS} value={theme} onChange={select} />
       </div>
     </section>
