@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -60,17 +61,58 @@ def _insert_item(user_id: str, category: str, **overrides: object) -> str:
         "season": ["spring"],
         "source": "upload",
         "name": overrides.pop("name", None),
+        "photo_path": overrides.pop("photo_path", None),
         **overrides,
     }
     with get_engine().begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO wardrobe_items (id, user_id, category, colors, formality, warmth, season, source, name)"
-                " VALUES (:id, :user_id, :category, :colors, :formality, :warmth, :season, :source, :name)"
+                "INSERT INTO wardrobe_items (id, user_id, category, colors, formality, warmth, season, source, "
+                "name, photo_path)"
+                " VALUES (:id, :user_id, :category, :colors, :formality, :warmth, :season, :source, :name,"
+                " :photo_path)"
             ),
             row,
         )
     return item_id
+
+
+def _insert_outfit(
+    user_id: str,
+    item_ids: list[str],
+    *,
+    title: str = "Outfit",
+    match_label: str = "great",
+    created_at: datetime | None = None,
+) -> str:
+    """Direct-SQL outfit insert for pagination tests (gh-28) — bypasses
+    `SupabaseOutfitRepository.create` (which always defaults `created_at` to
+    `now()`) so tests can seed many rows with distinct, controllable
+    timestamps to prove `sort=date` stays stable across pages, without
+    going through the full mocked-pipeline `_generate_outfit` HTTP round
+    trip for every row."""
+    outfit_id = str(uuid.uuid4())
+    with get_engine().begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO outfits (id, user_id, occasion, meta_line, rationale_text, match_label,"
+                " item_ids, title, favorite, created_at)"
+                " VALUES (:id, :user_id, :occasion, :meta_line, :rationale_text, :match_label,"
+                " :item_ids, :title, false, :created_at)"
+            ),
+            {
+                "id": outfit_id,
+                "user_id": user_id,
+                "occasion": title,
+                "meta_line": "",
+                "rationale_text": "",
+                "match_label": match_label,
+                "item_ids": item_ids,
+                "title": title,
+                "created_at": created_at or datetime.now(UTC),
+            },
+        )
+    return outfit_id
 
 
 @pytest.fixture
@@ -1012,6 +1054,64 @@ class TestListOutfits:
         with TestClient(app) as client:
             response = client.get("/api/v1/recommend/outfits")
         assert response.status_code == 401
+
+    def test_pagination_offset_and_has_more_flag(self, ready_closet: dict[str, str]) -> None:
+        """gh-28 — mirrors test_closet_routes.py's test_pagination_has_more_flag."""
+        top = ready_closet["top"]
+        base = datetime.now(UTC)
+        for i in range(25):
+            _insert_outfit(USER_READY, [top], title=f"Outfit {i}", created_at=base - timedelta(seconds=i))
+
+        with _client_as(USER_READY) as client:
+            first_page = client.get("/api/v1/recommend/outfits").json()
+            second_page = client.get("/api/v1/recommend/outfits", params={"offset": 20}).json()
+
+        assert first_page["total"] == 25
+        assert len(first_page["outfits"]) == 20
+        assert first_page["has_more"] is True
+        assert len(second_page["outfits"]) == 5
+        assert second_page["has_more"] is False
+
+    def test_page_two_continues_page_ones_sort_order(self, ready_closet: dict[str, str]) -> None:
+        """gh-28: page 2 of `?sort=date` must continue page 1's order, not
+        re-sort a different slice — titles double as the expected order so
+        the assertion doesn't have to re-derive it from timestamps."""
+        top = ready_closet["top"]
+        base = datetime.now(UTC)
+        expected_order = [f"Outfit {i}" for i in range(25)]
+        for i, title in enumerate(expected_order):
+            _insert_outfit(USER_READY, [top], title=title, created_at=base - timedelta(seconds=i))
+
+        with _client_as(USER_READY) as client:
+            first_page = client.get("/api/v1/recommend/outfits", params={"sort": "date"}).json()
+            second_page = client.get("/api/v1/recommend/outfits", params={"sort": "date", "offset": 20}).json()
+
+        combined_titles = [o["title"] for o in first_page["outfits"]] + [o["title"] for o in second_page["outfits"]]
+        assert combined_titles == expected_order
+
+    def test_only_current_pages_thumbnails_are_signed(self, ready_closet: dict[str, str]) -> None:
+        """The actual bug (gh-28): paginating the response while still
+        signing every row's photos fixes nothing — 25 outfits, each with one
+        photographed item; only the 20 on the first page may reach
+        `storage.create_signed_urls`."""
+        items_with_photos = [
+            _insert_item(USER_READY, "t-shirt", photo_path=f"{USER_READY}/outfit-{i}.jpg") for i in range(25)
+        ]
+        base = datetime.now(UTC)
+        for i, item_id in enumerate(items_with_photos):
+            _insert_outfit(USER_READY, [item_id], title=f"Outfit {i}", created_at=base - timedelta(seconds=i))
+
+        with (
+            patch("whattowear.api.v1.routes.recommend.storage.create_signed_urls", return_value={}) as mock_sign,
+            _client_as(USER_READY) as client,
+        ):
+            response = client.get("/api/v1/recommend/outfits")
+
+        assert response.status_code == 200
+        assert response.json()["total"] == 25
+        mock_sign.assert_called_once()
+        signed_paths = mock_sign.call_args.args[1]
+        assert len(signed_paths) == 20  # page size — never the full 25
 
 
 class TestGetOutfit:
