@@ -5,6 +5,19 @@
   margin-bottom: var(--space-md);
 }
 
+/*
+ * issue #35, follow-up to #22: #22's mobile-only TopHeader already shows
+ * the section name (title + "Settings" subtitle) below 1024px, so each
+ * section's own <h2> here would repeat it a second time. Edit/Done stays
+ * — only the name text is hidden. At 1024px+ the top-level header just
+ * says "Settings", so this <h2> remains the only place the name shows.
+ */
+@media (max-width: 1023.98px) {
+  .header h2 {
+    display: none;
+  }
+}
+
 .field {
   margin-bottom: var(--space-lg);
 }
