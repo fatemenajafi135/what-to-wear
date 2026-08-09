@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { Dropzone } from "./Dropzone";
 import { ReviewCard, type ReviewCardFields } from "./ReviewCard";
+import { OrientationAwarePhoto } from "./OrientationAwarePhoto";
 import { buildFromUploadBody } from "./fromUploadBody";
 import { apiClient } from "@/lib/api/client";
 import { addItemCopy } from "@/lib/add-item-copy";
@@ -117,8 +118,7 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
     return (
       <div className={styles.stateBlock} aria-live="polite">
         <div className={styles.scanningPhotoWrap}>
-          {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset */}
-          <img src={state.photoUrl} alt="" className={styles.photo} />
+          <OrientationAwarePhoto src={state.photoUrl} />
           <div className={`skeleton ${styles.scanningOverlay}`} />
         </div>
         <p className={`textBody ${styles.stateBody}`}>Scanning…</p>
@@ -129,8 +129,7 @@ export function AddItemFlow({ onClose }: AddItemFlowProps) {
   if (state.step === "empty") {
     return (
       <div className={styles.stateBlock}>
-        {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset */}
-        <img src={state.photoUrl} alt="" className={styles.photo} />
+        <OrientationAwarePhoto src={state.photoUrl} />
         <p className={`textBody ${styles.stateBody}`}>{addItemCopy.empty.body}</p>
         <Button width="intrinsic" onClick={() => setState({ step: "dropzone" })}>
           {addItemCopy.empty.retakeCta}

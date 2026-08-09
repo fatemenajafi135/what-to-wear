@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { ReviewCard, type ReviewCardFields } from "./ReviewCard";
+import { OrientationAwarePhoto } from "./OrientationAwarePhoto";
 import { buildFromUploadBody } from "./fromUploadBody";
 import { apiClient } from "@/lib/api/client";
 import { addItemCopy } from "@/lib/add-item-copy";
@@ -176,8 +177,7 @@ export function BulkQueue({ files, onClose, onPositionChange }: BulkQueueProps) 
     return (
       <div className={styles.scanningBlock} aria-live="polite">
         <div className={styles.scanningPhotoWrap}>
-          {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset */}
-          <img src={current.photoUrl} alt="" className={styles.scanningPhoto} />
+          <OrientationAwarePhoto src={current.photoUrl} />
           <div className={`skeleton ${styles.scanningOverlay}`} />
         </div>
         <p className={`textBody ${styles.scanningCaption}`}>Scanning…</p>
@@ -189,8 +189,7 @@ export function BulkQueue({ files, onClose, onPositionChange }: BulkQueueProps) 
     return (
       <div className={styles.queue}>
         <div className={styles.uploadError} role="alert">
-          {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset */}
-          <img src={current.photoUrl} alt="" className={styles.errorPhoto} />
+          <OrientationAwarePhoto src={current.photoUrl} />
           <p className={`textBody ${styles.errorBody}`}>{addItemCopy.error.body}</p>
           <Button width="intrinsic" onClick={() => void scanEntry(currentIndex, current.file)}>
             {addItemCopy.error.cta}

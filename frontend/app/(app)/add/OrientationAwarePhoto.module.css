@@ -1,0 +1,18 @@
+/* issue #33 — see OrientationAwarePhoto.tsx for the orientation logic. */
+.photo {
+  display: block;
+  width: 100%;
+  border-radius: 16px;
+  background-color: var(--color-surface-sunken);
+}
+
+/* Portrait: crop to a square, matching Closet's tile treatment. */
+.portrait {
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+/* Landscape or square: natural aspect ratio, no cropping. */
+.natural {
+  height: auto;
+}

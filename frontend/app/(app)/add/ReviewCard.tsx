@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input/Input";
 import { Textarea } from "@/components/ui/Textarea/Textarea";
 import { Button } from "@/components/ui/Button/Button";
 import { ColorField, isHex } from "./ColorField";
+import { OrientationAwarePhoto } from "./OrientationAwarePhoto";
 import {
   CATEGORY_CHIPS,
   type CategoryChip,
@@ -223,9 +224,8 @@ export function ReviewCard({
 
   return (
     <form className={styles.card} onSubmit={handleSubmit}>
-      {/* design-system.md § Image treatment: review-card photo, 150px, 16px radius. */}
-      {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset */}
-      <img src={photoUrl} alt="" className={styles.photo} />
+      {/* issue #33: square/landscape natural, portrait cropped to a square — see OrientationAwarePhoto. */}
+      <OrientationAwarePhoto src={photoUrl} />
 
       <Input label="Name" value={name} onChange={setName} />
 

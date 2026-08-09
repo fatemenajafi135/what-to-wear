@@ -4,16 +4,6 @@
   gap: var(--space-lg);
 }
 
-/* design/design-system.md § Image treatment: review-card photo — full-width,
-   height: 150px, radius: 16px. */
-.photo {
-  width: 100%;
-  height: 150px;
-  border-radius: 16px;
-  object-fit: cover;
-  background-color: var(--color-surface-sunken);
-}
-
 .field {
   display: flex;
   flex-direction: column;

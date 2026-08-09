@@ -27,8 +27,8 @@
 }
 
 /* issue #31: same layout as .uploadError below (mirrored, not shared,
-   since it's a distinct non-error state) — centred column, 150px photo,
-   secondary-colour caption. */
+   since it's a distinct non-error state) — centred column,
+   OrientationAwarePhoto (issue #33), secondary-colour caption. */
 .scanningBlock {
   display: flex;
   flex-direction: column;
@@ -46,13 +46,6 @@
   overflow: hidden;
 }
 
-.scanningPhoto {
-  width: 100%;
-  height: 150px;
-  border-radius: 16px;
-  object-fit: cover;
-}
-
 /* Reuses globals.css's .skeleton unchanged (same pulse animation, same
    prefers-reduced-motion gating) — its own opaque background-color plus
    fluctuating element opacity (0.55-1) is what produces the shimmer
@@ -68,9 +61,8 @@
 
 /* A photo whose UPLOAD failed (no photo_path came back), so its card can
    never be saved. Mirrors AddItemFlow's own error block rather than
-   inventing a second treatment — same 150px review-card photo box
-   (design-system.md § Image treatment), same centred column, same
-   secondary-colour body. */
+   inventing a second treatment — same OrientationAwarePhoto treatment
+   (issue #33), same centred column, same secondary-colour body. */
 .uploadError {
   display: flex;
   flex-direction: column;
@@ -79,13 +71,6 @@
   text-align: center;
   gap: var(--space-lg);
   padding: var(--space-xl) 0;
-}
-
-.errorPhoto {
-  width: 100%;
-  height: 150px;
-  border-radius: 16px;
-  object-fit: cover;
 }
 
 .errorBody {

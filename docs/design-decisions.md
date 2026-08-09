@@ -2920,6 +2920,33 @@ staging collection before the code was written, not assumed from the library's d
 The metadata carries `layer`, `rule_id` and `granularity`, so `by_layer()` works
 identically on reconstructed chunks.
 
+## 60. UI conformance batch (issue #33) — Add Item photo aspect ratio
+
+**Status: decided.** `design-system.md`'s "Image treatment" table documents the Add-item
+review-card photo (and, by the same rule, the scanning/upload-error states added later) as
+"full-width, fixed height: 150px... same flexing behavior [as the hero photo/dropzone]" —
+written when "no real photos exist in the prototype... every photo is the same
+diagonal-stripe placeholder" with no real aspect-ratio concerns. Real uploaded photos expose
+the problem a fixed-height `object-fit: cover` box can't avoid: a portrait photo gets
+cropped down to a sliver of its actual content.
+
+### Resolution
+
+Read the photo's own `naturalWidth`/`naturalHeight` on load (CSS alone can't branch on an
+image's intrinsic aspect ratio) and treat orientation as the deciding factor, not a fixed box:
+
+| Orientation | Treatment |
+|---|---|
+| Landscape or square (`width >= height`) | Natural aspect ratio, full width, no cropping |
+| Portrait (`height > width`) | Cropped to a square (`aspect-ratio: 1`, `object-fit: cover`), full container width — the same treatment already used on the Closet grid tile |
+
+Implemented once as `frontend/app/(app)/add/OrientationAwarePhoto.tsx`, replacing five
+separate call sites that had each duplicated the same fixed-150px-height rule
+(`ReviewCard.tsx`, `AddItemFlow.tsx`'s scanning and empty states, `BulkQueue.tsx`'s scanning
+and upload-error states). Defaults to the square treatment before the image loads, rather
+than collapsing to zero height — orientation is briefly unknown, and local blob URLs (the
+only source this ever renders) load fast enough that the window isn't visually significant.
+
 Verified against the real staging cluster with `CORPUS_LOCAL_DIR` unset: 391 chunks
 rebuilt from 391 points, `by_layer("L1")` → 197, `by_layer("L4")` → 65, L1-atomic → 15,
 and a live `similarity_search` through the gateway returning correctly ranked results.
