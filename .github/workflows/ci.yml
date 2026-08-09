@@ -42,7 +42,7 @@ jobs:
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v2
         with:
-          version: 2.110.0
+          version: 2.113.0
 
       - name: Start local Supabase
         working-directory: infra
@@ -59,6 +59,14 @@ jobs:
 
       - name: Run tests
         working-directory: backend
+        env:
+          # Settings requires `supabase_url` and there is no .env in CI, so
+          # without this every test that constructs Settings() dies with
+          # "ValidationError: supabase_url Field required". This was latent:
+          # the job never got this far, dying at `supabase db reset` first, so
+          # fixing the reset is what surfaced it. The local stack's real URL —
+          # the same value the pwa-e2e job already passes to its backend.
+          SUPABASE_URL: "http://127.0.0.1:54321"
         run: uv run pytest
 
       - name: Lint (ruff)
@@ -111,8 +119,16 @@ jobs:
       - name: Start backend to serve /openapi.json
         working-directory: backend
         env:
+          # Port 1 is deliberately dead: this step only needs /openapi.json,
+          # which touches no database.
           DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:1/postgres"
           SUPABASE_URL: "http://127.0.0.1:1"
+          # ...but the checkpointer's ConnectionPool opens eagerly and RETRIES
+          # against that dead port, pushing "Application startup complete" past
+          # the 30s readiness loop below — so the job failed with "backend
+          # never became ready" while the app was, in fact, fine. `memory` is
+          # what the mode exists for: this job genuinely has no Postgres.
+          WTW_CHECKPOINTER_MODE: "memory"
         run: |
           uv run uvicorn whattowear.main:app --host 127.0.0.1 --port 8000 &
           for _ in $(seq 1 30); do
@@ -194,7 +210,7 @@ jobs:
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v2
         with:
-          version: 2.110.0
+          version: 2.113.0
 
       - name: Start local Supabase
         working-directory: infra
