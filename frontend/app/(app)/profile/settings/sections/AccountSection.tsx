@@ -66,9 +66,6 @@ export function AccountSection({ disabled }: Props) {
     <section>
       <div className={styles.header}>
         <h2 className="textSectionTitle">Account</h2>
-        <Button variant="secondary" width="intrinsic" disabled={disabled || saving} onClick={editing ? done : startEdit}>
-          {editing ? "Done" : "Edit"}
-        </Button>
       </div>
 
       <div className={styles.field}>
@@ -89,6 +86,10 @@ export function AccountSection({ disabled }: Props) {
           </>
         )}
       </div>
+
+      <Button variant="secondary" width="stretch" disabled={disabled || saving} onClick={editing ? done : startEdit}>
+        {editing ? "Done" : "Edit"}
+      </Button>
     </section>
   );
 }

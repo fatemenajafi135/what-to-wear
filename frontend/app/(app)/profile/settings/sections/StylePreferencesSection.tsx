@@ -59,14 +59,6 @@ export function StylePreferencesSection({ profile, disabled, onSaved }: Props) {
     <section>
       <div className={styles.header}>
         <h2 className="textSectionTitle">Style preferences</h2>
-        <Button
-          variant="secondary"
-          width="intrinsic"
-          disabled={disabled || saving}
-          onClick={editing ? done : startEdit}
-        >
-          {editing ? "Done" : "Edit"}
-        </Button>
       </div>
 
       <div className={styles.field}>
@@ -125,6 +117,10 @@ export function StylePreferencesSection({ profile, disabled, onSaved }: Props) {
           </>
         )}
       </div>
+
+      <Button variant="secondary" width="stretch" disabled={disabled || saving} onClick={editing ? done : startEdit}>
+        {editing ? "Done" : "Edit"}
+      </Button>
     </section>
   );
 }
