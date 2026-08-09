@@ -131,7 +131,10 @@ class Settings(BaseSettings):
     #   "reconnect" — attach to an already-populated Qdrant collection and
     #                 rebuild the chunk list from stored payloads. Never reads
     #                 the corpus, so a deployed instance does not need it.
-    #   "auto"      — "corpus" when CORPUS_LOCAL_DIR is set, else "reconnect".
+    #   "auto"      — same as "corpus". It does NOT fall back to "reconnect"
+    #                 when CORPUS_LOCAL_DIR is unset: attaching to a collection
+    #                 this process did not build is an operational choice, not
+    #                 something to infer from a missing variable.
     # Explicit modes rather than a silent fallback, for the same reason
     # `wtw_checkpointer_mode` has them (docs/design-decisions.md §55).
     wtw_kb_mode: str = "auto"

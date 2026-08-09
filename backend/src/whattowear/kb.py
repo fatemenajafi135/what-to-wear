@@ -147,15 +147,30 @@ def get_kb() -> KnowledgeBase:
     if mode not in _VALID_MODES:
         raise RuntimeError(f"WTW_KB_MODE must be one of {', '.join(_VALID_MODES)} — got {settings.wtw_kb_mode!r}.")
 
-    if mode == "reconnect" or (mode == "auto" and not settings.corpus_local_dir):
+    if mode == "reconnect":
         return _reconnect_kb(settings)
 
-    # --- "corpus" mode: unchanged from the evaluated implementation ---------
+    # --- "corpus" mode (and "auto"): unchanged from the evaluated implementation ---
+    #
+    # `auto` deliberately does NOT fall back to reconnect here. It briefly did,
+    # and that was a silent-fallback bug: with no CORPUS_LOCAL_DIR set, a local
+    # process would quietly attach to whatever Qdrant collection its config
+    # happened to point at — in practice the deployed one — and serve it as if
+    # it had built the KB itself. No error, no warning, just someone else's
+    # knowledge base. Caught by `test_kb.py`'s pre-existing contract test, which
+    # this branch had stopped satisfying.
+    #
+    # Reconnecting reads a collection this process cannot verify against the
+    # corpus that produced it, so it is a deliberate operational choice, not a
+    # default worth inferring. `render.yaml` sets WTW_KB_MODE=reconnect
+    # explicitly for exactly that reason.
     if not settings.corpus_local_dir:
         raise RuntimeError(
-            "CORPUS_LOCAL_DIR is required to build/reconnect to the knowledge base. Set it in .env "
+            "CORPUS_LOCAL_DIR is required to build the knowledge base. Set it in .env "
             "(see .env.example), or set WTW_KB_MODE=reconnect to attach to an already-populated "
-            "Qdrant collection instead — which is what a deployed instance without the corpus wants."
+            "Qdrant collection instead — which is what a deployed instance without the corpus wants. "
+            "It is not inferred: attaching to a collection this process did not build is an explicit "
+            "choice."
         )
     corpus_dir = Path(settings.corpus_local_dir)
     chunks = ingest_all(corpus_dir)
