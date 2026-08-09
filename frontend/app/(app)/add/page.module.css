@@ -1,3 +1,25 @@
+/* issue #32: no page in the app had a working sticky header before this —
+   scoped here to Add Item specifically rather than changing the shared
+   TopHeader component app-wide. */
+.stickyHeader {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background-color: var(--color-background);
+}
+
+.bulkPosition {
+  margin: 0;
+  padding: 0 var(--space-lg) var(--space-md);
+}
+
+@media (min-width: 768px) {
+  .bulkPosition {
+    max-width: 480px;
+    margin-inline: auto;
+  }
+}
+
 /* design/design-system.md §5: Add item is stacked, one card at a time,
    centred at max-width: 480px from tablet up. */
 .content {

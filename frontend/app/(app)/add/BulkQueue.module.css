@@ -4,10 +4,6 @@
   gap: var(--space-lg);
 }
 
-.position {
-  margin: 0;
-}
-
 /* research.md §7: the progress bar animates between steps (not an instant
    jump), gated by prefers-reduced-motion (design-system.md §8). */
 .progressTrack {

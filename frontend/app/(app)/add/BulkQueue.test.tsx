@@ -1,8 +1,25 @@
+import { useState, type ComponentProps } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/lib/api/client";
 import { BulkQueue } from "./BulkQueue";
+
+/**
+ * issue #32 moved the "Reviewing item X of Y" indicator out of BulkQueue's
+ * own render (into the page's sticky header, via onPositionChange) — this
+ * mirrors what page.tsx now does, so the tests below can keep asserting on
+ * visible text rather than inspecting callback args directly.
+ */
+function BulkQueueHarness(props: Omit<ComponentProps<typeof BulkQueue>, "onPositionChange">) {
+  const [position, setPosition] = useState<{ current: number; total: number } | null>(null);
+  return (
+    <>
+      {position && <h2>{`Reviewing item ${position.current} of ${position.total}`}</h2>}
+      <BulkQueue {...props} onPositionChange={setPosition} />
+    </>
+  );
+}
 
 vi.mock("@/lib/api/client", () => ({
   apiClient: { POST: vi.fn(), GET: vi.fn() },
@@ -62,7 +79,7 @@ describe("BulkQueue", () => {
       }) as never
     );
 
-    render(<BulkQueue files={makeFiles(1)} onClose={vi.fn()} />);
+    render(<BulkQueueHarness files={makeFiles(1)} onClose={vi.fn()} />);
 
     expect(await screen.findByText("Scanning…")).toBeInTheDocument();
     const photo = document.querySelector("img");
@@ -77,7 +94,7 @@ describe("BulkQueue", () => {
       .mockResolvedValueOnce(extractResponse("user-a/1.jpg", "bottom"))
       .mockResolvedValueOnce(extractResponse("user-a/2.jpg", "footwear"));
 
-    render(<BulkQueue files={makeFiles(3)} onClose={vi.fn()} />);
+    render(<BulkQueueHarness files={makeFiles(3)} onClose={vi.fn()} />);
 
     expect(await screen.findByText("Reviewing item 1 of 3")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Top" })).toHaveAttribute("aria-pressed", "true");
@@ -90,7 +107,7 @@ describe("BulkQueue", () => {
       .mockResolvedValueOnce(extractResponse("user-a/1.jpg", "bottom"))
       .mockResolvedValueOnce({ data: { id: "item-1" }, error: undefined, response: new Response() });
 
-    render(<BulkQueue files={makeFiles(2)} onClose={vi.fn()} />);
+    render(<BulkQueueHarness files={makeFiles(2)} onClose={vi.fn()} />);
     await screen.findByText("Reviewing item 1 of 2");
     await userEvent.click(screen.getByRole("button", { name: "Save & next" }));
 
@@ -105,7 +122,7 @@ describe("BulkQueue", () => {
       .mockResolvedValueOnce({ data: { id: "item-1" }, error: undefined, response: new Response() }) // save card 1: success
       .mockResolvedValueOnce({ data: undefined, error: { detail: "boom" }, response: new Response() }); // save card 2: fails
 
-    render(<BulkQueue files={makeFiles(2)} onClose={vi.fn()} />);
+    render(<BulkQueueHarness files={makeFiles(2)} onClose={vi.fn()} />);
     await screen.findByText("Reviewing item 1 of 2");
     await userEvent.click(screen.getByRole("button", { name: "Save & next" }));
 
@@ -126,7 +143,7 @@ describe("BulkQueue", () => {
       .mockResolvedValueOnce(extractResponse("user-a/0.jpg", "top"))
       .mockResolvedValueOnce({ data: { id: "item-1" }, error: undefined, response: new Response() });
 
-    render(<BulkQueue files={makeFiles(1)} onClose={vi.fn()} />);
+    render(<BulkQueueHarness files={makeFiles(1)} onClose={vi.fn()} />);
     await screen.findByText("Reviewing item 1 of 1");
     await userEvent.click(screen.getByRole("button", { name: "Save to Closet" }));
 
@@ -142,7 +159,7 @@ describe("BulkQueue", () => {
       .mockResolvedValueOnce({ data: { id: "item-1" }, error: undefined, response: new Response() });
 
     const onClose = vi.fn();
-    render(<BulkQueue files={makeFiles(1)} onClose={onClose} />);
+    render(<BulkQueueHarness files={makeFiles(1)} onClose={onClose} />);
     await screen.findByText("Reviewing item 1 of 1");
     await userEvent.click(screen.getByRole("button", { name: "Save to Closet" }));
 
@@ -162,7 +179,7 @@ describe("BulkQueue", () => {
         response: new Response(),
       });
 
-      render(<BulkQueue files={makeFiles(1)} onClose={vi.fn()} />);
+      render(<BulkQueueHarness files={makeFiles(1)} onClose={vi.fn()} />);
 
       expect(await screen.findByText("That upload didn't go through.")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
@@ -175,7 +192,7 @@ describe("BulkQueue", () => {
         .mockResolvedValueOnce({ data: undefined, error: { detail: "nope" }, response: new Response() })
         .mockResolvedValueOnce(extractResponse("user-a/0.jpg", "top"));
 
-      render(<BulkQueue files={makeFiles(1)} onClose={vi.fn()} />);
+      render(<BulkQueueHarness files={makeFiles(1)} onClose={vi.fn()} />);
       await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
 
       expect(await screen.findByRole("button", { name: "Save to Closet" })).toBeInTheDocument();
@@ -187,7 +204,7 @@ describe("BulkQueue", () => {
         .mockResolvedValueOnce({ data: undefined, error: { detail: "nope" }, response: new Response() })
         .mockResolvedValueOnce(extractResponse("user-a/1.jpg", "bottom"));
 
-      render(<BulkQueue files={makeFiles(2)} onClose={vi.fn()} />);
+      render(<BulkQueueHarness files={makeFiles(2)} onClose={vi.fn()} />);
       await userEvent.click(await screen.findByRole("button", { name: "Skip this photo" }));
 
       expect(await screen.findByText("Reviewing item 2 of 2")).toBeInTheDocument();
@@ -198,7 +215,7 @@ describe("BulkQueue", () => {
       mockedPost.mockResolvedValueOnce({ data: undefined, error: { detail: "nope" }, response: new Response() });
 
       const onClose = vi.fn();
-      render(<BulkQueue files={makeFiles(1)} onClose={onClose} />);
+      render(<BulkQueueHarness files={makeFiles(1)} onClose={onClose} />);
       await userEvent.click(await screen.findByRole("button", { name: "Skip and finish" }));
 
       await waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -220,7 +237,7 @@ describe("BulkQueue", () => {
       response: new Response(),
     });
 
-    render(<BulkQueue files={makeFiles(1)} onClose={vi.fn()} />);
+    render(<BulkQueueHarness files={makeFiles(1)} onClose={vi.fn()} />);
 
     expect(await screen.findByRole("button", { name: "Save to Closet" })).toBeInTheDocument();
     expect(screen.queryByText("That upload didn't go through.")).not.toBeInTheDocument();

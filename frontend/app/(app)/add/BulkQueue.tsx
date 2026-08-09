@@ -20,9 +20,20 @@ interface QueueEntry {
   extracted?: ExtractedAttributes | null;
 }
 
+export interface BulkQueuePosition {
+  current: number;
+  total: number;
+}
+
 export interface BulkQueueProps {
   files: File[];
   onClose: () => void;
+  /** issue #32: the "Reviewing item X of Y" indicator moved up to the page's
+   * sticky header, since it needs to stay fixed alongside it — this reports
+   * it upward instead of rendering it inline. Fires with `null` whenever
+   * the indicator shouldn't show (the same "scanning" gate the inline
+   * version used). */
+  onPositionChange?: (position: BulkQueuePosition | null) => void;
 }
 
 /**
@@ -56,7 +67,7 @@ export interface BulkQueueProps {
  * card shows Button's Error treatment in place; already-saved cards are
  * unaffected; the queue does not advance past it until retried.
  */
-export function BulkQueue({ files, onClose }: BulkQueueProps) {
+export function BulkQueue({ files, onClose, onPositionChange }: BulkQueueProps) {
   const [entries, setEntries] = useState<QueueEntry[]>(() =>
     files.map((file) => ({ file, photoUrl: URL.createObjectURL(file), status: "scanning" }))
   );
@@ -120,6 +131,10 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
   const isLast = currentIndex === total - 1;
   const savedCount = entries.filter((e) => e.status === "saved").length;
 
+  useEffect(() => {
+    onPositionChange?.(current && current.status !== "scanning" ? { current: currentIndex + 1, total } : null);
+  }, [current, currentIndex, total, onPositionChange]);
+
   const advance = () => {
     if (isLast) {
       onClose();
@@ -173,9 +188,6 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
   if (current.status === "upload-error") {
     return (
       <div className={styles.queue}>
-        <h2 className={`textSectionTitle ${styles.position}`} aria-live="polite">
-          {addItemCopy.review.position(currentIndex + 1, total)}
-        </h2>
         <div className={styles.uploadError} role="alert">
           {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset */}
           <img src={current.photoUrl} alt="" className={styles.errorPhoto} />
@@ -196,9 +208,6 @@ export function BulkQueue({ files, onClose }: BulkQueueProps) {
 
   return (
     <div className={styles.queue}>
-      <h2 className={`textSectionTitle ${styles.position}`} aria-live="polite">
-        {addItemCopy.review.position(currentIndex + 1, total)}
-      </h2>
       <div className={styles.progressTrack} aria-hidden="true">
         <div className={styles.progressFill} style={{ width: `${((savedCount + 1) / total) * 100}%` }} />
       </div>
