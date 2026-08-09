@@ -1,3 +1,15 @@
+/* Sticks the Filter & sort toolbar to the header (already sticky app-wide,
+   issue #36) so both stay fixed together while the list scrolls beneath —
+   same technique as Add Item's header + position indicator (issue #32).
+   Redundant with TopHeader's own sticky rule, harmlessly so: TopHeader is
+   this wrapper's first child, already sitting at its own top edge. */
+.stickyHeader {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background-color: var(--color-background);
+}
+
 .toolbar {
   display: flex;
   padding: 0 var(--space-lg) var(--space-md);

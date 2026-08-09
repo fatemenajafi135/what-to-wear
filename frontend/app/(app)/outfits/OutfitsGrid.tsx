@@ -132,12 +132,14 @@ export function OutfitsGrid({ selectedOutfitId }: OutfitsGridProps) {
 
   return (
     <>
-      <TopHeader
-        title="Outfits"
-        subtitle={loading ? undefined : `${outfits.length} outfit${outfits.length === 1 ? "" : "s"}`}
-      />
-      <div className={styles.toolbar}>
-        <SortSheetTrigger onOpen={() => setSortSheetOpen(true)} />
+      <div className={styles.stickyHeader}>
+        <TopHeader
+          title="Outfits"
+          subtitle={loading ? undefined : `${outfits.length} outfit${outfits.length === 1 ? "" : "s"}`}
+        />
+        <div className={styles.toolbar}>
+          <SortSheetTrigger onOpen={() => setSortSheetOpen(true)} />
+        </div>
       </div>
       <SortSheet open={sortSheetOpen} onClose={() => setSortSheetOpen(false)} sort={sort} onChange={setSort} />
 
