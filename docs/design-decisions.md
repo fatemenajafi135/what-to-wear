@@ -2938,7 +2938,7 @@ image's intrinsic aspect ratio) and treat orientation as the deciding factor, no
 | Orientation | Treatment |
 |---|---|
 | Landscape or square (`width >= height`) | Natural aspect ratio, full width, no cropping |
-| Portrait (`height > width`) | Cropped to a square (`aspect-ratio: 1`, `object-fit: cover`), full container width — the same treatment already used on the Closet grid tile |
+| Portrait (`height > width`) | Centered in a square (`aspect-ratio: 1`, `object-fit: contain`), full container width — letterboxed with empty space left/right, never cropped. Deliberately **not** Closet grid tile's treatment, which crops via `object-fit: cover` — the whole garment staying visible mattered more here than filling the box. |
 
 Implemented once as `frontend/app/(app)/add/OrientationAwarePhoto.tsx`, replacing five
 separate call sites that had each duplicated the same fixed-150px-height rule

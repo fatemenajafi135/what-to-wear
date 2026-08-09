@@ -6,10 +6,12 @@
   background-color: var(--color-surface-sunken);
 }
 
-/* Portrait: crop to a square, matching Closet's tile treatment. */
+/* Portrait: centered in a square, letterboxed rather than cropped — the
+   whole photo stays visible, with empty space left/right instead of
+   losing the top/bottom of the garment. */
 .portrait {
   aspect-ratio: 1;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 /* Landscape or square: natural aspect ratio, no cropping. */

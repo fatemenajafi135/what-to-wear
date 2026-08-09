@@ -14,9 +14,11 @@ export interface OrientationAwarePhotoProps {
  * object-fit: cover — cropping portrait photos heavily. CSS alone can't
  * branch on an image's intrinsic aspect ratio, so this reads
  * naturalWidth/naturalHeight on load: landscape/square photos show at
- * their natural aspect ratio (no cropping), portrait photos crop to a
- * square, matching Closet's own tile treatment
- * (ClosetGrid.module.css's aspect-ratio: 1).
+ * their natural aspect ratio (no cropping); portrait photos are centered
+ * in a square box (aspect-ratio: 1) with object-fit: contain, so the
+ * whole photo stays visible, letterboxed with empty space left/right
+ * rather than cropped — deliberately *not* Closet grid's tile treatment,
+ * which crops via object-fit: cover.
  *
  * Defaults to the square treatment before the image loads (rather than
  * collapsing to zero height) — orientation is unknown for a brief moment,
