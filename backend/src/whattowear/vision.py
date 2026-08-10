@@ -24,6 +24,7 @@ from typing import Any
 from langsmith import traceable
 
 from .adapters.llm_gateway import get_chat_model
+from .categories import group_of
 from .core.config import get_settings
 from .prompts import load_prompt
 from .schema import BoundingBox, DetectedGarment, ExtractedAttributes
@@ -171,6 +172,91 @@ def _drop_overlapping(detections: list[DetectedGarment]) -> list[DetectedGarment
     return kept
 
 
+def _region_union(a: BoundingBox, b: BoundingBox) -> BoundingBox:
+    """The smallest region containing both — used so a merged pair's crop
+    shows both halves (e.g. both earrings), not just the one whose
+    detection survived."""
+    x1, y1 = min(a.x, b.x), min(a.y, b.y)
+    x2 = max(a.x + a.width, b.x + b.width)
+    y2 = max(a.y + a.height, b.y + b.height)
+    return BoundingBox(x=x1, y=y1, width=x2 - x1, height=y2 - y1)
+
+
+def _pairable(a: ExtractedAttributes, b: ExtractedAttributes) -> bool:
+    """Same category, same group, same colors, and no conflicting
+    fabric/pattern/fit — the criteria a real pair (two earrings, two
+    gloves) actually shares. Requested after `_drop_overlapping` alone left
+    side-by-side pairs unmerged: their regions barely overlap, so IoU can't
+    catch them.
+
+    Category equality already implies group equality today (`group_of` is a
+    pure function of category) — the group check is kept anyway as an
+    explicit statement of intent, so a future change to the category list
+    can't silently loosen this without someone noticing here.
+
+    `colors` must be present and equal as sets on both sides: color is the
+    one signal that reliably distinguishes "the same pair, twice" from "two
+    different, unrelated items that happen to share a category" (e.g. two
+    different rings). Absent color data means "can't confirm", not "assume
+    a match" — no merge.
+
+    fabric/pattern/fit only block a merge when BOTH sides extracted a value
+    AND it disagrees; either side leaving a field null does not, since a
+    null means "the model didn't extract this," not "this differs."
+    """
+    if not a.category or not b.category or a.category != b.category:
+        return False
+    if group_of(a.category) != group_of(b.category):
+        return False
+    if not a.colors or not b.colors or set(a.colors) != set(b.colors):
+        return False
+    for field in ("fabric", "pattern", "fit"):
+        va, vb = getattr(a, field), getattr(b, field)
+        if va is not None and vb is not None and va != vb:
+            return False
+    return True
+
+
+def _merge_matching_pairs(detections: list[DetectedGarment]) -> list[DetectedGarment]:
+    """Collapse a side-by-side pair (e.g. two earrings, non-overlapping
+    regions) into one detection once `_pairable` confirms they agree on
+    every attribute the model actually extracted.
+
+    Merges at most two at a time, in order (each detection matches against
+    at most one later one) — deliberately not a full pairwise cluster.
+    `_pairable`'s per-field checks are not guaranteed transitive (A and B
+    can both be null-vs-set "compatible" with C while B and C actively
+    disagree on that same field), so a wider merge risks collapsing three
+    genuinely different items that share a category. Two duplicate-of-a-pair
+    detections is the observed failure; this fixes exactly that without
+    reasoning about larger, unobserved groupings.
+    """
+    merged: list[DetectedGarment] = []
+    consumed: set[int] = set()
+    for i, detection in enumerate(detections):
+        if i in consumed:
+            continue
+        partner = next(
+            (
+                j
+                for j in range(i + 1, len(detections))
+                if j not in consumed and _pairable(detection.attributes, detections[j].attributes)
+            ),
+            None,
+        )
+        if partner is None:
+            merged.append(detection)
+            continue
+        consumed.add(partner)
+        merged.append(
+            DetectedGarment(
+                region=_region_union(detection.region, detections[partner].region),
+                attributes=detection.attributes,
+            )
+        )
+    return merged
+
+
 @traceable(name="vision.detect_garments", run_type="chain")
 def detect_garments_from_image(image_bytes: bytes, mime_type: str) -> tuple[list[DetectedGarment], bool]:
     """One VLM call. Raises on a genuine call failure (network/gateway
@@ -207,6 +293,7 @@ def detect_garments_from_image(image_bytes: bytes, mime_type: str) -> tuple[list
         for entry in raw["detections"]
     ]
     detections = _drop_overlapping(detections)
+    detections = _merge_matching_pairs(detections)
     max_detections = get_settings().wtw_max_detections_per_photo
     truncated = len(detections) > max_detections
     return detections[:max_detections], truncated

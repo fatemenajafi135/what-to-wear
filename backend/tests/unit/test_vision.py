@@ -104,7 +104,11 @@ def test_detect_garments_enforces_cap_in_python(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setenv("WTW_MAX_DETECTIONS_PER_PHOTO", "8")
     get_settings.cache_clear()
-    raw = {"detections": [_raw_detection(x=i / 10) for i in range(9)]}
+    # Distinct categories: identical ones would now also collapse via
+    # `_merge_matching_pairs` (feature 018 follow-up), which is correct
+    # behavior for 9 copies of one item but not what this test means to
+    # exercise — it means 9 DIFFERENT garments, only the cap in play.
+    raw = {"detections": [_raw_detection(x=i / 10, category=f"top-{i}") for i in range(9)]}
     fake_chat_model = _mock_llm(raw)
 
     with patch.object(vision, "get_chat_model", return_value=fake_chat_model):
@@ -120,7 +124,7 @@ def test_detect_garments_at_exactly_the_cap_is_not_truncated(monkeypatch: pytest
 
     monkeypatch.setenv("WTW_MAX_DETECTIONS_PER_PHOTO", "8")
     get_settings.cache_clear()
-    raw = {"detections": [_raw_detection(x=i / 10) for i in range(8)]}
+    raw = {"detections": [_raw_detection(x=i / 10, category=f"top-{i}") for i in range(8)]}
     fake_chat_model = _mock_llm(raw)
 
     with patch.object(vision, "get_chat_model", return_value=fake_chat_model):
@@ -184,3 +188,69 @@ class TestDuplicateDetectionFilter:
 
     def test_an_empty_list_is_safe(self) -> None:
         assert vision._drop_overlapping([]) == []
+
+
+class TestPairMerge:
+    """Two earrings, non-overlapping regions, side by side — the case
+    `_drop_overlapping` cannot catch because the boxes barely intersect."""
+
+    @staticmethod
+    def _attrs(category: str = "earrings", colors=("#d9d9d9", "#ffffff"), **kw) -> ExtractedAttributes:
+        return ExtractedAttributes(category=category, colors=list(colors) if colors else None, **kw)
+
+    @staticmethod
+    def _det(x: float, attrs: ExtractedAttributes) -> DetectedGarment:
+        return DetectedGarment(region=BoundingBox(x=x, y=0.1, width=0.25, height=0.4), attributes=attrs)
+
+    def test_a_real_pair_merges_into_one(self) -> None:
+        dets = [self._det(0.1, self._attrs()), self._det(0.6, self._attrs())]
+        merged = vision._merge_matching_pairs(dets)
+        assert len(merged) == 1
+        assert merged[0].attributes.category == "earrings"
+
+    def test_merged_region_covers_both_originals(self) -> None:
+        left = self._det(0.1, self._attrs())
+        right = self._det(0.6, self._attrs())
+        merged = vision._merge_matching_pairs([left, right])[0]
+        assert merged.region.x <= left.region.x
+        assert merged.region.x + merged.region.width >= right.region.x + right.region.width
+
+    def test_different_colors_do_not_merge(self) -> None:
+        """Two rings that happen to share a category but not a color are two
+        different items, not a pair."""
+        dets = [self._det(0.1, self._attrs(colors=("#d9d9d9",))), self._det(0.6, self._attrs(colors=("#c9a227",)))]
+        assert len(vision._merge_matching_pairs(dets)) == 2
+
+    def test_missing_colors_do_not_merge(self) -> None:
+        """Absent color data means 'can't confirm', not 'assume a match'."""
+        dets = [self._det(0.1, self._attrs(colors=None)), self._det(0.6, self._attrs(colors=None))]
+        assert len(vision._merge_matching_pairs(dets)) == 2
+
+    def test_different_category_does_not_merge(self) -> None:
+        dets = [self._det(0.1, self._attrs(category="earrings")), self._det(0.6, self._attrs(category="necklace"))]
+        assert len(vision._merge_matching_pairs(dets)) == 2
+
+    def test_conflicting_fabric_blocks_the_merge(self) -> None:
+        dets = [self._det(0.1, self._attrs(fabric="silver")), self._det(0.6, self._attrs(fabric="gold"))]
+        assert len(vision._merge_matching_pairs(dets)) == 2
+
+    def test_one_side_missing_fabric_does_not_block_the_merge(self) -> None:
+        """A null on one side is 'not extracted', not a disagreement."""
+        dets = [self._det(0.1, self._attrs(fabric="silver")), self._det(0.6, self._attrs(fabric=None))]
+        assert len(vision._merge_matching_pairs(dets)) == 1
+
+    def test_a_genuine_flat_lay_of_different_items_is_untouched(self) -> None:
+        dets = [
+            self._det(0.0, self._attrs(category="top", colors=("#ffffff",))),
+            self._det(0.5, self._attrs(category="bottom", colors=("#0f0f10",))),
+        ]
+        assert len(vision._merge_matching_pairs(dets)) == 2
+
+    def test_three_identical_detections_merge_at_most_two(self) -> None:
+        """Not a full pairwise cluster, by design — see the function's own
+        docstring for why a wider merge is not attempted."""
+        dets = [self._det(0.0, self._attrs()), self._det(0.35, self._attrs()), self._det(0.7, self._attrs())]
+        assert len(vision._merge_matching_pairs(dets)) == 2
+
+    def test_empty_list_is_safe(self) -> None:
+        assert vision._merge_matching_pairs([]) == []
