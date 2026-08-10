@@ -21,14 +21,24 @@ import type { ReviewCardFields } from "./ReviewCard";
  * surface colour instead of its own backdrop. Exactly the defect §30 records
  * for the other five attributes, repeated. Keeping it in this shared builder
  * is what stops the single and bulk flows dropping it independently.
+ *
+ * `isolatedPhotoPath` (feature 018) is the same class of fact-about-the-
+ * photo parameter, added for the same reason: found missing here in
+ * `/speckit-analyze` before it ever shipped — every backend and display
+ * piece for isolated images worked, but nothing sent the path back on
+ * save, so the column would have stayed `null` forever regardless of how
+ * well isolation itself worked. `null`/`undefined` when the draft never
+ * got a usable isolated image (a normal, saveable outcome, not an error).
  */
 export function buildFromUploadBody(
   photoPath: string,
+  isolatedPhotoPath: string | null | undefined,
   photoBackgroundColor: string | null | undefined,
   fields: ReviewCardFields
 ) {
   return {
     photo_path: photoPath,
+    isolated_photo_path: isolatedPhotoPath ?? null,
     photo_background_color: photoBackgroundColor ?? null,
     category: fields.category,
     colors: fields.colors,

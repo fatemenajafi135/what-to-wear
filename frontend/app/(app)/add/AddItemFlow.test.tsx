@@ -16,6 +16,8 @@ vi.mock("@/lib/camera/primed", () => ({
 const mockedPost = vi.mocked(apiClient.POST);
 const mockedGet = vi.mocked(apiClient.GET);
 
+const FULL_REGION = { x: 0, y: 0, width: 1, height: 1 };
+
 beforeEach(() => {
   mockedGet.mockResolvedValue({ data: TAXONOMY, error: undefined, response: new Response() } as never);
   mockedPost.mockReset();
@@ -37,14 +39,15 @@ const TAXONOMY = {
   accessory: ["belt", "bow_tie", "necklace", "tie"],
 };
 
-describe("AddItemFlow", () => {
-  it("shows the review card pre-filled after a successful scan", async () => {
-    mockedPost.mockResolvedValueOnce({
-      data: {
-        photo_path: "user-a/x.jpg",
-        extraction_ok: true,
-        extracted: {
-          category: "top",
+/** One photo, one detection — feature 018 still wraps this in `drafts`. */
+function draft(overrides: { extraction_ok?: boolean; category?: string | null } = {}) {
+  const { extraction_ok = true, category = "top" } = overrides;
+  return {
+    photo_path: "user-a/x.jpg",
+    extraction_ok,
+    extracted: extraction_ok
+      ? {
+          category,
           colors: ["#1b2a4a"],
           fabric: "cotton",
           formality: "casual",
@@ -52,9 +55,19 @@ describe("AddItemFlow", () => {
           season: ["spring"],
           pattern: "solid",
           fit: "regular",
-        },
-        color_names: ["navy"],
-      },
+        }
+      : {},
+    region: FULL_REGION,
+    isolated_photo_path: null,
+    isolated_photo_url: null,
+    color_names: extraction_ok ? ["navy"] : [],
+  };
+}
+
+describe("AddItemFlow", () => {
+  it("shows the review card pre-filled after a successful scan", async () => {
+    mockedPost.mockResolvedValueOnce({
+      data: { drafts: [draft()], truncated: false },
       error: undefined,
       response: new Response(),
     });
@@ -86,7 +99,7 @@ describe("AddItemFlow", () => {
     expect(photo).toHaveAttribute("src", "blob:fake-url");
 
     resolvePost({
-      data: { photo_path: "user-a/x.jpg", extraction_ok: false, extracted: {}, color_names: [] },
+      data: { drafts: [draft({ extraction_ok: false, category: null })], truncated: false },
       error: undefined,
       response: new Response(),
     });
@@ -94,12 +107,7 @@ describe("AddItemFlow", () => {
 
   it("shows the empty state (not an error) when no garment is found", async () => {
     mockedPost.mockResolvedValueOnce({
-      data: {
-        photo_path: "user-a/x.jpg",
-        extraction_ok: false,
-        extracted: {},
-        color_names: [],
-      },
+      data: { drafts: [draft({ extraction_ok: false, category: null })], truncated: false },
       error: undefined,
       response: new Response(),
     });
@@ -114,7 +122,7 @@ describe("AddItemFlow", () => {
 
   it("Enter manually advances to the same blank review card", async () => {
     mockedPost.mockResolvedValueOnce({
-      data: { photo_path: "user-a/x.jpg", extraction_ok: false, extracted: {}, color_names: [] },
+      data: { drafts: [draft({ extraction_ok: false, category: null })], truncated: false },
       error: undefined,
       response: new Response(),
     });
@@ -137,21 +145,30 @@ describe("AddItemFlow", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
+  it("shows the distinct error state when the response has no drafts at all", async () => {
+    mockedPost.mockResolvedValueOnce({
+      data: { drafts: [], truncated: false },
+      error: undefined,
+      response: new Response(),
+    });
+
+    render(<AddItemFlow onClose={vi.fn()} />);
+    await selectFile();
+
+    expect(await screen.findByText("That upload didn't go through.")).toBeInTheDocument();
+  });
+
   it("saves and closes the overlay on successful save", async () => {
     mockedPost
       .mockResolvedValueOnce({
         data: {
-          photo_path: "user-a/x.jpg",
-          extraction_ok: true,
-          extracted: {
-            category: "top",
-            colors: ["#1b2a4a"],
-            formality: "casual",
-            warmth: 2,
-            season: ["spring"],
-            background_color: "#e8e2d5",
-          },
-          color_names: ["navy"],
+          drafts: [
+            {
+              ...draft(),
+              extracted: { ...draft().extracted, background_color: "#e8e2d5" },
+            },
+          ],
+          truncated: false,
         },
         error: undefined,
         response: new Response(),
@@ -180,8 +197,84 @@ describe("AddItemFlow", () => {
           // database, then not threaded to the request for one commit, so
           // every item saved through the UI got null (design-decisions §31).
           photo_background_color: "#e8e2d5",
+          // Feature 018: found missing in /speckit-analyze (finding C1) —
+          // every backend/display piece for isolated images worked, but
+          // nothing sent the path back on save.
+          isolated_photo_path: null,
         }),
       })
     );
+  });
+
+  describe("one photo, several detected garments (feature 018, spec.md FR-001/FR-025)", () => {
+    function twoDrafts(truncated = false) {
+      return {
+        data: {
+          drafts: [
+            { ...draft({ category: "t-shirt" }), region: { x: 0, y: 0, width: 0.4, height: 0.6 } },
+            { ...draft({ category: "jeans" }), region: { x: 0.5, y: 0, width: 0.4, height: 0.6 } },
+          ],
+          truncated,
+        },
+        error: undefined,
+        response: new Response(),
+      };
+    }
+
+    it("reviews each detection as its own card, in place, without a second screen", async () => {
+      mockedPost.mockResolvedValueOnce(twoDrafts());
+
+      render(<AddItemFlow onClose={vi.fn()} />);
+      await selectFile();
+
+      expect(await screen.findByRole("button", { name: "T-shirt" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "Save & next" })).toBeInTheDocument();
+    });
+
+    it("Save & next advances to the second detection's card", async () => {
+      mockedPost
+        .mockResolvedValueOnce(twoDrafts())
+        .mockResolvedValueOnce({ data: { id: "item-1" }, error: undefined, response: new Response() });
+
+      render(<AddItemFlow onClose={vi.fn()} />);
+      await selectFile();
+      await screen.findByRole("button", { name: "T-shirt" });
+      await userEvent.click(screen.getByRole("button", { name: "Save & next" }));
+
+      expect(await screen.findByRole("button", { name: "Jeans" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "Save to Closet" })).toBeInTheDocument();
+    });
+
+    it("shows the detection-cap notice only on the last card", async () => {
+      mockedPost.mockResolvedValueOnce(twoDrafts(true));
+
+      render(<AddItemFlow onClose={vi.fn()} />);
+      await selectFile();
+      await screen.findByRole("button", { name: "T-shirt" });
+
+      expect(screen.queryByText(/could only add/)).not.toBeInTheDocument();
+    });
+
+    it("reports its position once there's more than one detection to review", async () => {
+      mockedPost.mockResolvedValueOnce(twoDrafts());
+      const onPositionChange = vi.fn();
+
+      render(<AddItemFlow onClose={vi.fn()} onPositionChange={onPositionChange} />);
+      await selectFile();
+      await screen.findByRole("button", { name: "T-shirt" });
+
+      expect(onPositionChange).toHaveBeenLastCalledWith({ current: 1, total: 2 });
+    });
+
+    it("never reports a position for the ordinary single-detection case", async () => {
+      mockedPost.mockResolvedValueOnce({ data: { drafts: [draft()], truncated: false }, error: undefined, response: new Response() });
+      const onPositionChange = vi.fn();
+
+      render(<AddItemFlow onClose={vi.fn()} onPositionChange={onPositionChange} />);
+      await selectFile();
+      await screen.findByRole("button", { name: "Top" });
+
+      expect(onPositionChange).toHaveBeenLastCalledWith(null);
+    });
   });
 });

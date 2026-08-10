@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
 import { CloseAddOverlay } from "./CloseAddOverlay";
-import { AddItemFlow } from "./AddItemFlow";
+import { AddItemFlow, type AddItemFlowPosition } from "./AddItemFlow";
 import { BulkChoiceSheet } from "./BulkChoiceSheet";
 import { BulkQueue, type BulkQueuePosition } from "./BulkQueue";
 import { addItemCopy } from "@/lib/add-item-copy";
@@ -31,13 +31,19 @@ type EntryState = { mode: "choice" } | { mode: "single" } | { mode: "bulk"; file
 export default function AddItemPage() {
   const router = useRouter();
   const [entry, setEntry] = useState<EntryState>({ mode: "choice" });
-  const [bulkPosition, setBulkPosition] = useState<BulkQueuePosition | null>(null);
+  // Shared by both flows (feature 018) — AddItemFlow now reports its own
+  // position once a single photo yields more than one detection (FR-025),
+  // the same "sticky header" pattern issue #32 gave BulkQueue. The two
+  // props' shapes are structurally identical; one piece of state is enough
+  // since only one flow is ever mounted at a time.
+  const [position, setPosition] = useState<BulkQueuePosition | AddItemFlowPosition | null>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
-  // Stable identity — BulkQueue's own effect that calls this depends on it,
-  // and a new function every render would re-fire that effect every render.
-  const handleBulkPosition = useCallback((position: BulkQueuePosition | null) => {
-    setBulkPosition(position);
+  // Stable identity — BulkQueue's/AddItemFlow's own effect that calls this
+  // depends on it, and a new function every render would re-fire that
+  // effect every render.
+  const handlePositionChange = useCallback((next: BulkQueuePosition | AddItemFlowPosition | null) => {
+    setPosition(next);
   }, []);
 
   const handleClose = () => {
@@ -64,16 +70,16 @@ export default function AddItemPage() {
     <>
       <div className={styles.stickyHeader}>
         <TopHeader title="Add item" rightSlot={{ kind: "custom", node: <CloseAddOverlay /> }} />
-        {entry.mode === "bulk" && bulkPosition && (
+        {position && (
           <h2 className={`textSectionTitle ${styles.bulkPosition}`} aria-live="polite">
-            {addItemCopy.review.position(bulkPosition.current, bulkPosition.total)}
+            {addItemCopy.review.position(position.current, position.total)}
           </h2>
         )}
       </div>
       <div className={styles.content}>
-        {entry.mode === "single" && <AddItemFlow onClose={handleClose} />}
+        {entry.mode === "single" && <AddItemFlow onClose={handleClose} onPositionChange={handlePositionChange} />}
         {entry.mode === "bulk" && (
-          <BulkQueue files={entry.files} onClose={handleClose} onPositionChange={handleBulkPosition} />
+          <BulkQueue files={entry.files} onClose={handleClose} onPositionChange={handlePositionChange} />
         )}
       </div>
 

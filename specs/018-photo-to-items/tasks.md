@@ -114,7 +114,7 @@ untouched — Phase 3 begins the user-observable slice.
 
 **Independent Test**: quickstart.md Scenario 1.
 
-- [ ] T014 [US1] Restructure `frontend/app/(app)/add/BulkQueue.tsx`'s `QueueEntry` to one-per-
+- [x] T014 [US1] Restructure `frontend/app/(app)/add/BulkQueue.tsx`'s `QueueEntry` to one-per-
       draft (research.md §10): `scanEntry` expands `data.drafts` into N entries sharing the same
       `photoUrl`(blob)/`file`, each carrying its own `region`/`isolatedPhotoUrl`/`isolatedPhotoPath`/
       `extracted`/`extraction_ok`/`photoPath`/`status`. `isolatedPhotoPath` (the raw Storage path,
@@ -123,19 +123,19 @@ untouched — Phase 3 begins the user-observable slice.
       one-entry special case**: an upload failure (`!photoPath`) has no `drafts` array to flatten at
       all, and must still produce exactly one `"upload-error"` entry for that file, unchanged from
       today (FR-026) — this is evaluated before `data.drafts` is ever read.
-- [ ] T015 [US1] Same flattening in `frontend/app/(app)/add/AddItemFlow.tsx`'s `FlowState`
+- [x] T015 [US1] Same flattening in `frontend/app/(app)/add/AddItemFlow.tsx`'s `FlowState`
       (`drafts: Draft[]` + `currentIndex`, replacing the single-draft fields, each draft carrying
       `isolatedPhotoPath` alongside `isolatedPhotoUrl` per T014) — a photo yielding >1 detection
       reviews the same way a small bulk batch does (FR-025). The existing `"error"` state (genuine
       upload/scan failure, distinct from `"empty"`) is unchanged (FR-026).
-- [ ] T016 [US1] `frontend/app/(app)/add/OrientationAwarePhoto.tsx`: add an optional `region`
+- [x] T016 [US1] `frontend/app/(app)/add/OrientationAwarePhoto.tsx`: add an optional `region`
       prop — when present and no `isolatedSrc` is given, renders the full blob scaled/positioned
       to the region's fraction inside the existing letterbox frame (research.md §4). No change to
       the natural/portrait letterbox decision itself.
-- [ ] T017 [US1] `frontend/app/(app)/add/ReviewCard.tsx`: accept and pass through
+- [x] T017 [US1] `frontend/app/(app)/add/ReviewCard.tsx`: accept and pass through
       `isolatedPhotoUrl`/`region` to `OrientationAwarePhoto` — isolated image when present
       (always null until Phase 6, so this path is a no-op until then), else the region crop.
-- [ ] T017a [US1] Thread `isolatedPhotoPath` through to the actual save request — found missing in
+- [x] T017a [US1] Thread `isolatedPhotoPath` through to the actual save request — found missing in
       `/speckit-analyze` (finding C1): `frontend/app/(app)/add/fromUploadBody.ts`'s
       `buildFromUploadBody()` gains an `isolatedPhotoPath: string | null | undefined` parameter,
       sent as `isolated_photo_path` (mirrors how `photoBackgroundColor` is already threaded);
@@ -143,22 +143,22 @@ untouched — Phase 3 begins the user-observable slice.
       draft's `isolatedPhotoPath` (T014/T015) through to it. Without this, T004/T006/T010's backend
       support for `isolated_photo_path` is never exercised by a real save — the column stays `null`
       forever regardless of how well isolation itself works.
-- [ ] T018 [US1] Add the "some garments in this photo weren't captured" notice to `BulkQueue.tsx`/
+- [x] T018 [US1] Add the "some garments in this photo weren't captured" notice to `BulkQueue.tsx`/
       `AddItemFlow.tsx`, shown when a photo's `truncated: true` (FR-002), using
       `frontend/lib/add-item-copy.ts`'s existing copy-module convention.
-- [ ] T019 [US1] Confirm `BulkQueuePosition`'s "Reviewing item X of Y" already counts flattened
+- [x] T019 [US1] Confirm `BulkQueuePosition`'s "Reviewing item X of Y" already counts flattened
       drafts post-T014/T015 (no separate change expected — this task is verification + a
       regression test, not new code).
-- [ ] T020 [P] [US1] `frontend/app/(app)/add/BulkQueue.test.tsx`: a batch of photos with mixed
+- [x] T020 [P] [US1] `frontend/app/(app)/add/BulkQueue.test.tsx`: a batch of photos with mixed
       detection counts produces the right total card count and "X of Y" sequence (quickstart.md
       Scenario 6).
-- [ ] T021 [P] [US1] `frontend/app/(app)/add/AddItemFlow.test.tsx`: one photo yielding 3
+- [x] T021 [P] [US1] `frontend/app/(app)/add/AddItemFlow.test.tsx`: one photo yielding 3
       detections reviews as 3 sequential cards, each save advancing correctly, `truncated` notice
       shown when applicable.
-- [ ] T022 [P] [US1] `frontend/app/(app)/add/OrientationAwarePhoto.test.tsx`: region-cropped
+- [x] T022 [P] [US1] `frontend/app/(app)/add/OrientationAwarePhoto.test.tsx`: region-cropped
       rendering across landscape/portrait × region-subset combinations.
-- [ ] T023 [US1] Manual/live verification: quickstart.md Scenario 1 (flat-lay upload, and the
-      >8-garments overflow case).
+- [ ] T023 [US1] **Needs the human** (live `AI_GATEWAY_API_KEY` + real photos) — manual/live
+      verification: quickstart.md Scenario 1 (flat-lay upload, and the >8-garments overflow case).
 
 **Checkpoint**: multi-garment photos produce multiple, individually-saveable review cards
 end-to-end. This is a demoable MVP slice on its own.
@@ -171,16 +171,18 @@ end-to-end. This is a demoable MVP slice on its own.
 
 **Independent Test**: quickstart.md Scenario 2.
 
-- [ ] T024 [US2] `backend/tests/integration/test_closet_routes.py`: the literal regression-proof
-      test — a single confident detection's draft has field-for-field identical values to what
-      the pre-018 single-object response would have returned (diff against a fixed expected
-      dict), plus the two fallback cases (T009's exception/empty-list paths) each produce exactly
-      one draft, never zero.
-- [ ] T025 [US2] `frontend/app/(app)/add/AddItemFlow.test.tsx`: a one-detection response renders
-      exactly one `ReviewCard` and shows no "X of Y" position indicator, matching today's
-      single-item silence (extends T021's file).
-- [ ] T026 [US2] Manual/live verification: quickstart.md Scenario 2 — single hanger photo (compare
-      wait time and fields against pre-018 behavior), then a forced detection-call failure.
+- [x] T024 [US2] `backend/tests/integration/test_closet_routes.py`/
+      `tests/unit/test_closet_routes_extract.py`: the regression-proof tests —
+      `test_single_detection_returns_one_draft` (field-for-field, matches the pre-018 single-object
+      shape), `test_detection_call_failure_falls_back_to_one_blank_draft` and
+      `test_zero_confident_detections_falls_back_to_one_blank_draft` (both fallback paths, exactly
+      one draft, never zero).
+- [x] T025 [US2] `frontend/app/(app)/add/AddItemFlow.test.tsx`: "never reports a position for the
+      ordinary single-detection case" — exactly one `ReviewCard`, no "X of Y" indicator, matching
+      today's single-item silence.
+- [ ] T026 [US2] **Needs the human** (live `AI_GATEWAY_API_KEY`) — manual/live verification:
+      quickstart.md Scenario 2 — single hanger photo (compare wait time and fields against pre-018
+      behavior), then a forced detection-call failure.
 
 **Checkpoint**: US1 + US2 together are the feature's MVP — multi-garment detection works, and
 existing single-item users see no regression.

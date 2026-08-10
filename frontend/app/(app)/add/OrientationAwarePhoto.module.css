@@ -18,3 +18,14 @@
 .natural {
   height: auto;
 }
+
+/* Feature 018 (photo-to-items): the region-crop frame. `.photo` (above)
+   already supplies the aspect-ratio/object-fit pair via `.portrait`/
+   `.natural` on this same element; this adds only what a crop needs on
+   top of that — a positioning context and a hard edge, since the inner
+   `<img>` is deliberately larger than the frame (OrientationAwarePhoto.tsx
+   computes its exact size/offset from the requested region). */
+.cropFrame {
+  position: relative;
+  overflow: hidden;
+}

@@ -40,6 +40,15 @@ export const addItemCopy = {
   // this only surfaces when it genuinely failed on them. Names the problem
   // and the one recovery action, per the design's error-copy convention.
   incomplete: "I still need Category, Formality, Warmth and Season before I can save this piece.",
+  // Feature 018 (photo-to-items, spec.md FR-002): shown when a photo had
+  // more garments than the detection limit kept. New for this feature —
+  // not in the design system's copy table, same situation
+  // `cameraPrimerCopy` below was already in (docs/design-decisions.md
+  // §23.6) — resolved in docs/design-decisions.md §63, not invented
+  // silently (Principle VIII).
+  truncated: {
+    body: "I could only add the first 8 items from that photo. Add the rest with another photo.",
+  },
 } as const;
 
 export const cameraPrimerCopy = {

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/lib/api/client";
 import { BulkQueue } from "./BulkQueue";
+import type { PhotoRegion } from "./OrientationAwarePhoto";
 
 /**
  * issue #32 moved the "Reviewing item X of Y" indicator out of BulkQueue's
@@ -28,23 +29,67 @@ vi.mock("@/lib/api/client", () => ({
 const mockedPost = vi.mocked(apiClient.POST);
 const mockedGet = vi.mocked(apiClient.GET);
 
-function extractResponse(photoPath: string, category: string) {
+const FULL_REGION: PhotoRegion = { x: 0, y: 0, width: 1, height: 1 };
+
+/** One photo, one detection — the pre-018 shape every existing test used,
+ * now wrapped in the always-a-list response (feature 018, spec.md
+ * FR-001/FR-004). */
+function extractResponse(photoPath: string, category: string, truncated = false) {
   return {
     data: {
-      photo_path: photoPath,
-      extraction_ok: true,
-      extracted: {
-        category,
-        colors: ["#1b2a4a"],
-        formality: "casual",
-        warmth: 2,
-        season: ["spring"],
-        fabric: "cotton",
-        pattern: "solid",
-        fit: "regular",
-        background_color: "#e8e2d5",
-      },
-      color_names: ["navy"],
+      drafts: [
+        {
+          photo_path: photoPath,
+          extraction_ok: true,
+          extracted: {
+            category,
+            colors: ["#1b2a4a"],
+            formality: "casual",
+            warmth: 2,
+            season: ["spring"],
+            fabric: "cotton",
+            pattern: "solid",
+            fit: "regular",
+            background_color: "#e8e2d5",
+          },
+          region: FULL_REGION,
+          isolated_photo_path: null,
+          isolated_photo_url: null,
+          color_names: ["navy"],
+        },
+      ],
+      truncated,
+    },
+    error: undefined,
+    response: new Response(),
+  };
+}
+
+/** One photo, several detections — feature 018's core case (spec.md
+ * FR-001/US1). */
+function multiDraftResponse(photoPath: string, categories: string[], truncated = false) {
+  return {
+    data: {
+      drafts: categories.map((category, i) => ({
+        photo_path: photoPath,
+        extraction_ok: true,
+        extracted: {
+          category,
+          colors: ["#1b2a4a"],
+          formality: "casual",
+          warmth: 2,
+          season: ["spring"],
+          fabric: null,
+          pattern: null,
+          fit: null,
+          background_color: "#e8e2d5",
+        },
+        region: { x: i * 0.3, y: 0, width: 0.3, height: 0.5 },
+        isolated_photo_path: null,
+        isolated_photo_url: null,
+        color_names: ["navy"],
+      })),
+      truncated,
     },
     error: undefined,
     response: new Response(),
@@ -88,7 +133,12 @@ describe("BulkQueue", () => {
     resolveFirst(extractResponse("user-a/0.jpg", "top"));
   });
 
-  it("scans every photo upfront and shows the first card with an announced position", async () => {
+  it("scans every photo upfront and shows the first card only once the whole batch is scanned", async () => {
+    // Feature 018: the total ("of 3") is a detection count summed across
+    // the whole batch, only knowable once every photo has been scanned —
+    // so the queue view (and its position indicator) must not appear
+    // until all three calls have resolved (research.md, BulkQueue.tsx's
+    // own docstring on `initialScanComplete`).
     mockedPost
       .mockResolvedValueOnce(extractResponse("user-a/0.jpg", "top"))
       .mockResolvedValueOnce(extractResponse("user-a/1.jpg", "bottom"))
@@ -98,7 +148,31 @@ describe("BulkQueue", () => {
 
     expect(await screen.findByText("Reviewing item 1 of 3")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Top" })).toHaveAttribute("aria-pressed", "true");
-    await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(3));
+    expect(mockedPost).toHaveBeenCalledTimes(3);
+  });
+
+  it("one photo with several detected garments expands into that many cards", async () => {
+    mockedPost.mockResolvedValueOnce(multiDraftResponse("user-a/0.jpg", ["t-shirt", "jeans", "boots"]));
+
+    render(<BulkQueueHarness files={makeFiles(1)} onClose={vi.fn()} />);
+
+    expect(await screen.findByText("Reviewing item 1 of 3")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "T-shirt" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("shows the detection-cap notice only on a truncated photo's LAST card (spec.md FR-002)", async () => {
+    mockedPost
+      .mockResolvedValueOnce(multiDraftResponse("user-a/0.jpg", ["t-shirt", "jeans"], true))
+      .mockResolvedValueOnce({ data: { id: "item-1" }, error: undefined, response: new Response() });
+
+    render(<BulkQueueHarness files={makeFiles(1)} onClose={vi.fn()} />);
+    await screen.findByText("Reviewing item 1 of 2");
+    expect(screen.queryByText(/could only add/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save & next" }));
+
+    expect(await screen.findByText("Reviewing item 2 of 2")).toBeInTheDocument();
+    expect(screen.getByText(/could only add/)).toBeInTheDocument();
   });
 
   it("Save & next advances to the next card and announces the updated position", async () => {
@@ -138,7 +212,7 @@ describe("BulkQueue", () => {
   // fills the letterbox when a non-square photo is padded to 1:1. It was
   // added to the extractor and the database and then, for one commit, not
   // threaded into the request body at all.
-  it("sends the detected photo background colour", async () => {
+  it("sends the detected photo background colour and isolated photo path", async () => {
     mockedPost
       .mockResolvedValueOnce(extractResponse("user-a/0.jpg", "top"))
       .mockResolvedValueOnce({ data: { id: "item-1" }, error: undefined, response: new Response() });
@@ -149,7 +223,9 @@ describe("BulkQueue", () => {
 
     expect(mockedPost).toHaveBeenCalledWith(
       "/api/v1/closet/items/from-upload",
-      expect.objectContaining({ body: expect.objectContaining({ photo_background_color: "#e8e2d5" }) })
+      expect.objectContaining({
+        body: expect.objectContaining({ photo_background_color: "#e8e2d5", isolated_photo_path: null }),
+      })
     );
   });
 
@@ -166,11 +242,12 @@ describe("BulkQueue", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
-  // A failed UPLOAD (no photo_path) used to be marked `ready` like any other
-  // card, and Save then bailed on a bare `if (!current?.photoPath) return;` —
-  // no error, no request, nothing. Every test above mocks a successful
-  // extract, which is why the whole class of failure went unnoticed until a
-  // real batch produced fifteen extract calls and zero saves.
+  // A failed UPLOAD (no drafts at all) used to be marked `ready` like any
+  // other card, and Save then bailed on a bare
+  // `if (!current?.photoPath) return;` — no error, no request, nothing.
+  // Every test above mocks a successful extract, which is why the whole
+  // class of failure went unnoticed until a real batch produced fifteen
+  // extract calls and zero saves.
   describe("a photo whose upload failed", () => {
     it("says so instead of rendering a card whose Save button does nothing", async () => {
       mockedPost.mockResolvedValueOnce({
@@ -228,10 +305,18 @@ describe("BulkQueue", () => {
   it("still offers a saveable card when the scan found no colour", async () => {
     mockedPost.mockResolvedValueOnce({
       data: {
-        photo_path: "user-a/0.jpg",
-        extraction_ok: true,
-        extracted: { category: null, colors: null },
-        color_names: [],
+        drafts: [
+          {
+            photo_path: "user-a/0.jpg",
+            extraction_ok: true,
+            extracted: { category: null, colors: null },
+            region: FULL_REGION,
+            isolated_photo_path: null,
+            isolated_photo_url: null,
+            color_names: [],
+          },
+        ],
+        truncated: false,
       },
       error: undefined,
       response: new Response(),

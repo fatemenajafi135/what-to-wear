@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/Input/Input";
 import { Textarea } from "@/components/ui/Textarea/Textarea";
 import { Button } from "@/components/ui/Button/Button";
 import { ColorField, isHex } from "./ColorField";
-import { OrientationAwarePhoto } from "./OrientationAwarePhoto";
+import { OrientationAwarePhoto, type PhotoRegion } from "./OrientationAwarePhoto";
 import {
   CATEGORY_CHIPS,
   type CategoryChip,
@@ -65,6 +65,17 @@ export interface ReviewCardFields {
 
 export interface ReviewCardProps {
   photoUrl: string;
+  /** Feature 018 (photo-to-items): this detection's region within
+   * `photoUrl` (0-1 fractions) — ignored once `isolatedPhotoUrl` is set,
+   * since a cutout has no meaningful sub-region of itself to crop further
+   * (research.md §4). Defaults to the whole photo, matching every card
+   * before this feature. */
+  region?: PhotoRegion;
+  /** Feature 018: the clean, background-removed image for this detection,
+   * when isolation succeeded. Renders in place of the region-cropped
+   * original when present — a normal, saveable state either way (FR-013).
+   */
+  isolatedPhotoUrl?: string | null;
   /** Scan-derived starting values — every field editable regardless of
    * whether the scan found it (spec.md FR-003/FR-016: a blank review card
    * for "no garment found"/"Enter manually" is just this with empty
@@ -115,6 +126,8 @@ function inferChip(category: string, taxonomy: Record<string, string[]>): Catego
 
 export function ReviewCard({
   photoUrl,
+  region,
+  isolatedPhotoUrl,
   initial,
   saveLabel,
   onSave,
@@ -224,8 +237,15 @@ export function ReviewCard({
 
   return (
     <form className={styles.card} onSubmit={handleSubmit}>
-      {/* issue #33: square/landscape natural, portrait cropped to a square — see OrientationAwarePhoto. */}
-      <OrientationAwarePhoto src={photoUrl} />
+      {/* issue #33: square/landscape natural, portrait cropped to a square — see OrientationAwarePhoto.
+          Feature 018: an isolated image (once one exists) renders as-is, no region — a cutout gets the
+          exact same treatment as any other photo (FR-022). Until then, the original is shown cropped
+          to this detection's own region. */}
+      {isolatedPhotoUrl ? (
+        <OrientationAwarePhoto src={isolatedPhotoUrl} />
+      ) : (
+        <OrientationAwarePhoto src={photoUrl} region={region} />
+      )}
 
       <Input label="Name" value={name} onChange={setName} />
 

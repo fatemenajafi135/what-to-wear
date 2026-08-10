@@ -103,9 +103,13 @@ export interface paths {
         /**
          * Extract Closet Item
          * @description Draft extraction only — persists nothing to `wardrobe_items`
-         *     (contracts/wardrobe-items-extract.md). Extraction failure is always a
-         *     200 with `extraction_ok: false`; only a genuine Storage failure 5xxs
-         *     (handoff §5.2).
+         *     (contracts/closet-items-extract.md, superseding contracts/wardrobe-
+         *     items-extract.md's response shape). Always returns a LIST of drafts,
+         *     one per detected garment, even when there's exactly one (feature 018,
+         *     spec.md FR-001/FR-004) — an extension of the existing contract, not a
+         *     new route. Extraction failure is always a 200 with `extraction_ok:
+         *     false` on a single fallback draft; only a genuine Storage failure 5xxs
+         *     (handoff §5.2, unchanged).
          */
         post: operations["extract_closet_item_api_v1_closet_items_extract_post"];
         delete?: never;
@@ -126,10 +130,11 @@ export interface paths {
         /**
          * Create Closet Item From Upload
          * @description Creates a `wardrobe_items` row from a previously-extracted (and
-         *     possibly corrected) draft (contracts/wardrobe-items-create-from-upload.md).
-         *     `ports.ClosetRepository` is unchanged — this calls a repository method
-         *     beyond the Protocol, same pattern 005's four write methods already
-         *     established (handoff trap 5).
+         *     possibly corrected) draft (contracts/closet-items-from-upload.md,
+         *     superseding contracts/wardrobe-items-create-from-upload.md's field
+         *     list). `ports.ClosetRepository` is unchanged — this calls a repository
+         *     method beyond the Protocol, same pattern 005's four write methods
+         *     already established (handoff trap 5).
          */
         post: operations["create_closet_item_from_upload_api_v1_closet_items_from_upload_post"];
         delete?: never;
@@ -613,6 +618,26 @@ export interface components {
             /** Photo */
             photo: string;
         };
+        /**
+         * BoundingBox
+         * @description A detection's region within the original photo, as fractions of its
+         *     width/height (0-1) — resolution-independent, so the frontend applies it
+         *     against the browser's own naturalWidth/naturalHeight rather than the
+         *     backend needing to know the display size (specs/018-photo-to-items/
+         *     research.md §4). `{0,0,1,1}` means "the whole photo" — the fallback
+         *     region for the single-draft cases vision.detect_garments_from_image
+         *     never itself constructs (that's the route's job, see closet.py).
+         */
+        BoundingBox: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+        };
         /** CalendarEventView */
         CalendarEventView: {
             /** Google Event Id */
@@ -673,6 +698,10 @@ export interface components {
          *     photo. Populated by the route, not this classmethod, since signing
          *     needs the caller's own access token, which this model has no access to
          *     and shouldn't (`ports.ClosetRepository` stays untouched).
+         *
+         *     `isolated_photo_url` (feature 018) is the same idea applied to
+         *     `isolated_photo_path` — signed at read time, `None` when the item has
+         *     no isolated image (a normal, saveable outcome, not an error).
          */
         ClosetItemView: {
             /** Id */
@@ -700,6 +729,8 @@ export interface components {
             fit?: string | null;
             /** Photo Path */
             photo_path?: string | null;
+            /** Isolated Photo Path */
+            isolated_photo_path?: string | null;
             /** Photo Background Color */
             photo_background_color?: string | null;
             /** Name */
@@ -720,6 +751,8 @@ export interface components {
             color_names: string[];
             /** Photo Url */
             photo_url?: string | null;
+            /** Isolated Photo Url */
+            isolated_photo_url?: string | null;
         };
         /** ClosetItemsResponse */
         ClosetItemsResponse: {
@@ -776,6 +809,8 @@ export interface components {
         CreateWardrobeItemFromUploadRequest: {
             /** Photo Path */
             photo_path: string;
+            /** Isolated Photo Path */
+            isolated_photo_path?: string | null;
             /** Category */
             category: string;
             /** Colors */
@@ -935,13 +970,31 @@ export interface components {
             has_more: boolean;
         };
         /**
+         * PhotoExtractionListView
+         * @description Same shape `PhotoExtractionListResponse` describes (`drafts` +
+         *     `truncated`), with `drafts` narrowed to `PhotoExtractionView` — a fresh
+         *     model rather than a subclass overriding `PhotoExtractionListResponse.
+         *     drafts`'s type, which mypy rejects (`list` is invariant). Matches
+         *     `ClosetItemsResponse`'s own fresh-model pattern for the same "list of
+         *     route-local views" shape.
+         */
+        PhotoExtractionListView: {
+            /** Drafts */
+            drafts: components["schemas"]["PhotoExtractionView"][];
+            /** Truncated */
+            truncated: boolean;
+        };
+        /**
          * PhotoExtractionView
-         * @description `PhotoExtractionResponse` plus a display-only computed field, same
-         *     pattern as `ClosetItemView` over `WardrobeItem`: the review card's
-         *     Color field pre-fills with a NAME (`colors.nearest_names`), not the
-         *     raw hex `extracted.colors` carries — computed here, route-local, so
-         *     `PhotoExtractionResponse`/`ExtractedAttributes` (feature 007's AI-layer
-         *     contract) stay untouched (design-decisions.md §23.4, research.md §5).
+         * @description `PhotoExtractionResponse` plus two display-only computed fields,
+         *     same pattern as `ClosetItemView` over `WardrobeItem`: the review
+         *     card's Color field pre-fills with a NAME (`colors.nearest_names`), not
+         *     the raw hex `extracted.colors` carries, and `isolated_photo_url` is a
+         *     signed URL (feature 018) minted for `isolated_photo_path`, same idea
+         *     as `ClosetItemView.photo_url` over `WardrobeItem.photo_path` — both
+         *     computed here, route-local, so `PhotoExtractionResponse`/
+         *     `ExtractedAttributes` (feature 007's AI-layer contract) stay untouched
+         *     (design-decisions.md §23.4, research.md §5).
          */
         PhotoExtractionView: {
             /** Photo Path */
@@ -949,8 +1002,13 @@ export interface components {
             extracted: components["schemas"]["ExtractedAttributes"];
             /** Extraction Ok */
             extraction_ok: boolean;
+            region: components["schemas"]["BoundingBox"];
+            /** Isolated Photo Path */
+            isolated_photo_path?: string | null;
             /** Color Names */
             color_names: string[];
+            /** Isolated Photo Url */
+            isolated_photo_url?: string | null;
         };
         /** PickedEventRequest */
         PickedEventRequest: {
@@ -1466,7 +1524,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PhotoExtractionView"];
+                    "application/json": components["schemas"]["PhotoExtractionListView"];
                 };
             };
             /** @description Validation Error */
