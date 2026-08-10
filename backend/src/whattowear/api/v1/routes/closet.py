@@ -18,6 +18,7 @@ the same reason (specs/005-closet-write/research.md §5).
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import uuid
 from typing import Literal
@@ -26,14 +27,17 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from pydantic import BaseModel
 
 from whattowear.adapters import storage
+from whattowear.adapters.isolation import get_isolation_client
 from whattowear.auth import get_current_access_token, get_current_user_id
 from whattowear.categories import CategoryGroup, group_of
 from whattowear.colors import is_hex, name_to_hex, nearest_names, normalize_hex
 from whattowear.core.config import get_settings
+from whattowear.ports import IsolationClient
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
 from whattowear.schema import (
     BoundingBox,
     CreateWardrobeItemFromUploadRequest,
+    DetectedGarment,
     ExtractedAttributes,
     PhotoExtractionResponse,
     WardrobeItem,
@@ -406,19 +410,64 @@ def extract_closet_item(
             truncated=False,
         )
 
-    # `isolated_photo_path` stays None here — isolation is wired into this
-    # route in Phase 6 (feature 018, US4/#48, T041), not this phase.
+    # Isolation runs concurrently across this photo's detections
+    # (research.md §5) — 8 detections' calls cost roughly one call's
+    # wall-clock time, not eight, protecting SC-007's 30s p50 budget. The
+    # route stays a plain `def` (already run in FastAPI's threadpool), so
+    # `ThreadPoolExecutor` is in keeping with the file's own idiom rather
+    # than introducing `async def` for one route.
+    isolation_client = get_isolation_client()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(detections)) as executor:
+        isolation_results = list(
+            executor.map(
+                lambda d: _isolate_and_upload(isolation_client, file_bytes, photo, access_token, user_id, d), detections
+            )
+        )
+
     drafts = [
         PhotoExtractionView(
             photo_path=photo_path,
             extracted=detection.attributes,
             extraction_ok=True,
             region=detection.region,
+            isolated_photo_path=isolated_photo_path,
+            isolated_photo_url=isolated_photo_url,
             color_names=nearest_names(detection.attributes.colors or []),
         )
-        for detection in detections
+        for detection, (isolated_photo_path, isolated_photo_url) in zip(detections, isolation_results, strict=True)
     ]
     return PhotoExtractionListView(drafts=drafts, truncated=truncated)
+
+
+def _isolate_and_upload(
+    isolation_client: IsolationClient,
+    file_bytes: bytes,
+    photo: UploadFile,
+    access_token: str,
+    user_id: str,
+    detection: DetectedGarment,
+) -> tuple[str | None, str | None]:
+    """One detection's isolate-then-upload-then-sign, run inside the
+    `ThreadPoolExecutor` above. Never raises — an isolation failure (the
+    call itself, or the subsequent Storage upload) falls back to
+    `(None, None)`, which the caller renders as "no isolated image for
+    this detection," a normal saveable state (spec.md FR-013), not
+    surfaced as an error. This is deliberately NOT the same "a genuine
+    Storage failure legitimately 5xxs" rule the original photo's own
+    upload follows a few lines up — isolation is best-effort by design."""
+    outcome = isolation_client.isolate(file_bytes, photo.content_type or "image/jpeg", detection.region)
+    if outcome.image_bytes is None:
+        return None, None
+    try:
+        isolated_filename = f"isolated-{photo.filename or 'photo'}"
+        isolated_path = storage.upload_photo(
+            access_token, user_id, outcome.image_bytes, isolated_filename, outcome.mime_type or "image/png"
+        )
+    except Exception:
+        logger.exception("Isolated image upload failed; falling back to the region-cropped original")
+        return None, None
+    isolated_url = storage.create_signed_url(access_token, isolated_path)
+    return isolated_path, isolated_url
 
 
 @router.post("/closet/items/from-upload", status_code=status.HTTP_201_CREATED)

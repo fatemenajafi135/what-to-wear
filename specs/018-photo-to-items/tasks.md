@@ -242,51 +242,55 @@ missed attributes, and vague naming.
 
 **Independent Test**: quickstart.md Scenario 3 + Scenario 5.
 
-- [ ] T035 [P] Add `IsolationClient` Protocol to `backend/src/whattowear/ports.py` (data-model.md
+- [x] T035 [P] Add `IsolationClient` Protocol to `backend/src/whattowear/ports.py` (data-model.md
       §4) and `IsolationOutcome` to `schema.py` (`image_bytes`/`mime_type`/`mask_area_fraction`/
       `cost_usd` all `Optional`, `latency_seconds` always set).
-- [ ] T036 [P] Add isolation settings to `core/config.py` (data-model.md §3):
+- [x] T036 [P] Add isolation settings to `core/config.py` (data-model.md §3):
       `wtw_isolation_strategy`, `wtw_isolation_timeout_seconds`, `wtw_isolation_hybrid_min_area`,
       `wtw_isolation_hybrid_max_area`, `wtw_segmentation_api_url`, `wtw_segmentation_api_key`,
       `wtw_generative_isolation_model` (+ a `generative_isolation_model` property mirroring
       `vision_model`'s existing fallback-to-chat-model pattern). All optional-until-used, same
       posture as `cohere_api_key`/`tavily_api_key`.
-- [ ] T037 [P] Write `backend/src/whattowear/adapters/isolation_segmentation.py`: plain
+- [x] T037 [P] Write `backend/src/whattowear/adapters/isolation_segmentation.py`: plain
       `requests`-based hosted call (no SDK, mirrors `adapters/storage.py`'s idiom), bounded by
       `wtw_isolation_timeout_seconds`. **Never raises** on a call/timeout failure — returns
       `IsolationOutcome(image_bytes=None, ...)` instead (mirrors `storage.py::create_signed_url`'s
       fail-soft pattern), so every call site handles success/failure uniformly without try/except
       boilerplate.
-- [ ] T038 [P] Add `get_image_model()` to `backend/src/whattowear/adapters/llm_gateway.py`
-      (mirrors `get_chat_model()`) and write
-      `backend/src/whattowear/adapters/isolation_generative.py` using it — same fail-soft
-      contract as T037.
-- [ ] T039 Write `backend/src/whattowear/adapters/isolation_hybrid.py`: calls the segmentation
+- [x] T038 [P] Add `edit_image()` to `backend/src/whattowear/adapters/llm_gateway.py` — **named
+      differently than drafted**: no LangChain wrapper class exists for image editing the way
+      `ChatLiteLLM` exists for chat, so this calls `litellm.image_edit` directly (already a direct
+      dependency) rather than returning a `get_image_model()`-style client object; same gateway
+      config reuse in spirit. `backend/src/whattowear/adapters/isolation_generative.py` uses it —
+      same fail-soft contract as T037.
+- [x] T039 Write `backend/src/whattowear/adapters/isolation_hybrid.py`: calls the segmentation
       adapter (T037) first; escalates to the generative adapter (T038) when
       `mask_area_fraction < wtw_isolation_hybrid_min_area`, `> wtw_isolation_hybrid_max_area`, or
       the segmentation call itself failed (research.md §6). Depends on T037/T038.
-- [ ] T040 Write `backend/src/whattowear/adapters/isolation.py` — `get_isolation_client()` factory
+- [x] T040 Write `backend/src/whattowear/adapters/isolation.py` — `get_isolation_client()` factory
       selecting T037/T038/T039 by `wtw_isolation_strategy`, mirroring `kb.py`'s `wtw_kb_mode`
       selection pattern. Depends on T037–T039.
-- [ ] T041 Wire isolation into the extract route (`closet.py`, extends T009): for each accepted
+- [x] T041 Wire isolation into the extract route (`closet.py`, extends T009): for each accepted
       detection, dispatch `get_isolation_client().isolate(...)` concurrently across detections
       (`concurrent.futures.ThreadPoolExecutor`, research.md §5 — the route stays a plain `def`,
       no `async def` conversion); on success, upload via `storage.upload_photo` with an
       `-isolated-` filename (research.md §7) and populate `isolated_photo_path`/sign
       `isolated_photo_url`; on failure/timeout, leave both `null` (FR-013 — the draft stays fully
       saveable via T009's existing region-crop fallback).
-- [ ] T042 [P] `backend/tests/unit/test_isolation.py`: each adapter's success/failure/timeout path
+- [x] T042 [P] `backend/tests/unit/test_isolation.py`: each adapter's success/failure/timeout path
       (mocked HTTP/gateway calls, never raises); hybrid escalation at both area boundaries and on
       segmentation failure; factory selects the right adapter per `wtw_isolation_strategy`.
-- [ ] T043 `backend/tests/integration/test_closet_routes.py` (extends T013's file): isolation
+- [x] T043 `backend/tests/unit/test_closet_routes_extract.py` (extends T013's coverage): isolation
       success populates both new fields; isolation failure leaves them `null` and the draft
       remains fully present; 8 mocked detections' isolation calls complete in roughly one call's
       wall-clock time, not eight (proves T041's concurrency).
-- [ ] T044 Extend `eval/vision_harness.py` with an `isolation_report()` function (research.md §9):
+- [x] T044 Extend `eval/vision_harness.py` with an `isolation_report()` function (research.md §9):
       for each strategy, run every fixture-corpus image through `get_isolation_client(strategy)`,
-      record latency/success/cost, print a per-strategy summary table. Add a
-      `--isolation-report` CLI flag.
-- [ ] T045 Run `uv run python -m whattowear.eval.vision_harness --isolation-report` against the
+      record latency/success/cost, print a per-strategy summary table. Added a
+      `--isolation-report` CLI flag. **Landed early** in the T001-T013 commit (stub, lazy-imported
+      `adapters.isolation` before it existed); T035-T040 completed the module it imports.
+- [ ] T045 **Needs the human** (T027's real corpus + live gateway/segmentation keys) — run
+      `uv run python -m whattowear.eval.vision_harness --isolation-report` against the
       real fixture corpus (T027) for all three strategies; record the table in
       `docs/design-decisions.md` §62; set `wtw_isolation_strategy`'s real default and
       `wtw_isolation_hybrid_min_area`/`_max_area`'s real values from the measured numbers (FR-016)
@@ -296,15 +300,18 @@ missed attributes, and vague naming.
       calls at that strategy), not isolation cost alone, and confirm it's ≤ $0.05, or record why
       not; (b) **SC-005** — confirm the chosen default's success rate on worn/flat-lay/occluded
       fixtures clears 50%, or record why not.
-- [ ] T046 [US4] Frontend: `frontend/app/(app)/closet/ClosetGrid.tsx` and
+- [x] T046 [US4] Frontend: `frontend/app/(app)/closet/ClosetGrid.tsx` and
       `.../closet/[itemId]/page.tsx`'s `ItemDetailCard` — pass
       `src={item.isolated_photo_url ?? item.photo_url}` and
       `backgroundColor={item.isolated_photo_url ? null : item.photo_background_color}` to
       `ItemPhoto` (research.md §8). Zero changes inside `components/ui/ItemPhoto/ItemPhoto.tsx`.
-- [ ] T047 [P] [US4] Tests confirming the prop wiring from T046 (ClosetGrid/ItemDetailCard test
-      files) — isolated image renders with the neutral-surface fallback, original renders with
-      its own `backgroundColor` as before.
-- [ ] T048 [US4] Manual/live verification: quickstart.md Scenario 3 (worn/multi-item photo → clean
+- [x] T047 [P] [US4] Tests confirming the prop wiring from T046 — `ClosetGrid.test.tsx` (isolated
+      image renders with the neutral-surface fallback, original renders with its own
+      `backgroundColor` as before). `ItemDetailCard`'s equivalent coverage folds into T051 (Phase
+      7) rather than duplicating it here, since Phase 7 changes that same component again (adds
+      the toggle) immediately after.
+- [ ] T048 [US4] **Needs the human** (live keys) — manual/live verification: quickstart.md
+      Scenario 3 (worn/multi-item photo → clean
       isolated card; forced `WTW_SEGMENTATION_API_URL` failure → graceful region-crop fallback,
       still saveable) and Scenario 5 (per-strategy report sanity check). Two checks added in
       `/speckit-analyze` (findings E2/E5): (a) **SC-007** — time a real (not mocked) upload of an

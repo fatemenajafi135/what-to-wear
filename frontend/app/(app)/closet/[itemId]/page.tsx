@@ -191,9 +191,13 @@ function ItemDetailCard({ item }: { item: ClosetItemView }) {
 
   return (
     <div className={styles.wrapper}>
+      {/* Feature 018 (photo-to-items, research.md §8): isolated image by default
+          when one exists (FR-020) — the original/isolated toggle (US5) sits above
+          this, in ItemDetailPage. Same ItemPhoto, same no-backgroundColor-for-
+          isolated pairing ClosetGrid's tile uses. */}
       <ItemPhoto
-        src={item.photo_url}
-        backgroundColor={item.photo_background_color}
+        src={item.isolated_photo_url ?? item.photo_url}
+        backgroundColor={item.isolated_photo_url ? null : item.photo_background_color}
         className={styles.photo}
         radius={16}
       />

@@ -69,4 +69,63 @@ describe("ClosetGrid", () => {
     expect(link.querySelector("img")).toBeNull();
     expect(link.querySelector('[aria-hidden="true"]')).not.toBeNull();
   });
+
+  // Feature 018 (photo-to-items, research.md §8): ItemPhoto itself is
+  // unchanged — only what ClosetGrid passes it differs for an isolated image.
+  it("renders the isolated image, not the original, when one exists", async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: {
+        items: [
+          item({
+            id: "isolated",
+            photo_url: "https://example.com/original.jpg",
+            photo_background_color: "#e8e2d5",
+            isolated_photo_url: "https://example.com/isolated.jpg",
+          }),
+        ],
+        total: 1,
+        has_more: false,
+      },
+      error: undefined,
+      response: new Response(),
+    });
+
+    render(<ClosetGrid />);
+
+    const link = await screen.findByRole("link", { name: "Navy tee" });
+    const photoImg = link.querySelector("img");
+    expect(photoImg).toHaveAttribute("src", "https://example.com/isolated.jpg");
+    // No backgroundColor for an isolated image — ItemPhoto's own neutral-
+    // surface fallback applies instead (FR-021), not the original photo's
+    // backdrop colour.
+    const frame = photoImg?.closest("div");
+    expect(frame).not.toHaveStyle({ backgroundColor: "#e8e2d5" });
+  });
+
+  it("falls back to the original photo when isolation never produced one", async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: {
+        items: [
+          item({
+            id: "no-isolated",
+            photo_url: "https://example.com/original.jpg",
+            photo_background_color: "#e8e2d5",
+            isolated_photo_url: null,
+          }),
+        ],
+        total: 1,
+        has_more: false,
+      },
+      error: undefined,
+      response: new Response(),
+    });
+
+    render(<ClosetGrid />);
+
+    const link = await screen.findByRole("link", { name: "Navy tee" });
+    const photoImg = link.querySelector("img");
+    expect(photoImg).toHaveAttribute("src", "https://example.com/original.jpg");
+    const frame = photoImg?.closest("div");
+    expect(frame).toHaveStyle({ backgroundColor: "#e8e2d5" });
+  });
 });

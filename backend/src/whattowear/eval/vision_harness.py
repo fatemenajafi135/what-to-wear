@@ -161,7 +161,7 @@ def isolation_report() -> int:
     but placeholders. Imports `adapters.isolation` lazily (not at module
     level) so this file stays importable — and the rest of this harness
     runnable — before Phase 6 lands the isolation adapters themselves."""
-    from ..adapters.isolation import get_isolation_client  # type: ignore[import-untyped]  # Phase 6, not yet landed
+    from ..adapters.isolation import get_isolation_client
 
     cases = load_vision_cases()
     strategies = ["segmentation", "generative", "hybrid"]

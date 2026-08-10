@@ -209,6 +209,26 @@ class BoundingBox(BaseModel):
     height: float = Field(gt=0, le=1)
 
 
+class IsolationOutcome(BaseModel):
+    """What one `ports.IsolationClient.isolate()` call returns — a plain
+    return value, not a Protocol itself (that's `ports.IsolationClient`).
+
+    `image_bytes`/`mime_type` are `None` on any failure (call error,
+    timeout, an adapter declining to produce a usable result) — the caller
+    (`api/v1/routes/closet.py`) falls back to the region-cropped original
+    either way (spec.md FR-013), so this never raises. `mask_area_fraction`
+    is segmentation-only (`None` for the other two strategies) and drives
+    the hybrid adapter's escalation trigger (research.md §6). `cost_usd`
+    feeds `eval/vision_harness.py`'s `isolation_report()` (research.md §9);
+    `latency_seconds` is always set, even on failure, for the same report."""
+
+    image_bytes: bytes | None
+    mime_type: str | None
+    mask_area_fraction: float | None = None
+    cost_usd: float | None = None
+    latency_seconds: float
+
+
 class DetectedGarment(BaseModel):
     """One detection from vision.detect_garments_from_image — a region plus
     the same attribute set a single-item photo has always produced. Feature

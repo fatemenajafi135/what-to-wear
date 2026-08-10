@@ -188,6 +188,36 @@ class Settings(BaseSettings):
     # to page through. Enforced in Python (vision.py), not the JSON schema
     # (research.md §3).
     wtw_max_detections_per_photo: int = 8
+    # Which IsolationClient adapter (adapters/isolation.py) the extract route
+    # uses. "segmentation" is the working default (fastest/cheapest of the
+    # three, research.md §5) — spec.md FR-016 requires this be confirmed
+    # against real measured data (eval/vision_harness.py --isolation-report),
+    # not assumed; see docs/design-decisions.md §62 (PENDING until that run
+    # happens).
+    wtw_isolation_strategy: str = "segmentation"
+    # Per-detection timeout for one isolate() call (research.md §5) — treated
+    # identically to any other isolation failure (FR-013's fallback), not
+    # surfaced differently.
+    wtw_isolation_timeout_seconds: float = 8.0
+    # Hybrid's escalation-to-generative trigger (research.md §6): the
+    # segmentation mask's area, as a fraction of the frame, below/above which
+    # the result is treated as degenerate ("found nothing" / "found
+    # everything"). Both PROVISIONAL — tuned from real eval/vision_harness.py
+    # --isolation-report numbers once the fixture corpus exists (§62).
+    wtw_isolation_hybrid_min_area: float = 0.03
+    wtw_isolation_hybrid_max_area: float = 0.92
+    # Hosted background-removal endpoint for the segmentation strategy.
+    # Unset until a real provider is chosen and an account provisioned
+    # (research.md §5's "open item") — same optional-until-used posture as
+    # cohere_api_key/tavily_api_key above; get_settings() must not fail for a
+    # caller that never touches isolation.
+    wtw_segmentation_api_url: str | None = None
+    wtw_segmentation_api_key: str | None = None
+    # Image-generation-capable model for the generative strategy, routed
+    # through the existing AI Gateway (adapters/llm_gateway.get_image_model)
+    # — no second LLM client. Defaults to wtw_chat_model if unset, mirroring
+    # wtw_vision_model's existing fallback pattern (vision.py).
+    wtw_generative_isolation_model: str | None = None
 
     # --- CORS (feature 017) — deployment readiness --------------------------------
     # Comma-separated list of allowed origins. Optional; unset means the local
@@ -212,6 +242,10 @@ class Settings(BaseSettings):
     @property
     def vision_model(self) -> str:
         return self.wtw_vision_model or self.wtw_chat_model
+
+    @property
+    def generative_isolation_model(self) -> str:
+        return self.wtw_generative_isolation_model or self.wtw_chat_model
 
 
 @lru_cache

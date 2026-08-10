@@ -209,3 +209,127 @@ def test_zero_confident_detections_falls_back_to_one_blank_draft(
     assert len(body["drafts"]) == 1
     assert body["drafts"][0]["extraction_ok"] is True
     assert body["drafts"][0]["extracted"]["category"] is None
+
+
+# --- Feature 018 (photo-to-items) isolation wiring (T041/T043) --------------
+
+
+def _single_detection(category: str = "top") -> tuple:
+    from whattowear.schema import BoundingBox, DetectedGarment, ExtractedAttributes
+
+    return (
+        [
+            DetectedGarment(
+                region=BoundingBox(x=0, y=0, width=1, height=1), attributes=ExtractedAttributes(category=category)
+            )
+        ],
+        False,
+    )
+
+
+def test_isolation_success_populates_isolated_fields(
+    client: TestClient, _mock_storage_and_vision: tuple[MagicMock, MagicMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from whattowear.schema import IsolationOutcome
+
+    upload_mock, detect_mock = _mock_storage_and_vision
+    detect_mock.return_value = _single_detection()
+    # First upload_photo call is the original photo; the second (inside
+    # _isolate_and_upload) is the isolated image — distinguished by call
+    # order, matching the route's own sequencing.
+    upload_mock.side_effect = [f"{USER_A}/original.jpg", f"{USER_A}/isolated-shirt.jpg"]
+    sign_mock = MagicMock(return_value="https://signed.example/isolated-shirt.jpg")
+    monkeypatch.setattr(closet_routes.storage, "create_signed_url", sign_mock)
+
+    fake_isolation_client = MagicMock()
+    fake_isolation_client.isolate.return_value = IsolationOutcome(
+        image_bytes=b"cutout-bytes", mime_type="image/png", latency_seconds=0.1
+    )
+    monkeypatch.setattr(closet_routes, "get_isolation_client", MagicMock(return_value=fake_isolation_client))
+
+    resp = client.post(
+        "/api/v1/closet/items/extract",
+        files={"photo": ("shirt.jpg", b"x" * 100, "image/jpeg")},
+    )
+
+    assert resp.status_code == 200
+    draft = resp.json()["drafts"][0]
+    assert draft["isolated_photo_path"] == f"{USER_A}/isolated-shirt.jpg"
+    assert draft["isolated_photo_url"] == "https://signed.example/isolated-shirt.jpg"
+    assert upload_mock.call_count == 2
+
+
+def test_isolation_failure_leaves_fields_null_and_draft_still_saveable(
+    client: TestClient, _mock_storage_and_vision: tuple[MagicMock, MagicMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FR-013: an isolation failure is never surfaced as an error — the
+    draft is still `extraction_ok: true` and fully present, just without
+    an isolated image."""
+    from whattowear.schema import IsolationOutcome
+
+    upload_mock, detect_mock = _mock_storage_and_vision
+    detect_mock.return_value = _single_detection()
+    upload_mock.return_value = f"{USER_A}/original.jpg"
+
+    fake_isolation_client = MagicMock()
+    fake_isolation_client.isolate.return_value = IsolationOutcome(
+        image_bytes=None, mime_type=None, latency_seconds=0.05
+    )
+    monkeypatch.setattr(closet_routes, "get_isolation_client", MagicMock(return_value=fake_isolation_client))
+
+    resp = client.post(
+        "/api/v1/closet/items/extract",
+        files={"photo": ("shirt.jpg", b"x" * 100, "image/jpeg")},
+    )
+
+    assert resp.status_code == 200
+    draft = resp.json()["drafts"][0]
+    assert draft["extraction_ok"] is True
+    assert draft["isolated_photo_path"] is None
+    assert draft["isolated_photo_url"] is None
+    # Only the original photo's upload — no attempt to upload a failed
+    # isolation result.
+    assert upload_mock.call_count == 1
+
+
+def test_isolation_calls_run_concurrently_across_detections(
+    client: TestClient, _mock_storage_and_vision: tuple[MagicMock, MagicMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """8 detections' isolation calls complete in roughly one call's
+    wall-clock time, not eight (research.md §5, protects SC-007's 30s p50
+    budget)."""
+    import time
+
+    from whattowear.schema import BoundingBox, DetectedGarment, ExtractedAttributes, IsolationOutcome
+
+    upload_mock, detect_mock = _mock_storage_and_vision
+    detect_mock.return_value = (
+        [
+            DetectedGarment(region=BoundingBox(x=i * 0.1, y=0, width=0.1, height=0.1), attributes=ExtractedAttributes())
+            for i in range(8)
+        ],
+        False,
+    )
+    upload_mock.return_value = f"{USER_A}/x.jpg"
+
+    call_delay = 0.2
+
+    def _slow_isolate(*_args: object, **_kwargs: object) -> IsolationOutcome:
+        time.sleep(call_delay)
+        return IsolationOutcome(image_bytes=None, mime_type=None, latency_seconds=call_delay)
+
+    fake_isolation_client = MagicMock()
+    fake_isolation_client.isolate.side_effect = _slow_isolate
+    monkeypatch.setattr(closet_routes, "get_isolation_client", MagicMock(return_value=fake_isolation_client))
+
+    start = time.monotonic()
+    resp = client.post(
+        "/api/v1/closet/items/extract",
+        files={"photo": ("pile.jpg", b"x" * 100, "image/jpeg")},
+    )
+    elapsed = time.monotonic() - start
+
+    assert resp.status_code == 200
+    assert len(resp.json()["drafts"]) == 8
+    # Well under 8 * call_delay (1.6s) — concurrent, not sequential.
+    assert elapsed < call_delay * 4

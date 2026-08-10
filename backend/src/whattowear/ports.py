@@ -16,12 +16,24 @@ measured problem it solves"):
   docs/legacy-ai-inventory.md §3 — `pipeline/graph.py`, `memory/store.py`
   and `pipeline/context_assembler.py` used to import the DB session factory
   directly; they now take this Protocol instead.
+- `IsolationClient` — feature 018 (photo-to-items, specs/018-photo-to-items/
+  research.md §5): what `api/v1/routes/closet.py`'s extract route needs
+  from whichever image-isolation strategy is configured. Three concrete
+  implementations exist (segmentation, generative reconstruction, hybrid —
+  `adapters/isolation_*.py`), each a hosted HTTP call, chosen at runtime by
+  `adapters.isolation.get_isolation_client()` reading `wtw_isolation_
+  strategy` — the same shape `kb.py`'s `wtw_kb_mode` selection already
+  establishes for `VectorStore`-adjacent code, applied to a different
+  Protocol. Qualifies for a port the same way this file's other three do:
+  three concrete implementations today, not a speculative "might need
+  later" abstraction.
 
 Every concrete binding (`ChatLiteLLM`, `QdrantVectorStore`,
-`adapters.closet_fixture.FixtureClosetRepository`) satisfies its Protocol
-structurally — no adapter *class* wraps them, only `ClosetRepository`, which
-has no existing structural match because nothing in this package already
-shapes closet data this way.
+`adapters.closet_fixture.FixtureClosetRepository`, the three
+`adapters.isolation_*` modules) satisfies its Protocol structurally — no
+adapter *class* wraps them, only `ClosetRepository`, which has no existing
+structural match because nothing in this package already shapes closet
+data this way.
 """
 
 from __future__ import annotations
@@ -40,7 +52,7 @@ if TYPE_CHECKING:
     # so this costs nothing at runtime and never becomes a real import-time
     # coupling from ports.py to the domain modules it describes.
     from .memory.preferences import FeedbackRecord
-    from .schema import WardrobeItem
+    from .schema import BoundingBox, IsolationOutcome, WardrobeItem
 
 
 @runtime_checkable
@@ -91,3 +103,17 @@ class ClosetRepository(Protocol):
     def list_catalog_items(self) -> list[WardrobeItem]: ...
 
     def get_derivation_inputs(self, user_id: str) -> tuple[list[FeedbackRecord], dict[str, datetime]]: ...
+
+
+@runtime_checkable
+class IsolationClient(Protocol):
+    """Structurally satisfied by each of `adapters/isolation_segmentation.
+    py`, `isolation_generative.py`, `isolation_hybrid.py`. `isolate` MUST
+    NEVER raise for an ordinary call/timeout failure — it returns an
+    `IsolationOutcome` with `image_bytes=None` instead (mirrors `adapters/
+    storage.py::create_signed_url`'s fail-soft pattern), so the extract
+    route handles success/failure identically across all three strategies
+    without per-adapter try/except (spec.md FR-013: an isolation failure
+    is never surfaced as an error, always falls back silently)."""
+
+    def isolate(self, image_bytes: bytes, mime_type: str, region: BoundingBox) -> IsolationOutcome: ...

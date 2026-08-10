@@ -168,8 +168,15 @@ export function ClosetGrid({ selectedItemId }: ClosetGridProps) {
                 aria-label={item.name ?? item.category}
               >
                 <ItemPhoto
-                  src={item.photo_url}
-                  backgroundColor={item.photo_background_color}
+                  // Feature 018 (photo-to-items, research.md §8): the isolated
+                  // image when present, else the original — ItemPhoto itself is
+                  // unchanged, only what this call site passes it differs. No
+                  // backgroundColor for an isolated image — its own background is
+                  // already removed, so ItemPhoto's existing neutral-surface
+                  // fallback (--color-surface-sunken) applies, which is exactly
+                  // FR-021's "standard neutral surface treatment."
+                  src={item.isolated_photo_url ?? item.photo_url}
+                  backgroundColor={item.isolated_photo_url ? null : item.photo_background_color}
                   className={styles.tilePhoto}
                 />
               </Link>

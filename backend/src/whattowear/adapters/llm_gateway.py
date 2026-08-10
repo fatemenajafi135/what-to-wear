@@ -15,8 +15,10 @@ when a factory that needs it is actually called — same guarantee
 
 from __future__ import annotations
 
+import base64
 from typing import Any
 
+import litellm
 from langchain_cohere import CohereRerank
 from langchain_litellm import ChatLiteLLM
 from langchain_openai import OpenAIEmbeddings
@@ -85,6 +87,33 @@ def get_embeddings(model: str | None = None) -> OpenAIEmbeddings:
         api_key=SecretStr(_gateway_key()),
         check_embedding_ctx_length=False,
     )
+
+
+def edit_image(image_bytes: bytes, mime_type: str, prompt: str) -> bytes:
+    """Feature 018's generative isolation strategy (`adapters/
+    isolation_generative.py`) — routes through this SAME gateway config
+    (`ai_gateway_base_url`/`_gateway_key()`), not a second LLM client.
+
+    No LangChain wrapper class exists for image editing the way
+    `ChatLiteLLM` exists for chat (`get_chat_model` above), so this calls
+    `litellm.image_edit` directly — `litellm` is already a direct
+    dependency (`langchain_litellm` itself depends on it), not a new one.
+    Raises on a genuine call failure; the caller
+    (`isolation_generative.py`) catches it into a failed `IsolationOutcome`,
+    same fail-soft contract every isolation strategy has (`ports.
+    IsolationClient`)."""
+    settings = get_settings()
+    response = litellm.image_edit(
+        model=settings.generative_isolation_model,
+        image=[(f"photo.{mime_type.split('/')[-1]}", image_bytes, mime_type)],
+        prompt=prompt,
+        api_base=settings.ai_gateway_base_url,
+        api_key=_gateway_key(),
+    )
+    b64 = response.data[0].b64_json
+    if not b64:
+        raise RuntimeError("Image edit call returned no image data")
+    return base64.b64decode(b64)
 
 
 def get_reranker(top_n: int = 5) -> CohereRerank:
