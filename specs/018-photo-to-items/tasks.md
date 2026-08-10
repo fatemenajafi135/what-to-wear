@@ -27,9 +27,12 @@ Backend: `backend/src/whattowear/`, tests in `backend/tests/{unit,integration}`,
 - [ ] T001 Confirm `backend/.env` has `AI_GATEWAY_API_KEY` set (copy `backend/.env.example` if
       missing) — required from Phase 2 onward for any live verification.
 - [ ] T002 Confirm `npx supabase start` is running locally, for T004's migration.
-- [ ] T003 [P] Identify the source of 8+ real closet photos for the expanded fixture corpus
-      (T033) — a real closet, phone camera roll, or equivalent; confirm they can be committed
+- [ ] T003 [P] Identify the source of 10+ real closet photos for the expanded fixture corpus
+      (T027) — a real closet, phone camera roll, or equivalent; confirm they can be committed
       under the tracked `evals/fixtures/` carve-out (Constitution Principle X) before Phase 5.
+      **10, not 8** (corrected in `/speckit-analyze`, finding F2): spec.md's Assumptions require
+      "at least ten **real** closet photos" — the corpus doesn't reach that bar by keeping the 2
+      existing synthetic placeholders and adding 8; those 2 are retired in T027, not counted.
 
 ---
 
@@ -108,11 +111,18 @@ untouched — Phase 3 begins the user-observable slice.
 
 - [ ] T014 [US1] Restructure `frontend/app/(app)/add/BulkQueue.tsx`'s `QueueEntry` to one-per-
       draft (research.md §10): `scanEntry` expands `data.drafts` into N entries sharing the same
-      `photoUrl`(blob)/`file`, each carrying its own `region`/`isolatedPhotoUrl`/`extracted`/
-      `extraction_ok`/`photoPath`/`status`.
+      `photoUrl`(blob)/`file`, each carrying its own `region`/`isolatedPhotoUrl`/`isolatedPhotoPath`/
+      `extracted`/`extraction_ok`/`photoPath`/`status`. `isolatedPhotoPath` (the raw Storage path,
+      distinct from the signed `isolatedPhotoUrl` used only for display) is what T017a's save call
+      needs — do not drop it while flattening. **Preserve the existing upload-error branch as a
+      one-entry special case**: an upload failure (`!photoPath`) has no `drafts` array to flatten at
+      all, and must still produce exactly one `"upload-error"` entry for that file, unchanged from
+      today (FR-026) — this is evaluated before `data.drafts` is ever read.
 - [ ] T015 [US1] Same flattening in `frontend/app/(app)/add/AddItemFlow.tsx`'s `FlowState`
-      (`drafts: Draft[]` + `currentIndex`, replacing the single-draft fields) — a photo yielding
-      >1 detection reviews the same way a small bulk batch does (FR-025).
+      (`drafts: Draft[]` + `currentIndex`, replacing the single-draft fields, each draft carrying
+      `isolatedPhotoPath` alongside `isolatedPhotoUrl` per T014) — a photo yielding >1 detection
+      reviews the same way a small bulk batch does (FR-025). The existing `"error"` state (genuine
+      upload/scan failure, distinct from `"empty"`) is unchanged (FR-026).
 - [ ] T016 [US1] `frontend/app/(app)/add/OrientationAwarePhoto.tsx`: add an optional `region`
       prop — when present and no `isolatedSrc` is given, renders the full blob scaled/positioned
       to the region's fraction inside the existing letterbox frame (research.md §4). No change to
@@ -120,6 +130,14 @@ untouched — Phase 3 begins the user-observable slice.
 - [ ] T017 [US1] `frontend/app/(app)/add/ReviewCard.tsx`: accept and pass through
       `isolatedPhotoUrl`/`region` to `OrientationAwarePhoto` — isolated image when present
       (always null until Phase 6, so this path is a no-op until then), else the region crop.
+- [ ] T017a [US1] Thread `isolatedPhotoPath` through to the actual save request — found missing in
+      `/speckit-analyze` (finding C1): `frontend/app/(app)/add/fromUploadBody.ts`'s
+      `buildFromUploadBody()` gains an `isolatedPhotoPath: string | null | undefined` parameter,
+      sent as `isolated_photo_path` (mirrors how `photoBackgroundColor` is already threaded);
+      `BulkQueue.tsx`'s and `AddItemFlow.tsx`'s `handleSave` call sites both pass the current
+      draft's `isolatedPhotoPath` (T014/T015) through to it. Without this, T004/T006/T010's backend
+      support for `isolated_photo_path` is never exercised by a real save — the column stays `null`
+      forever regardless of how well isolation itself works.
 - [ ] T018 [US1] Add the "some garments in this photo weren't captured" notice to `BulkQueue.tsx`/
       `AddItemFlow.tsx`, shown when a photo's `truncated: true` (FR-002), using
       `frontend/lib/add-item-copy.ts`'s existing copy-module convention.
@@ -171,13 +189,15 @@ missed attributes, and vague naming.
 
 **Independent Test**: quickstart.md Scenario 4.
 
-- [ ] T027 [US3] Add the 8+ real photos identified in T003 to
+- [ ] T027 [US3] Retire `evals/fixtures/vision_samples/navy_top_placeholder.png` and
+      `beige_trousers_placeholder.png` (synthetic, not real — don't count toward spec.md's "at
+      least ten real closet photos"); add the 10+ real photos identified in T003 to
       `backend/evals/fixtures/vision_samples/`, covering: ≥1 single garment on a hanger, ≥2
       flat-lay/multi-garment photos, ≥1 garment worn by a person, ≥1 partially occluded garment
-      (spec.md Assumptions' minimum corpus — total fixtures now 10+, up from 2 placeholders).
-- [ ] T028 [US3] Extend `backend/evals/golden_set.yaml`'s `vision_cases:` — one case per new
-      fixture; multi-garment fixtures gain `expected_count`; each case's comment names which
-      named failure mode (#46) it targets.
+      (spec.md Assumptions' minimum corpus — 10+ fixtures, all real).
+- [ ] T028 [US3] Extend `backend/evals/golden_set.yaml`'s `vision_cases:` — remove `v01`/`v02`
+      (the retired placeholders' cases); one new case per real fixture; multi-garment fixtures
+      gain `expected_count`; each case's comment names which named failure mode (#46) it targets.
 - [ ] T029 [US3] Extend `backend/src/whattowear/eval/vision_harness.py`'s `_check()`: call
       `detect_garments_from_image`; when `expected_count` is present, compare it to the returned
       detection count; apply the existing per-field loose checks per detection (matched to the
@@ -255,7 +275,12 @@ missed attributes, and vague naming.
       real fixture corpus (T027) for all three strategies; record the table in
       `docs/design-decisions.md` §62; set `wtw_isolation_strategy`'s real default and
       `wtw_isolation_hybrid_min_area`/`_max_area`'s real values from the measured numbers (FR-016)
-      — replacing T036's placeholder defaults.
+      — replacing T036's placeholder defaults. Two checks added in `/speckit-analyze` (findings
+      E3/E4), both recorded in the same §62 entry: (a) **SC-008** — compute the full per-photo
+      cost at the chosen default (one detection/extraction call's own cost + up to 8 isolation
+      calls at that strategy), not isolation cost alone, and confirm it's ≤ $0.05, or record why
+      not; (b) **SC-005** — confirm the chosen default's success rate on worn/flat-lay/occluded
+      fixtures clears 50%, or record why not.
 - [ ] T046 [US4] Frontend: `frontend/app/(app)/closet/ClosetGrid.tsx` and
       `.../closet/[itemId]/page.tsx`'s `ItemDetailCard` — pass
       `src={item.isolated_photo_url ?? item.photo_url}` and
@@ -266,7 +291,12 @@ missed attributes, and vague naming.
       its own `backgroundColor` as before.
 - [ ] T048 [US4] Manual/live verification: quickstart.md Scenario 3 (worn/multi-item photo → clean
       isolated card; forced `WTW_SEGMENTATION_API_URL` failure → graceful region-crop fallback,
-      still saveable) and Scenario 5 (per-strategy report sanity check).
+      still saveable) and Scenario 5 (per-strategy report sanity check). Two checks added in
+      `/speckit-analyze` (findings E2/E5): (a) **SC-007** — time a real (not mocked) upload of an
+      8-detection photo end-to-end and confirm it lands within 30s, recording the actual figure;
+      (b) **SC-004** — upload a plain-background/hanger photo (today's best case) and confirm the
+      isolated image looks at least as clean as the app's existing (non-isolated) treatment of the
+      same kind of photo.
 
 **Checkpoint**: review cards and closet tiles show clean, isolated images by default, with the
 strategy chosen from real measurements rather than assumption.

@@ -150,7 +150,10 @@ backend/
 │   │   ├── isolation_segmentation.py           # NEW — hosted background-removal call
 │   │   ├── isolation_generative.py             # NEW — hosted generative-reconstruction call
 │   │   ├── isolation_hybrid.py                 # NEW — composes the two above (FR-011/FR-012)
-│   │   └── isolation.py                        # NEW — get_isolation_client() factory, config-selected
+│   │   ├── isolation.py                        # NEW — get_isolation_client() factory, config-selected
+│   │   └── llm_gateway.py                      # CHANGED — get_image_model() factory, mirrors
+│   │                                             #   get_chat_model(), for the generative strategy
+│   │                                             #   (found missing here in /speckit-analyze)
 │   ├── vision.py                                # CHANGED — detect_garments_from_image() replaces
 │   │                                             #   extract_attributes_from_image(); returns
 │   │                                             #   list[DetectedGarment]; one VLM call, not N+1
