@@ -332,23 +332,25 @@ isolated image exists.
 
 **Independent Test**: quickstart.md Scenario 3 steps 5–6.
 
-- [ ] T049 [US5] New `frontend/app/(app)/closet/[itemId]/ItemDetailToggle.tsx` — renders only when
+- [x] T049 [US5] New `frontend/app/(app)/closet/[itemId]/ItemDetailToggle.tsx` — renders only when
       `item.isolated_photo_url` is present; flips which `src`/`backgroundColor` pair
-      `ItemDetailCard` passes to `ItemPhoto`, defaulting to the isolated image (FR-020). Built
-      from the existing segmented-control/tab primitive under `components/ui/` if one exists;
-      otherwise a minimal two-option `Button`-state group, explicitly flagged in this task's
-      commit as a Principle VIII gap (no design-system token for this control yet) rather than
-      inventing a new visual language silently.
-- [ ] T050 [US5] Wire the toggle into `.../closet/[itemId]/page.tsx`'s `ItemDetailCard`.
-- [ ] T051 [P] [US5] `ItemDetailToggle.test.tsx`: absent when no isolated image; present and
-      functional when one exists; defaults to isolated.
-- [ ] T052 [US5] `backend/tests/integration/test_closet_routes.py`: both `GET /closet/items` and
+      `ItemDetailCard` passes to `ItemPhoto`, defaulting to the isolated image (FR-020). **No
+      Principle VIII gap after all**: `components/ui/SegmentedControl` already exists and is
+      exactly the "2-3 option tab switcher" shape needed — used as-is, only the two option labels
+      ("Isolated"/"Original") are new, DRAFT-flagged copy (docs/design-decisions.md §64).
+- [x] T050 [US5] Wire the toggle into `.../closet/[itemId]/page.tsx`'s `ItemDetailCard`.
+- [x] T051 [P] [US5] `ItemDetailToggle.test.tsx`: both options render with the current value
+      selected; picking the other option calls `onChange`. (The absent-when-no-isolated-image and
+      defaults-to-isolated behavior live in `ItemDetailCard`, not this component — it only renders
+      the toggle when told to, per T050's wiring.)
+- [x] T052 [US5] `backend/tests/integration/test_closet_routes.py`: both `GET /closet/items` and
       `GET /closet/items/{item_id}` return `isolated_photo_url: null` (present, not omitted) for
       every item saved before this feature — SC-006's "100% of saved items" claim, including the
       pre-existing ones.
-- [ ] T053 [US5] Manual/live verification: save an item from a multi-garment photo; confirm its
-      detail-page toggle's "original" state shows the literal, unmodified upload (the whole
-      multi-garment photo it was detected from), not a cropped or regenerated variant.
+- [ ] T053 [US5] **Needs the human** (live keys + a real photo) — manual/live verification: save an
+      item from a multi-garment photo; confirm its detail-page toggle's "original" state shows the
+      literal, unmodified upload (the whole multi-garment photo it was detected from), not a
+      cropped or regenerated variant.
 
 **Checkpoint**: all five user stories independently demoable; spec.md is fully satisfied.
 

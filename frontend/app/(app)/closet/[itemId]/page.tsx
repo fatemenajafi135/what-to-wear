@@ -11,6 +11,7 @@ import { ClosetGrid } from "../ClosetGrid";
 import { ItemOverflowSheet } from "./ItemOverflowSheet";
 import { ItemEditForm } from "./ItemEditForm";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { ItemDetailToggle, useItemDetailPhotoView } from "./ItemDetailToggle";
 import type { components } from "@/lib/api/schema";
 import twoPaneStyles from "../page.module.css";
 import styles from "./page.module.css";
@@ -189,18 +190,23 @@ function ItemDetailCard({ item }: { item: ClosetItemView }) {
     { label: "Notes", value: item.notes ?? "—" },
   ];
 
+  // Feature 018 (photo-to-items, spec.md FR-020, research.md §8): isolated
+  // by default when one exists; the toggle (US5) only renders in that case
+  // — there's nothing to flip to otherwise, so `photoView` staying
+  // "isolated" for an item with no isolated image is inert (the fallback
+  // below already resolves to the original either way).
+  const [photoView, setPhotoView] = useItemDetailPhotoView();
+  const showOriginal = photoView === "original" || !item.isolated_photo_url;
+
   return (
     <div className={styles.wrapper}>
-      {/* Feature 018 (photo-to-items, research.md §8): isolated image by default
-          when one exists (FR-020) — the original/isolated toggle (US5) sits above
-          this, in ItemDetailPage. Same ItemPhoto, same no-backgroundColor-for-
-          isolated pairing ClosetGrid's tile uses. */}
       <ItemPhoto
-        src={item.isolated_photo_url ?? item.photo_url}
-        backgroundColor={item.isolated_photo_url ? null : item.photo_background_color}
+        src={showOriginal ? item.photo_url : item.isolated_photo_url}
+        backgroundColor={showOriginal ? item.photo_background_color : null}
         className={styles.photo}
         radius={16}
       />
+      {item.isolated_photo_url && <ItemDetailToggle value={photoView} onChange={setPhotoView} />}
       <div className={styles.card}>
         {fields.map((field) => (
           <div key={field.label} className={styles.fieldRow}>

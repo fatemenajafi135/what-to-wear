@@ -104,6 +104,8 @@ def test_lists_only_the_caller_own_items(seeded_items: dict[str, list[str]]) -> 
     assert returned_ids == set(seeded_items["user_a"])
     assert seeded_items["user_b"][0] not in returned_ids
     assert body["total"] == 2
+    # Feature 018 (spec.md SC-006): present, not omitted, for every item.
+    assert all("isolated_photo_url" in item and item["isolated_photo_url"] is None for item in body["items"])
 
 
 def test_category_filter_bottom_includes_full_body_dress(seeded_items: dict[str, list[str]]) -> None:
@@ -141,6 +143,11 @@ def test_item_detail_returns_own_item_with_computed_fields(seeded_items: dict[st
     # e.g. "navy": "#1b2a4a") — title-casing for display is a frontend
     # (CSS text-transform) concern, not something the API encodes.
     assert body["color_names"] == ["navy"]
+    # Feature 018 (photo-to-items, spec.md SC-006): present (not omitted)
+    # and null for every item saved before this feature — the same
+    # graceful fallback ItemPhoto already gives photo_url=None.
+    assert "isolated_photo_url" in body
+    assert body["isolated_photo_url"] is None
 
 
 def test_item_detail_404_for_foreign_item(seeded_items: dict[str, list[str]]) -> None:

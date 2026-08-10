@@ -3074,3 +3074,28 @@ for a limit that essentially never changes was judged not worth the indirection.
 the cap itself ever becomes user-configurable.
 
 ---
+
+## 64. Feature 018 (photo-to-items) — the item detail original/isolated toggle (#48, US5)
+
+**Status: decided, DRAFT labels.** Spec.md FR-020 requires the item detail page let a user
+flip between the isolated image (shown by default when one exists) and the original,
+unmodified upload. Unlike §63's notice, this one needed **no new visual component**: the
+existing `SegmentedControl` (design-system.md §3, "2-3 option tab switcher") is exactly the
+"flip between two views of the same thing" shape this control is — used as-is,
+`components/ui/SegmentedControl/SegmentedControl.tsx` untouched.
+
+Only the two option **labels** ("Isolated" / "Original") have no design-system table entry —
+same DRAFT-until-reviewed treatment §23.6/§63 already established. `ItemDetailToggle.tsx`
+renders only when `item.isolated_photo_url` is present (FR-020: "the closet grid and the
+review card MUST NOT offer this switch" — those two never render it either, since neither
+imports this component). Defaults to `"isolated"` on every mount, including revisiting an
+item — no state is persisted across visits; each detail-page open starts from the same
+default the rest of the closet grid already shows.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — reuse `SegmentedControl` | The design system already has the exact 2-option shape needed; a bespoke toggle would duplicate it for no reason. |
+| (b) A new dedicated "photo toggle" component | No visual gap to fill — (a) already covers it; would be a second implementation of the same control. |
+| (c) Persist the last-chosen view (localStorage or a query param) | Adds state for a preference nobody asked for; the isolated view is the one the rest of the app (grid, review card) already shows, so defaulting to it every time is the more predictable behavior, not less. |
