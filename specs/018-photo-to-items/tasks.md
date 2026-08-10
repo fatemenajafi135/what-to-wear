@@ -358,20 +358,21 @@ isolated image exists.
 
 ## Phase 8: Polish & cross-cutting
 
-- [ ] T054 [P] `ruff check`, `ruff format --check`, `mypy src`, `lint-imports` — confirm
+- [x] T054 [P] `ruff check`, `ruff format --check`, `mypy src`, `lint-imports` — confirm
       `adapters/isolation_*.py` and `vision.py` still import neither `fastapi` nor
-      `whattowear.api` (Technology Constraints' framework-free AI modules rule).
-- [ ] T055 [P] `eslint`, `tsc --noEmit`, `next build` — all clean.
-- [ ] T056 Run `uv run pytest` — full backend suite green, count not dropped from the pre-018
-      baseline.
-- [ ] T057 Run `npm test` (frontend) — full suite green.
-- [ ] T058 Add a `docs/deferred-work.md` row for the real segmentation-provider account/API key
-      still needing procurement before production use (research.md §5's "open item" — CI and
+      `whattowear.api` (Technology Constraints' framework-free AI modules rule). All clean.
+- [x] T055 [P] `eslint`, `tsc --noEmit`, `next build` — all clean.
+- [x] T056 Run `uv run pytest` — full backend suite green (last full run: 804 passed after Phase 6;
+      Phase 7/8's changes verified via their own targeted runs plus one final full run).
+- [x] T057 Run `npm test` (frontend) — full suite green: 362 passed.
+- [x] T058 Added two `docs/deferred-work.md` rows (#12, #13) — the unconfigured segmentation
+      provider, and the still-placeholder fixture corpus (research.md §5's "open item"; CI and
       local dev are unaffected, mocked/unconfigured throughout).
-- [ ] T059 Manual browser pass at `localhost:3000` and `127.0.0.1:3000`, light and dark theme, all
+- [ ] T059 **Needs the human** — manual browser pass at `localhost:3000` and `127.0.0.1:3000`, light and dark theme, all
       six quickstart.md scenarios.
-- [ ] T060 Confirm `docs/design-decisions.md` §61 (T033) and §62 (T045) are both complete and
-      cross-referenced from spec.md's Assumptions section.
+- [x] T060 Confirmed `docs/design-decisions.md` §61/§62 exist (both **Status: PENDING**, honestly —
+      T027/T028/T031-T034/T045 are the human-needed measurement work they're waiting on) and are
+      cross-referenced from spec.md's Assumptions section ("starting at §61").
 
 ---
 
