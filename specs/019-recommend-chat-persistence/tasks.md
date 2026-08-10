@@ -24,7 +24,7 @@ Frontend only, per plan.md's Project Structure — no backend, `infra/`, or `des
 
 **Purpose**: Stand up the new store module's shape before wiring any behavior into it.
 
-- [ ] T001 Create `frontend/lib/recommend/recommendChatStore.ts` with the `RecommendChatState` type (per contracts/recommend-chat-store.md), the initial/default state, a module-scoped mutable snapshot variable, a `listeners: Set<() => void>` set, and `getState()`/`subscribe(listener)` — no action functions yet. `getState()` returns the current snapshot; `subscribe` adds/removes a listener and returns the unsubscribe function.
+- [X] T001 Create `frontend/lib/recommend/recommendChatStore.ts` with the `RecommendChatState` type (per contracts/recommend-chat-store.md), the initial/default state, a module-scoped mutable snapshot variable, a `listeners: Set<() => void>` set, and `getState()`/`subscribe(listener)` — no action functions yet. `getState()` returns the current snapshot; `subscribe` adds/removes a listener and returns the unsubscribe function.
 
 **Checkpoint**: The store's read side compiles and exports a stable empty snapshot. Nothing consumes it yet.
 
