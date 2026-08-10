@@ -37,7 +37,11 @@ import styles from "./page.module.css";
  * live pager card it never was in this page-load.
  */
 export default function RecommendPage() {
-  const chat = useSyncExternalStore(recommendChatStore.subscribe, recommendChatStore.getState);
+  const chat = useSyncExternalStore(
+    recommendChatStore.subscribe,
+    recommendChatStore.getState,
+    recommendChatStore.getServerSnapshot,
+  );
   const hasUserMessage = chat.messages.some((m) => m.role === "user");
   const searchParams = useSearchParams();
   const resumeThreadId = searchParams.get("thread_id");

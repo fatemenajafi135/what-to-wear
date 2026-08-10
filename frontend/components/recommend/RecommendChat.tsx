@@ -32,7 +32,11 @@ type Readiness = { ready: boolean; sparse: boolean; missing: string[] };
  * current contents, even if they changed while the user was elsewhere).
  */
 export function RecommendChat() {
-  const chat = useSyncExternalStore(recommendChatStore.subscribe, recommendChatStore.getState);
+  const chat = useSyncExternalStore(
+    recommendChatStore.subscribe,
+    recommendChatStore.getState,
+    recommendChatStore.getServerSnapshot,
+  );
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);

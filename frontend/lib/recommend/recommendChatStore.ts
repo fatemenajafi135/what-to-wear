@@ -59,6 +59,16 @@ export function getState(): RecommendChatState {
   return state;
 }
 
+/** For `useSyncExternalStore`'s required third argument. This state is
+ * client-only (FR-002/FR-008 — nothing here is ever meant to be server-
+ * rendered), so a server prerender always sees the pristine empty
+ * conversation — exactly what a fresh client load shows before hydration
+ * takes over, never the live (possibly mutated) singleton. */
+const serverSnapshot = initialState();
+export function getServerSnapshot(): RecommendChatState {
+  return serverSnapshot;
+}
+
 /** Registers `listener` to be called after any action changes state.
  * Returns the unsubscribe function. */
 export function subscribe(listener: () => void): () => void {

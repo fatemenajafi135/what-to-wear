@@ -105,9 +105,9 @@ Frontend only, per plan.md's Project Structure — no backend, `infra/`, or `des
 
 **Purpose**: Full verification suite, per the task brief's hard bar (counts must not drop) and its explicit requirement for a real, human-driven browser pass.
 
-- [ ] T018 [P] Run `npm run lint && npm run typecheck` in `frontend/` and fix any findings introduced by this feature's changes. (depends on T006–T017)
-- [ ] T019 [P] Run `npm test` in `frontend/` and confirm the total passing count is at or above the 347 baseline recorded in the task brief. (depends on T006–T017)
-- [ ] T020 Run `npm run build` in `frontend/`. (depends on T018, T019)
+- [X] T018 [P] Run `npm run lint && npm run typecheck` in `frontend/` and fix any findings introduced by this feature's changes. (depends on T006–T017)
+- [X] T019 [P] Run `npm test` in `frontend/` and confirm the total passing count is at or above the 347 baseline recorded in the task brief. (depends on T006–T017)
+- [X] T020 Run `npm run build` in `frontend/`. (depends on T018, T019)
 - [ ] T021 Run `npm run e2e:pwa` in `frontend/` and confirm the total passing count is at or above the 11 baseline. (depends on T020)
 - [ ] T022 Full manual walkthrough of `quickstart.md`'s 8-step sequence, end to end in one sitting, in a real browser — not just the per-story slices already run in T010/T012/T014/T017 — to catch any interaction between the four stories. (depends on T021)
 
