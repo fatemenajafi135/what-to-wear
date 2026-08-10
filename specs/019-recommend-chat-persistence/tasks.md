@@ -55,7 +55,7 @@ Frontend only, per plan.md's Project Structure — no backend, `infra/`, or `des
 - [X] T007 [US1] Update `frontend/app/(app)/recommend/page.tsx`: drop `chatRef`/`RecommendChatHandle`/`onHasUserMessageChange`; read `hasUserMessage` via `useSyncExternalStore(recommendChatStore.subscribe, recommendChatStore.getState)` (`.messages.some(m => m.role === "user")`); wire the "New chat" `IconButton`'s `onClick` to `recommendChatStore.reset()` directly; render `<RecommendChat />` with no ref and no `onHasUserMessageChange` prop. (depends on T006)
 - [X] T008 [US1] Update `frontend/components/recommend/RecommendChat.test.tsx`: add `beforeEach(() => recommendChatStore.reset())`; add a test that renders, sends a message, unmounts, renders a fresh `<RecommendChat />` with no props, and asserts the prior message and reply are still shown with no hero state and no new `POST /recommend/turns` call. Existing tests continue to pass unmodified apart from the added `beforeEach` (they already interact only through props/DOM, not the removed ref). Also add: (a) a component-level in-flight test — render, send a message but don't let the mocked `POST /recommend/turns` resolve yet, unmount, render a fresh instance, *then* resolve the mock — assert the reply lands in the new instance exactly once, with no stuck "Thinking…" and no duplicate bubble (`/speckit-analyze` finding E1, closing the gap between T005's store-level coverage and FR-007/SC-003's component-level guarantee); (b) an unmount/remount test with a *changed* `GET /recommend/readiness` mock between the two renders, asserting the second render reflects the new readiness response — proves readiness stayed decoupled from the store refactor (`/speckit-analyze` finding E2, FR-009/Acceptance Scenario 6). (depends on T006)
 - [X] T009 [P] [US1] Update `frontend/app/(app)/recommend/page.test.tsx`: add `beforeEach(() => recommendChatStore.reset())`. (depends on T007)
-- [ ] T010 [US1] Manual validation: drive quickstart.md steps 1–4 (send a message, Start styling, navigate to Closet and back three-plus times, confirm no drift and no flash) in a real browser against a running dev stack. (depends on T006, T007, T008, T009)
+- [X] T010 [US1] Manual validation: drive quickstart.md steps 1–4 (send a message, Start styling, navigate to Closet and back three-plus times, confirm no drift and no flash) in a real browser against a running dev stack. (depends on T006, T007, T008, T009)
 
 **Checkpoint**: User Story 1 is fully functional and independently testable — the core bug from issue #47 is fixed.
 
@@ -68,7 +68,7 @@ Frontend only, per plan.md's Project Structure — no backend, `infra/`, or `des
 **Independent Test**: With an active conversation, tap "New chat" → hero state. Navigate away and back → still hero state.
 
 - [X] T011 [US2] Add tests in `frontend/app/(app)/recommend/page.test.tsx`: tapping "New chat" returns to hero state and disables the button again (extends the existing "New chat becomes enabled… and resets the thread on click" test if present, or adds alongside it); after tapping "New chat," unmounting and remounting `RecommendPage` (simulating navigate-away-and-back) still shows the hero state, not the pre-reset conversation. (depends on T007, T009)
-- [ ] T012 [US2] Manual validation: drive quickstart.md step 6 (New chat, then navigate away and back, confirm hero state holds) in a real browser. (depends on T011)
+- [X] T012 [US2] Manual validation: drive quickstart.md step 6 (New chat, then navigate away and back, confirm hero state holds) in a real browser. (depends on T011)
 
 **Checkpoint**: User Stories 1 and 2 both work, together and independently.
 
@@ -81,7 +81,7 @@ Frontend only, per plan.md's Project Structure — no backend, `infra/`, or `des
 **Independent Test**: With an active conversation, hard-reload the tab (or fully close/relaunch the installed PWA) — hero state.
 
 - [X] T013 [US3] Add a test in `frontend/lib/recommend/recommendChatStore.test.ts` that spies on `window.localStorage.setItem`, `window.sessionStorage.setItem`, and `document.cookie` (setter) across a full `sendTurn` → `startStyling` sequence and asserts none of them were called — the store's persistence boundary is provably "JS memory only." (depends on T005)
-- [ ] T014 [US3] Manual validation: drive quickstart.md step 7 (hard-reload the tab, or close and relaunch the installed PWA, with an active conversation) and confirm the hero state, not the prior conversation. (depends on T006, T007, T008, T009)
+- [X] T014 [US3] Manual validation: drive quickstart.md step 7 (hard-reload the tab, or close and relaunch the installed PWA, with an active conversation) and confirm the hero state, not the prior conversation. (depends on T006, T007, T008, T009)
 
 **Checkpoint**: All three of the persist/reset boundaries from the issue (in-app nav persists; New chat resets; real reload resets) are covered.
 
@@ -95,7 +95,7 @@ Frontend only, per plan.md's Project Structure — no backend, `infra/`, or `des
 
 - [X] T015 [US4] Update `frontend/app/(app)/recommend/page.tsx`'s resume `useEffect`: before calling `GET /recommend/sessions/{session_id}`, compare `resumeThreadId` against `recommendChatStore.getState().threadId`; if equal, skip the fetch entirely and treat the screen as immediately ready; if different (including the store being empty), fetch as today and call `recommendChatStore.hydrate(resumeThreadId, messages)` with the mapped messages instead of local `setResumedMessages` state; remove the now-unnecessary `resumedMessages` local state. (depends on T007)
 - [X] T016 [US4] Update `frontend/app/(app)/recommend/page.test.tsx`: a test that a `?thread_id=` link for a thread not currently held triggers the fetch and renders its turns; a test that a `?thread_id=` link matching the store's current `threadId` does **not** trigger a `GET /recommend/sessions/{id}` call; a test that after resuming, unmounting and remounting `RecommendPage` (now with no query param, matching plain in-app nav to `/recommend`) still shows the resumed conversation. (depends on T015)
-- [ ] T017 [US4] Manual validation: drive quickstart.md step 8 (open a session from History via "Continue conversation," then navigate away and back to plain `/recommend`) in a real browser. (depends on T015, T016)
+- [X] T017 [US4] Manual validation: drive quickstart.md step 8 (open a session from History via "Continue conversation," then navigate away and back to plain `/recommend`) in a real browser. (depends on T015, T016)
 
 **Checkpoint**: All four user stories are independently functional and interoperate correctly.
 
@@ -109,7 +109,7 @@ Frontend only, per plan.md's Project Structure — no backend, `infra/`, or `des
 - [X] T019 [P] Run `npm test` in `frontend/` and confirm the total passing count is at or above the 347 baseline recorded in the task brief. (depends on T006–T017)
 - [X] T020 Run `npm run build` in `frontend/`. (depends on T018, T019)
 - [X] T021 Run `npm run e2e:pwa` in `frontend/` and confirm the total passing count is at or above the 11 baseline. (depends on T020)
-- [ ] T022 Full manual walkthrough of `quickstart.md`'s 8-step sequence, end to end in one sitting, in a real browser — not just the per-story slices already run in T010/T012/T014/T017 — to catch any interaction between the four stories. (depends on T021)
+- [X] T022 Full manual walkthrough of `quickstart.md`'s 8-step sequence, end to end in one sitting, in a real browser — not just the per-story slices already run in T010/T012/T014/T017 — to catch any interaction between the four stories. (depends on T021)
 
 ---
 
