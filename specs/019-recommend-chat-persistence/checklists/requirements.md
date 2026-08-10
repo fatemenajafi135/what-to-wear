@@ -34,6 +34,6 @@
 - No `[NEEDS CLARIFICATION]` markers were needed — the issue and its linked design-decisions
   context (§37/§49) left the scope boundary (persist vs. reset, in-app nav vs. real reload,
   #53 out of scope) unambiguous enough to spec directly with documented assumptions instead.
-  One open question remains worth a short `/speckit-clarify` pass regardless: exactly what
-  "the same thread" means for FR-006 (comparing a URL `thread_id` against in-memory state) is
-  a genuine multi-reasonable-interpretation point best confirmed before planning locks it in.
+- `/speckit-clarify` (2026-08-11) resolved two remaining open questions: readiness re-fetches
+  every return (FR-009) rather than being persisted, and the "Start styling" error card is part
+  of what FR-001 preserves. See `## Clarifications` in spec.md.

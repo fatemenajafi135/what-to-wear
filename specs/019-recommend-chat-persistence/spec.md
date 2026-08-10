@@ -8,6 +8,13 @@
 
 **Input**: User description: "The Recommend screen's styling chat resets when the user navigates away and back. The conversation itself is NOT lost — it's durable via the LangGraph checkpointer and chat_history (backend). The screen just re-fetches and re-renders from scratch on remount, so it FEELS lost. Fix: the conversation stays alive across in-app navigation. It resets only on app close + reopen (a real reload) or an explicit 'New chat' tap." (GitHub issue #47)
 
+## Clarifications
+
+### Session 2026-08-11
+
+- Q: Should the Closet-readiness check (the gate deciding hero/chat vs. "add more items," and the sparse-closet banner) re-run every time the user returns to Recommend, or be held in persisted state and skipped on return? → A: Refetch every return — only the conversation itself is preserved; readiness always reflects the closet's current state.
+- Q: Should the "Start styling" error card ("Something went wrong pulling that together" + Try again) still be showing if the user navigates away right after it appears, then comes back? → A: Yes, preserve it — it's part of the conversation's current state, same as any pending/sent message.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Conversation survives a trip to another tab (Priority: P1)
@@ -39,6 +46,13 @@ was left, with no loading flash and no re-fetch.
 4. **Given** a Recommend conversation, **When** the user navigates away and back repeatedly (3+
    times) without sending anything new, **Then** state is preserved identically every time — no
    drift, no gradual loss of history.
+5. **Given** a "Start styling" attempt has just failed and the error card with "Try again" is
+   showing, **When** the user navigates away and back, **Then** the same error card is still
+   showing and "Try again" still resumes from the same accumulated composer text.
+6. **Given** the closet's contents changed while the user was away (e.g. items were added or
+   removed on Closet), **When** the user returns to Recommend, **Then** the insufficient-closet
+   gate and sparse-closet banner reflect the closet's current state, even though the
+   conversation itself is unchanged.
 
 ---
 
@@ -124,8 +138,9 @@ is still there, not re-fetched a second time or reset.
 
 - **FR-001**: The system MUST preserve the full in-progress Recommend conversation — sent
   messages, assistant replies, any generated outfits, the accumulated not-yet-styled composer
-  text, the active thread identity, and any in-flight request — across navigation to any other
-  in-app destination and back, with no visible reset and no re-fetch-from-scratch.
+  text, the active thread identity, any in-flight request, and a visible "Start styling" failure
+  (the error card and its "Try again" affordance) — across navigation to any other in-app
+  destination and back, with no visible reset and no re-fetch-from-scratch.
 - **FR-002**: The system MUST reset the Recommend conversation to the empty hero state when the
   user performs a real reload (closing and reopening the installed app, or a hard browser
   reload) — this is existing behavior (state does not survive a JS context restart) and MUST
@@ -150,6 +165,11 @@ is still there, not re-fetched a second time or reset.
   mechanism (LangGraph checkpointer, `chat_history`) — the fix is confined to how the frontend
   holds and re-displays state it already has, not to how or whether the backend durably stores
   the conversation.
+- **FR-009**: The Closet-readiness check (whether Recommend shows the chat vs. the insufficient-
+  closet gate, and whether the sparse-closet banner shows) MUST be re-evaluated every time the
+  user returns to Recommend, independent of the conversation-persistence mechanism — it is not
+  itself preserved, so it always reflects the closet's current contents even if those changed
+  while the user was on another screen.
 
 ### Key Entities
 
