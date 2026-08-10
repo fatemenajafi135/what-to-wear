@@ -48,6 +48,7 @@ from whattowear.repositories.supabase_closet import SupabaseClosetRepository
 from whattowear.repositories.supabase_outfits import Sort, SupabaseOutfitRepository
 from whattowear.repositories.supabase_sessions import SupabaseSessionRepository
 from whattowear.schema import CitedSource, Context, ConversationalTurnResult, ScoredOutfit, WardrobeItem
+from whattowear.scoring.combine import equal_weighted_average
 
 logger = logging.getLogger(__name__)
 
@@ -340,15 +341,21 @@ class RenamedOutfitResponse(BaseModel):
     title: str
 
 
-def match_label(rank_score: float) -> MatchLabel | None:
+def match_label(match_quality: float) -> MatchLabel | None:
     """design-system.md § Scores: labels only, never the float. Below 0.4 an
     outfit is never surfaced at all (`None`), not shown with a discouraging
-    label — the caller must treat `None` as "don't render this outfit"."""
-    if rank_score >= 0.8:
+    label — the caller must treat `None` as "don't render this outfit".
+
+    `match_quality` MUST be `combine.equal_weighted_average(outfit.scores)`,
+    never `outfit.rank_score` — `rank_score` is `combine.fit_first_lexicographic`'s
+    output, an internal ordering key (unbounded, deliberately weighted so
+    weather/formality dominate sort order) rather than a 0-1 match-quality
+    signal, and feeding it here saturates every outfit to "great"."""
+    if match_quality >= 0.8:
         return "great"
-    if rank_score >= 0.6:
+    if match_quality >= 0.6:
         return "good"
-    if rank_score >= 0.4:
+    if match_quality >= 0.4:
         return "might_work"
     return None
 
@@ -379,7 +386,7 @@ def _resolve_outfit(
     caller of this function needs. The saved row's own
     `rationale_with_citations` (Outfit detail's concern) is built
     separately, from the same `ScoredOutfit`, by `_build_rationale_with_citations`."""
-    label = match_label(outfit.rank_score)
+    label = match_label(equal_weighted_average(outfit.scores))
     if label is None:
         return None
 

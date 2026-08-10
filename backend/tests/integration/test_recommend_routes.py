@@ -150,17 +150,25 @@ def _clear_overrides() -> Iterator[None]:
     app.dependency_overrides.clear()
 
 
-def _scored_outfit(items: list[str], rank_score: float, cites: list[str]) -> ScoredOutfit:
+def _scored_outfit(items: list[str], quality: float, cites: list[str]) -> ScoredOutfit:
+    """`quality` drives every dimension score equally, so
+    `equal_weighted_average(outfit.scores)` — what `match_label` actually
+    reads — comes out to exactly `quality`. `rank_score` below is a fixed,
+    deliberately unrelated placeholder shaped like a real
+    `combine.fit_first_lexicographic` value (an internal ordering key, not
+    a 0-1 quality score) precisely so these tests would fail if match
+    labeling ever again read `outfit.rank_score` instead of the
+    dimension-score average."""
     return ScoredOutfit(
         items=items,
         rationale=[Rationale(text="A clean, casual pairing.", cites=cites)],
         scores=[
-            DimensionScore(dimension="color_harmony", value=0.8, reason="ok"),
-            DimensionScore(dimension="formality_coherence", value=0.8, reason="ok"),
-            DimensionScore(dimension="weather_fitness", value=0.8, reason="ok"),
-            DimensionScore(dimension="silhouette_balance", value=0.8, reason="ok"),
+            DimensionScore(dimension="color_harmony", value=quality, reason="ok"),
+            DimensionScore(dimension="formality_coherence", value=quality, reason="ok"),
+            DimensionScore(dimension="weather_fitness", value=quality, reason="ok"),
+            DimensionScore(dimension="silhouette_balance", value=quality, reason="ok"),
         ],
-        rank_score=rank_score,
+        rank_score=900.7,
     )
 
 
@@ -176,7 +184,7 @@ def _generate_outfit(
     persistence, so the resulting row goes through the real
     `send_message`/`SupabaseOutfitRepository.create` path. Returns the
     generated `StylingOutfit` dict (already carrying a real `id`)."""
-    outfit = _scored_outfit(item_ids, rank_score=0.85, cites=cites or [])
+    outfit = _scored_outfit(item_ids, quality=0.85, cites=cites or [])
     result = SuggestResult(outfits=[outfit], sources=sources or [])
     mock_graph = MagicMock()
     mock_graph.invoke.return_value = {"result": result, "note": None}
@@ -383,7 +391,7 @@ class TestSendMessage:
     def test_happy_path_returns_only_owned_items_and_no_numbers(self, ready_closet: dict[str, str]) -> None:
         outfit = _scored_outfit(
             [ready_closet["top"], ready_closet["bottom"], ready_closet["shoes"]],
-            rank_score=0.85,
+            quality=0.85,
             cites=["rule-1"],
         )
         result = SuggestResult(
@@ -426,18 +434,18 @@ class TestSendMessage:
         assert row["rationale_with_citations"] == "A clean, casual pairing. [1]"
         assert row["citations"] == [{"number": 1, "text": "Pair casual denim with a relaxed top."}]
         assert row["dimension_scores"] == [
-            {"dimension": "color_harmony", "value": 0.8},
-            {"dimension": "formality_coherence", "value": 0.8},
-            {"dimension": "weather_fitness", "value": 0.8},
-            {"dimension": "silhouette_balance", "value": 0.8},
+            {"dimension": "color_harmony", "value": 0.85},
+            {"dimension": "formality_coherence", "value": 0.85},
+            {"dimension": "weather_fitness", "value": 0.85},
+            {"dimension": "silhouette_balance", "value": 0.85},
         ]
 
     def test_multiple_outfits_returned_in_rank_order_below_floor_dropped_and_all_saved(
         self, ready_closet: dict[str, str]
     ) -> None:
-        great = _scored_outfit([ready_closet["top"]], rank_score=0.85, cites=[])
-        good = _scored_outfit([ready_closet["bottom"]], rank_score=0.65, cites=[])
-        below_floor = _scored_outfit([ready_closet["shoes"]], rank_score=0.2, cites=[])
+        great = _scored_outfit([ready_closet["top"]], quality=0.85, cites=[])
+        good = _scored_outfit([ready_closet["bottom"]], quality=0.65, cites=[])
+        below_floor = _scored_outfit([ready_closet["shoes"]], quality=0.2, cites=[])
         result = SuggestResult(outfits=[great, good, below_floor], sources=[])
         mock_graph = MagicMock()
         mock_graph.invoke.return_value = {"result": result, "note": None}
@@ -476,7 +484,7 @@ class TestSendMessage:
         assert body["reply_text"] == "Your closet doesn't have enough items to assemble an outfit for this request."
 
     def test_all_outfits_below_floor_is_the_empty_case_not_an_error(self, ready_closet: dict[str, str]) -> None:
-        below_floor = _scored_outfit([ready_closet["top"]], rank_score=0.1, cites=[])
+        below_floor = _scored_outfit([ready_closet["top"]], quality=0.1, cites=[])
         result = SuggestResult(outfits=[below_floor], sources=[])
         mock_graph = MagicMock()
         mock_graph.invoke.return_value = {"result": result, "note": None}
@@ -522,7 +530,7 @@ class TestSendMessage:
         internal refinement parsing (unmodified, already evaluated elsewhere,
         constitution Principle I) — is that a `thread_id` is minted once and
         then correctly threaded through on every subsequent call."""
-        outfit = _scored_outfit([ready_closet["top"]], rank_score=0.85, cites=[])
+        outfit = _scored_outfit([ready_closet["top"]], quality=0.85, cites=[])
         result = SuggestResult(outfits=[outfit], sources=[])
         mock_graph = MagicMock()
         mock_graph.invoke.return_value = {"result": result, "note": None}
@@ -550,7 +558,7 @@ class TestSendMessage:
         shown since it isn't in the caller's own wardrobe; the persisted row
         must match what was shown, not the pipeline's raw item list."""
         catalog_item_id = str(uuid.uuid4())
-        outfit = _scored_outfit([ready_closet["top"], catalog_item_id], rank_score=0.85, cites=[])
+        outfit = _scored_outfit([ready_closet["top"], catalog_item_id], quality=0.85, cites=[])
         result = SuggestResult(outfits=[outfit], sources=[])
         mock_graph = MagicMock()
         mock_graph.invoke.return_value = {"result": result, "note": None}
@@ -652,7 +660,7 @@ class TestSendMessage:
         """design-decisions.md §45: outfits.thread_id is set from the
         request's own thread_id, and the styling_reply message's
         outfit_ids matches what was actually persisted."""
-        outfit = _scored_outfit([ready_closet["top"]], rank_score=0.85, cites=[])
+        outfit = _scored_outfit([ready_closet["top"]], quality=0.85, cites=[])
         result = SuggestResult(outfits=[outfit], sources=[])
         mock_graph = MagicMock()
         mock_graph.invoke.return_value = {"result": result, "note": None}
@@ -835,7 +843,7 @@ class TestListSessions:
         assert sessions[0]["outfit_count"] == 0
 
     def test_outfit_count_reflects_only_outfits_linked_to_that_thread(self, ready_closet: dict[str, str]) -> None:
-        outfit = _scored_outfit([ready_closet["top"]], rank_score=0.85, cites=[])
+        outfit = _scored_outfit([ready_closet["top"]], quality=0.85, cites=[])
         result = SuggestResult(outfits=[outfit], sources=[])
         mock_graph = MagicMock()
         mock_graph.invoke.return_value = {"result": result, "note": None}
@@ -1137,10 +1145,10 @@ class TestGetOutfit:
         assert body["rationale_with_citations"] == "A clean, casual pairing. [1]"
         assert body["citations"] == [{"number": 1, "text": "Pair casual denim with a relaxed top."}]
         assert body["dimension_scores"] == [
-            {"dimension": "color_harmony", "value": 0.8},
-            {"dimension": "formality_coherence", "value": 0.8},
-            {"dimension": "weather_fitness", "value": 0.8},
-            {"dimension": "silhouette_balance", "value": 0.8},
+            {"dimension": "color_harmony", "value": 0.85},
+            {"dimension": "formality_coherence", "value": 0.85},
+            {"dimension": "weather_fitness", "value": 0.85},
+            {"dimension": "silhouette_balance", "value": 0.85},
         ]
 
     def test_omits_an_item_no_longer_owned(self, ready_closet: dict[str, str]) -> None:
