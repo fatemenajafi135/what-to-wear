@@ -2995,10 +2995,21 @@ the corpus — it is what sent this investigation toward "set the variable" inst
 The KB is evaluated code, and the constitution requires an eval run for any refactor of
 it. The `corpus` branch is byte-for-byte unchanged and remains the default wherever a
 corpus is configured, so the evaluated path is untouched by construction; the new branch
-is reachable only by explicit opt-in. On the design owner's decision, verification here
-was a single live reconnect + retrieval check (recorded above) rather than a full eval
-run, deferred until staging is working end to end. **The full run against
-`docs/eval-baselines/` is still outstanding and owed before this is treated as settled.**
+is reachable only by explicit opt-in. Initial verification here was a single live
+reconnect + retrieval check (recorded above), deferred until staging was working end to
+end.
+
+**Closed 2026-08-11 — `docs/eval-baselines/017-kb-reconnect/`.** Full golden set (24
+cases), all three strategies, `corpus` mode vs `reconnect` mode run back-to-back on the
+same day, same corpus, same Qdrant collection. `retrieval_recall` — the one metric that
+depends purely on KB content — was **byte-identical between the two modes across every
+strategy** (0.79 / 0.94 / 0.94 baseline/hybrid/advanced, both runs), and matches the
+last recorded `advanced`/`grounded` baseline (`010-engine`, 2026-07-31: 0.94).
+`owned_only`, `cites_grounded`, `every_choice_cites`, `occasion_fit`,
+`respects_exclusions`, `all_have_four_scores` and `ranked_descending` were `1.00` in
+both runs, every strategy. See `COMPARISON.md` in that directory for the full table and
+the generation-dependent metrics' expected run-to-run drift. The eval run this section
+named as outstanding is done; §59 is settled.
 
 ### Rejected alternatives
 
