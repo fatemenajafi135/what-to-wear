@@ -32,13 +32,14 @@ from whattowear.colors import is_hex, name_to_hex, nearest_names, normalize_hex
 from whattowear.core.config import get_settings
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
 from whattowear.schema import (
+    BoundingBox,
     CreateWardrobeItemFromUploadRequest,
     ExtractedAttributes,
     PhotoExtractionResponse,
     WardrobeItem,
     WardrobeItemPatch,
 )
-from whattowear.vision import extract_attributes_from_image
+from whattowear.vision import detect_garments_from_image
 
 logger = logging.getLogger(__name__)
 
@@ -75,19 +76,27 @@ class ClosetItemView(WardrobeItem):
     time, never stored (data-model.md §5) — `None` when the item has no
     photo. Populated by the route, not this classmethod, since signing
     needs the caller's own access token, which this model has no access to
-    and shouldn't (`ports.ClosetRepository` stays untouched)."""
+    and shouldn't (`ports.ClosetRepository` stays untouched).
+
+    `isolated_photo_url` (feature 018) is the same idea applied to
+    `isolated_photo_path` — signed at read time, `None` when the item has
+    no isolated image (a normal, saveable outcome, not an error)."""
 
     category_group: CategoryGroup
     color_names: list[str]
     photo_url: str | None = None
+    isolated_photo_url: str | None = None
 
     @classmethod
-    def from_wardrobe_item(cls, item: WardrobeItem, photo_url: str | None = None) -> ClosetItemView:
+    def from_wardrobe_item(
+        cls, item: WardrobeItem, photo_url: str | None = None, isolated_photo_url: str | None = None
+    ) -> ClosetItemView:
         return cls(
             **item.model_dump(),
             category_group=group_of(item.category),
             color_names=nearest_names(item.colors),
             photo_url=photo_url,
+            isolated_photo_url=isolated_photo_url,
         )
 
 
@@ -172,13 +181,22 @@ def list_closet_items(
     has_more = offset + page_size < total
 
     # One batched sign call for the whole page rather than N sequential ones
-    # (research.md §2 addendum).
-    photo_paths = [item.photo_path for item in page if item.photo_path is not None]
-    signed_urls = storage.create_signed_urls(access_token, photo_paths)
+    # (research.md §2 addendum) — extended in feature 018 to also cover
+    # isolated_photo_path, mixed into the same request/response dict since
+    # create_signed_urls is keyed by path string regardless of which column
+    # a path came from.
+    all_paths = [item.photo_path for item in page if item.photo_path is not None]
+    all_paths += [item.isolated_photo_path for item in page if item.isolated_photo_path is not None]
+    signed_urls = storage.create_signed_urls(access_token, all_paths)
 
     return ClosetItemsResponse(
         items=[
-            ClosetItemView.from_wardrobe_item(item, photo_url=signed_urls.get(item.photo_path or "")) for item in page
+            ClosetItemView.from_wardrobe_item(
+                item,
+                photo_url=signed_urls.get(item.photo_path or ""),
+                isolated_photo_url=signed_urls.get(item.isolated_photo_path or ""),
+            )
+            for item in page
         ],
         total=total,
         has_more=has_more,
@@ -206,7 +224,10 @@ def get_closet_item(
         # another user — never reveals which (contracts/closet.md).
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
     photo_url = storage.create_signed_url(access_token, item.photo_path) if item.photo_path else None
-    return ClosetItemView.from_wardrobe_item(item, photo_url=photo_url)
+    isolated_photo_url = (
+        storage.create_signed_url(access_token, item.isolated_photo_path) if item.isolated_photo_path else None
+    )
+    return ClosetItemView.from_wardrobe_item(item, photo_url=photo_url, isolated_photo_url=isolated_photo_url)
 
 
 @router.patch("/closet/items/{item_id}")
@@ -278,14 +299,36 @@ def delete_closet_item(
 
 
 class PhotoExtractionView(PhotoExtractionResponse):
-    """`PhotoExtractionResponse` plus a display-only computed field, same
-    pattern as `ClosetItemView` over `WardrobeItem`: the review card's
-    Color field pre-fills with a NAME (`colors.nearest_names`), not the
-    raw hex `extracted.colors` carries — computed here, route-local, so
-    `PhotoExtractionResponse`/`ExtractedAttributes` (feature 007's AI-layer
-    contract) stay untouched (design-decisions.md §23.4, research.md §5)."""
+    """`PhotoExtractionResponse` plus two display-only computed fields,
+    same pattern as `ClosetItemView` over `WardrobeItem`: the review
+    card's Color field pre-fills with a NAME (`colors.nearest_names`), not
+    the raw hex `extracted.colors` carries, and `isolated_photo_url` is a
+    signed URL (feature 018) minted for `isolated_photo_path`, same idea
+    as `ClosetItemView.photo_url` over `WardrobeItem.photo_path` — both
+    computed here, route-local, so `PhotoExtractionResponse`/
+    `ExtractedAttributes` (feature 007's AI-layer contract) stay untouched
+    (design-decisions.md §23.4, research.md §5)."""
 
     color_names: list[str]
+    isolated_photo_url: str | None = None
+
+
+class PhotoExtractionListView(BaseModel):
+    """Same shape `PhotoExtractionListResponse` describes (`drafts` +
+    `truncated`), with `drafts` narrowed to `PhotoExtractionView` — a fresh
+    model rather than a subclass overriding `PhotoExtractionListResponse.
+    drafts`'s type, which mypy rejects (`list` is invariant). Matches
+    `ClosetItemsResponse`'s own fresh-model pattern for the same "list of
+    route-local views" shape."""
+
+    drafts: list[PhotoExtractionView]
+    truncated: bool
+
+
+# The whole-photo fallback region for the two single-draft cases below
+# (specs/018-photo-to-items/research.md §2) — `detect_garments_from_image`
+# itself never constructs this; it's the route's own fallback shape.
+_WHOLE_PHOTO_REGION = BoundingBox(x=0, y=0, width=1, height=1)
 
 
 @router.post("/closet/items/extract")
@@ -293,11 +336,15 @@ def extract_closet_item(
     photo: UploadFile = File(...),  # noqa: B008
     user_id: str = Depends(get_current_user_id),  # noqa: B008
     access_token: str = Depends(get_current_access_token),  # noqa: B008
-) -> PhotoExtractionView:
+) -> PhotoExtractionListView:
     """Draft extraction only — persists nothing to `wardrobe_items`
-    (contracts/wardrobe-items-extract.md). Extraction failure is always a
-    200 with `extraction_ok: false`; only a genuine Storage failure 5xxs
-    (handoff §5.2)."""
+    (contracts/closet-items-extract.md, superseding contracts/wardrobe-
+    items-extract.md's response shape). Always returns a LIST of drafts,
+    one per detected garment, even when there's exactly one (feature 018,
+    spec.md FR-001/FR-004) — an extension of the existing contract, not a
+    new route. Extraction failure is always a 200 with `extraction_ok:
+    false` on a single fallback draft; only a genuine Storage failure 5xxs
+    (handoff §5.2, unchanged)."""
     if photo.content_type not in _SUPPORTED_UPLOAD_TYPES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unsupported image type")
 
@@ -313,31 +360,65 @@ def extract_closet_item(
     photo_path = storage.upload_photo(access_token, user_id, file_bytes, photo.filename or "photo", photo.content_type)
 
     try:
-        extracted = extract_attributes_from_image(file_bytes, photo.content_type)
-        extraction_ok = True
+        detections, truncated = detect_garments_from_image(file_bytes, photo.content_type)
     except Exception:
         # This is always a genuine CALL failure (network, gateway auth,
         # rate limit, a response the structured-output parser couldn't
-        # handle) — never a legitimate "no garment visible" result.
-        # _EXTRACTION_SCHEMA (vision.py) makes every field nullable
-        # specifically so the VLM can express "I don't see a garment" by
-        # returning nulls in an otherwise-successful call; that path
-        # never raises and never reaches this except block. Still never a
-        # 5xx (the photo is already uploaded, so the user can proceed to
-        # manual entry without re-uploading) — but it must not be
-        # invisible either: without this, a misconfigured gateway and a
-        # genuine no-garment photo were indistinguishable from the logs
-        # (defect 3, found in first live-stack review).
-        logger.exception("Photo extraction failed for photo_path=%r", photo_path)
-        extracted = ExtractedAttributes()
-        extraction_ok = False
+        # handle) — never a legitimate "no garment visible" result (that's
+        # the `not detections` branch below). Still never a 5xx (the photo
+        # is already uploaded, so the user can proceed to manual entry
+        # without re-uploading) — but it must not be invisible either:
+        # without this, a misconfigured gateway and a genuine no-garment
+        # photo were indistinguishable from the logs (defect 3, found in
+        # first live-stack review of feature 006). Falls back to today's
+        # single-draft behavior, unchanged in shape from before feature 018
+        # (spec.md FR-003).
+        logger.exception("Garment detection failed for photo_path=%r", photo_path)
+        return PhotoExtractionListView(
+            drafts=[
+                PhotoExtractionView(
+                    photo_path=photo_path,
+                    extracted=ExtractedAttributes(),
+                    extraction_ok=False,
+                    region=_WHOLE_PHOTO_REGION,
+                    color_names=[],
+                )
+            ],
+            truncated=False,
+        )
 
-    return PhotoExtractionView(
-        photo_path=photo_path,
-        extracted=extracted,
-        extraction_ok=extraction_ok,
-        color_names=nearest_names(extracted.colors or []),
-    )
+    if not detections:
+        # The call succeeded but confidently found nothing — today's
+        # existing "call succeeded, nothing found" semantics
+        # (extraction_ok=True, all-null), now expressed as a one-element
+        # list instead of a lone object (spec.md FR-003). Never zero
+        # drafts for a successfully uploaded photo.
+        return PhotoExtractionListView(
+            drafts=[
+                PhotoExtractionView(
+                    photo_path=photo_path,
+                    extracted=ExtractedAttributes(),
+                    extraction_ok=True,
+                    region=_WHOLE_PHOTO_REGION,
+                    color_names=[],
+                )
+            ],
+            truncated=False,
+        )
+
+    # `isolated_photo_path` stays None here — isolation is wired into this
+    # route in Phase 6 (feature 018, US4/#48, T041), not this phase.
+    drafts = [
+        PhotoExtractionView(
+            photo_path=photo_path,
+            extracted=detection.attributes,
+            extraction_ok=True,
+            region=detection.region,
+            color_names=nearest_names(detection.attributes.colors or []),
+        )
+        for detection in detections
+    ]
+    return PhotoExtractionListView(drafts=drafts, truncated=truncated)
 
 
 @router.post("/closet/items/from-upload", status_code=status.HTTP_201_CREATED)
@@ -348,17 +429,28 @@ def create_closet_item_from_upload(
     repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
 ) -> ClosetItemView:
     """Creates a `wardrobe_items` row from a previously-extracted (and
-    possibly corrected) draft (contracts/wardrobe-items-create-from-upload.md).
-    `ports.ClosetRepository` is unchanged — this calls a repository method
-    beyond the Protocol, same pattern 005's four write methods already
-    established (handoff trap 5)."""
+    possibly corrected) draft (contracts/closet-items-from-upload.md,
+    superseding contracts/wardrobe-items-create-from-upload.md's field
+    list). `ports.ClosetRepository` is unchanged — this calls a repository
+    method beyond the Protocol, same pattern 005's four write methods
+    already established (handoff trap 5)."""
     if not body.photo_path.startswith(f"{user_id}/"):
         # The caller's own extract call always produces a path under their
         # own prefix (adapters.storage.upload_photo) — the same prefix
         # Storage RLS matches on. A path outside it can never be this
         # user's own photo.
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "photo_path does not belong to this user")
+    if body.isolated_photo_path is not None and not body.isolated_photo_path.startswith(f"{user_id}/"):
+        # Same ownership-prefix check as photo_path above, extended to the
+        # isolated image (feature 018) — a Storage path is access-control
+        # relevant, unlike e.g. photo_background_color, a cosmetic hex
+        # value with no path/ownership implication (found in
+        # /speckit-analyze, finding "closet-items-from-upload.md's 422s").
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "isolated_photo_path does not belong to this user")
 
     item = repository.create_wardrobe_item_from_upload(user_id, body)
     photo_url = storage.create_signed_url(access_token, item.photo_path) if item.photo_path else None
-    return ClosetItemView.from_wardrobe_item(item, photo_url=photo_url)
+    isolated_photo_url = (
+        storage.create_signed_url(access_token, item.isolated_photo_path) if item.isolated_photo_path else None
+    )
+    return ClosetItemView.from_wardrobe_item(item, photo_url=photo_url, isolated_photo_url=isolated_photo_url)

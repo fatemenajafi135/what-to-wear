@@ -3011,3 +3011,66 @@ run, deferred until staging is working end to end. **The full run against
 | (e) Have the deployed instance ingest on boot | Needs the corpus (which it does not have), re-embeds on every cold start, and on Render's free tier that is every ~15 idle minutes. |
 
 ---
+
+## 61. Feature 018 (photo-to-items) — extraction accuracy before/after (#46)
+
+**Status: PENDING.** `prompts/vision_system.md` was rewritten v2 → v3 for multi-garment
+detection, targeting the three failure modes issue #46 names (wrong category, missed
+attributes, vague names) — see the prompt file itself and
+`specs/018-photo-to-items/research.md` §1 for what changed and why. Spec.md FR-009 requires
+that claim be demonstrated by `eval/vision_harness.py` against the real fixture corpus
+before/after, not asserted from reading the prompt — and that corpus does not exist yet
+(`evals/fixtures/vision_samples/` still holds only the two pre-018 synthetic placeholders as
+of this entry). Sourcing 10+ real closet photos (tasks.md T003/T027) is work only a human
+with an actual closet and camera can do; the harness extension itself
+(`eval/vision_harness.py`'s multi-detection `_check`, `expected_count`) is implemented and
+unit-tested (`tests/unit/eval/test_vision_harness.py`) and ready to run the moment the corpus
+lands.
+
+**Owed before this entry is treated as settled**: the actual before/after pass counts and
+per-case failure list (tasks.md T031–T034), recorded here.
+
+---
+
+## 62. Feature 018 (photo-to-items) — isolation strategy comparison and default (#48)
+
+**Status: PENDING**, same reason as §61. `eval/vision_harness.py --isolation-report`
+(research.md §9) is implemented — it runs every fixture-corpus image through each configured
+`IsolationClient` strategy (segmentation/generative/hybrid) and prints per-strategy success
+rate, p50 latency, and cost — but needs the same real fixture corpus §61 is waiting on, plus
+a live `WTW_SEGMENTATION_API_URL`/`WTW_SEGMENTATION_API_KEY` (no default provider is
+configured; research.md §5 deliberately leaves the vendor choice as a deployment-time
+decision, not a hardcoded one).
+
+**Owed before this entry is treated as settled**: the per-strategy report table; the real
+`wtw_isolation_strategy` default (currently `"segmentation"`, a reasoned-but-unmeasured
+placeholder — spec.md FR-016 requires it be set from measured data); the real
+`wtw_isolation_hybrid_min_area`/`_max_area` values (currently `0.03`/`0.92`, same
+placeholder status, research.md §6); and confirmation against SC-005 (majority success rate
+on worn/flat-lay/occluded fixtures) and SC-008 (the $0.05/photo cost ceiling at the chosen
+default, including the detection call's own cost, not isolation cost alone).
+
+---
+
+## 63. Feature 018 (photo-to-items) — copy without a design-system entry: the detection-cap notice
+
+**Status: decided, DRAFT wording.** Spec.md FR-002 requires the user be told when a photo had
+more garments than the 8-detection cap kept, rather than silently dropping the extras. No
+copy for this exists in `design/design-system.md`'s table — the same situation
+`cameraPrimerCopy` was already in when feature 006 added it (§23.6 above), handled the same
+way: written here rather than invented silently in code (Principle VIII), and flagged DRAFT
+in `lib/add-item-copy.ts` until the design owner reviews it.
+
+Rendered via the existing `Banner` component (design-system.md §3, `variant="info"` —
+`--color-accent-soft` background), not a bespoke element — this is exactly the "full-width
+inline strip, optional message" shape the component already exists for, on the same review
+card the truncated photo's cards render on.
+
+**Current wording** (`addItemCopy.truncated.body`): *"I could only add the first 8 items
+from that photo. Add the rest with another photo."* Hardcodes "8" rather than reading
+`wtw_max_detections_per_photo` into the copy string — the number is stable app behavior a
+user can act on ("try a smaller batch"), and templating a config value into user-facing copy
+for a limit that essentially never changes was judged not worth the indirection. Revisit if
+the cap itself ever becomes user-configurable.
+
+---

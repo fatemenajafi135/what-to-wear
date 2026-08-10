@@ -331,11 +331,23 @@ class TestExtractAndCreateFromUpload:
 
     def test_extract_persists_nothing_to_wardrobe_items(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # FR-002: a scan alone must never create a closet item.
-        from whattowear.schema import ExtractedAttributes
+        from whattowear.schema import BoundingBox, DetectedGarment, ExtractedAttributes
 
         monkeypatch.setattr(closet_routes.storage, "upload_photo", MagicMock(return_value=f"{USER_A}/fake.jpg"))
         monkeypatch.setattr(
-            closet_routes, "extract_attributes_from_image", MagicMock(return_value=ExtractedAttributes(category="top"))
+            closet_routes,
+            "detect_garments_from_image",
+            MagicMock(
+                return_value=(
+                    [
+                        DetectedGarment(
+                            region=BoundingBox(x=0, y=0, width=1, height=1),
+                            attributes=ExtractedAttributes(category="top"),
+                        )
+                    ],
+                    False,
+                )
+            ),
         )
         with _client_as(USER_A) as client:
             extract_response = client.post(
@@ -343,7 +355,9 @@ class TestExtractAndCreateFromUpload:
                 files={"photo": ("shirt.jpg", b"fake-bytes", "image/jpeg")},
             )
             assert extract_response.status_code == 200
-            assert extract_response.json()["extraction_ok"] is True
+            drafts = extract_response.json()["drafts"]
+            assert len(drafts) == 1
+            assert drafts[0]["extraction_ok"] is True
 
             list_response = client.get("/api/v1/closet/items")
             assert list_response.json()["total"] == 0
@@ -351,7 +365,7 @@ class TestExtractAndCreateFromUpload:
     def test_extraction_failure_is_200_with_extraction_ok_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(closet_routes.storage, "upload_photo", MagicMock(return_value=f"{USER_A}/fake.jpg"))
         monkeypatch.setattr(
-            closet_routes, "extract_attributes_from_image", MagicMock(side_effect=RuntimeError("gateway down"))
+            closet_routes, "detect_garments_from_image", MagicMock(side_effect=RuntimeError("gateway down"))
         )
         with _client_as(USER_A) as client:
             response = client.post(
@@ -359,9 +373,10 @@ class TestExtractAndCreateFromUpload:
                 files={"photo": ("shirt.jpg", b"fake-bytes", "image/jpeg")},
             )
         assert response.status_code == 200
-        body = response.json()
-        assert body["extraction_ok"] is False
-        assert body["extracted"]["category"] is None
+        drafts = response.json()["drafts"]
+        assert len(drafts) == 1
+        assert drafts[0]["extraction_ok"] is False
+        assert drafts[0]["extracted"]["category"] is None
 
     def test_detected_attributes_are_stored_exactly_as_sent(self) -> None:
         """The scan's findings are what gets stored. This route used to

@@ -182,6 +182,13 @@ class Settings(BaseSettings):
     # §48) — counted from existing `messages` rows, not a separate counter.
     wtw_conversation_turn_cap: int = 6
 
+    # --- Photo to items (feature 018) --------------------------------------------
+    # Maximum garments accepted from one photo (spec.md FR-002) — bounds worst-case
+    # detection call cost/latency and how many review cards one batch asks a user
+    # to page through. Enforced in Python (vision.py), not the JSON schema
+    # (research.md §3).
+    wtw_max_detections_per_photo: int = 8
+
     # --- CORS (feature 017) — deployment readiness --------------------------------
     # Comma-separated list of allowed origins. Optional; unset means the local
     # development defaults. Parsing lives in the module-level

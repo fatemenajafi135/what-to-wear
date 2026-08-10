@@ -82,6 +82,12 @@ class WardrobeItem(BaseModel):
     pattern: str | None = None  # free-text, matches fabric's shape
     fit: str | None = None  # free-text, matches fabric's shape
     photo_path: str | None = None  # Storage object path, set once at creation
+    # Feature 018: the background-removed image, when isolation succeeded at
+    # save time. Storage object path, same shape as photo_path — mirrors it
+    # exactly rather than introducing a second kind of reference. NULL is a
+    # normal, saveable outcome (isolation is best-effort), never an error
+    # state (spec.md FR-013).
+    isolated_photo_path: str | None = None
     # Presentation-only: pads a non-square photo to 1:1. NOT a garment colour
     # — keeping it out of `colors` keeps the backdrop out of the colour-harmony
     # scorer (docs/design-decisions.md §31).
@@ -188,12 +194,58 @@ class ExtractedAttributes(BaseModel):
             return None
 
 
+class BoundingBox(BaseModel):
+    """A detection's region within the original photo, as fractions of its
+    width/height (0-1) — resolution-independent, so the frontend applies it
+    against the browser's own naturalWidth/naturalHeight rather than the
+    backend needing to know the display size (specs/018-photo-to-items/
+    research.md §4). `{0,0,1,1}` means "the whole photo" — the fallback
+    region for the single-draft cases vision.detect_garments_from_image
+    never itself constructs (that's the route's job, see closet.py)."""
+
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    width: float = Field(gt=0, le=1)
+    height: float = Field(gt=0, le=1)
+
+
+class DetectedGarment(BaseModel):
+    """One detection from vision.detect_garments_from_image — a region plus
+    the same attribute set a single-item photo has always produced. Feature
+    018 (photo-to-items): one VLM call now returns a list of these instead
+    of one ExtractedAttributes for the whole photo (research.md §1)."""
+
+    region: BoundingBox
+    attributes: ExtractedAttributes
+
+
 class PhotoExtractionResponse(BaseModel):
-    """What a photo-extraction endpoint returns — an unsaved draft."""
+    """What one detection's draft looks like — an unsaved draft. Unchanged
+    shape from before feature 018 (photo_path, extracted, extraction_ok), so
+    a caller inspecting a single element of the now-list response
+    (PhotoExtractionListResponse) sees exactly what the old single-object
+    response returned (spec.md FR-004)."""
 
     photo_path: str
     extracted: ExtractedAttributes
     extraction_ok: bool
+    region: BoundingBox
+    # Storage object path of the isolated image, when isolation succeeded
+    # for this detection. Always present, possibly null — never omitted, so
+    # clients don't need an `in` check (contracts/closet-items-extract.md).
+    isolated_photo_path: str | None = None
+
+
+class PhotoExtractionListResponse(BaseModel):
+    """POST /closet/items/extract's actual response shape from feature 018
+    on: always a list, even when it holds exactly one draft (spec.md
+    FR-001) — an extension of the existing contract, not a new route."""
+
+    drafts: list[PhotoExtractionResponse]
+    # True when more garments were detected than wtw_max_detections_per_photo
+    # kept (spec.md FR-002) — the 8 kept are the most confidently/prominently
+    # detected, never a silent drop.
+    truncated: bool
 
 
 class ConversationalTurnResult(BaseModel):
@@ -252,6 +304,12 @@ class CreateWardrobeItemFromUploadRequest(BaseModel):
     matching `WardrobeItem`'s own existing optionality for both."""
 
     photo_path: str
+    # Feature 018: passed straight through from the extract response's
+    # matching draft, unmodified — this route does not re-attempt isolation
+    # or otherwise touch it beyond persisting it and the ownership-prefix
+    # check below (spec.md FR-013 — isolation failure is never retried at
+    # save time). None when the draft never got a usable isolated image.
+    isolated_photo_path: str | None = None
     category: str
     colors: list[str] = Field(min_length=1)
     formality: Formality

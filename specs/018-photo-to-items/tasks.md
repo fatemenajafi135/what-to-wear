@@ -24,10 +24,15 @@ Backend: `backend/src/whattowear/`, tests in `backend/tests/{unit,integration}`,
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm `backend/.env` has `AI_GATEWAY_API_KEY` set (copy `backend/.env.example` if
-      missing) — required from Phase 2 onward for any live verification.
-- [ ] T002 Confirm `npx supabase start` is running locally, for T004's migration.
-- [ ] T003 [P] Identify the source of 10+ real closet photos for the expanded fixture corpus
+- [x] T001 Confirm `backend/.env` has `AI_GATEWAY_API_KEY` set (copy `backend/.env.example` if
+      missing) — required from Phase 2 onward for any live verification. **Confirmed present**;
+      the actual value's validity is only provable by a live call (T023/T026/etc.).
+- [x] T002 Confirm `npx supabase start` is running locally, for T004's migration. **Confirmed** —
+      already running under the `whattowear` project (config.toml's `project_id`); CLI commands
+      for this repo must run from `infra/supabase/` (or `--workdir infra/supabase`), not repo
+      root — repo root has no `supabase/` directory of its own.
+- [ ] T003 [P] **Needs the human** — identify the source of 10+ real closet photos for the
+      expanded fixture corpus
       (T027) — a real closet, phone camera roll, or equivalent; confirm they can be committed
       under the tracked `evals/fixtures/` carve-out (Constitution Principle X) before Phase 5.
       **10, not 8** (corrected in `/speckit-analyze`, finding F2): spec.md's Assumptions require
@@ -43,19 +48,19 @@ serves it. No user story is independently testable until this phase is done. Iso
 deliberately **not** part of this phase (see Organization above) — every field this phase adds
 for it (`isolated_photo_path`/`_url`) exists but stays `null` until Phase 6.
 
-- [ ] T004 [P] Write `infra/supabase/migrations/0013_isolated_photo.sql` (data-model.md §1) —
+- [x] T004 [P] Write `infra/supabase/migrations/0013_isolated_photo.sql` (data-model.md §1) —
       `wardrobe_items.isolated_photo_path text`, nullable, no default. Apply via
       `npx supabase db reset`; confirm the column exists and no existing row is affected.
-- [ ] T005 [P] Add `wtw_max_detections_per_photo: int = 8` to `Settings` in
+- [x] T005 [P] Add `wtw_max_detections_per_photo: int = 8` to `Settings` in
       `backend/src/whattowear/core/config.py` (data-model.md §3; isolation-specific settings are
       added later, in T041).
-- [ ] T006 Extend `backend/src/whattowear/schema.py` (data-model.md §2): add `BoundingBox`; add
+- [x] T006 Extend `backend/src/whattowear/schema.py` (data-model.md §2): add `BoundingBox`; add
       `DetectedGarment` (`region: BoundingBox`, `attributes: ExtractedAttributes`); extend
       `PhotoExtractionResponse` with `region: BoundingBox` and `isolated_photo_path: str | None
       = None`; add `PhotoExtractionListResponse` (`drafts: list[PhotoExtractionView]`,
       `truncated: bool`); add `isolated_photo_path: str | None = None` to both `WardrobeItem` and
       `CreateWardrobeItemFromUploadRequest`. (`ExtractedAttributes` itself is unchanged — FR-005.)
-- [ ] T007 Rewrite `backend/src/whattowear/vision.py`: replace `extract_attributes_from_image`
+- [x] T007 Rewrite `backend/src/whattowear/vision.py`: replace `extract_attributes_from_image`
       with `detect_garments_from_image(image_bytes, mime_type) -> tuple[list[DetectedGarment],
       bool]` (the `bool` is `truncated`). Extend `_EXTRACTION_SCHEMA` into a `detections` array
       schema, each entry gaining `region` (research.md §1); enforce
@@ -63,7 +68,7 @@ for it (`isolated_photo_path`/`_url`) exists but stays `null` until Phase 6.
       the JSON schema itself (research.md §3). An empty `detections` array is a valid, successful
       return (`[], False`) — the caller (T009), not this function, decides what an empty result
       or a raised exception means for the response shape (research.md §2).
-- [ ] T008 Rewrite `backend/src/whattowear/prompts/vision_system.md`: `version: 2` → `version: 3`.
+- [x] T008 Rewrite `backend/src/whattowear/prompts/vision_system.md`: `version: 2` → `version: 3`.
       Instruct the model to enumerate **every** distinguishable garment in the photo (not only
       the most prominent one), order detections by confidence/prominence, and emit a `region`
       per detection. Keep every existing attribute instruction unchanged (FR-005) while
@@ -71,7 +76,7 @@ for it (`isolated_photo_path`/`_url`) exists but stays `null` until Phase 6.
       group (already in v2 — keep, reinforce per-detection), avoid vague/generic naming, and
       explicitly check each region individually for fabric/pattern/fit rather than describing the
       photo once. Wording here is a first pass — T034 iterates it against real harness results.
-- [ ] T009 Rewrite `POST /closet/items/extract` in
+- [x] T009 Rewrite `POST /closet/items/extract` in
       `backend/src/whattowear/api/v1/routes/closet.py`: call `vision.detect_garments_from_image`
       after the existing upload step (unchanged). On a raised exception: one draft,
       `extraction_ok=False`, all-null attributes, `region={0,0,1,1}` (today's exact fallback,
@@ -80,7 +85,7 @@ for it (`isolated_photo_path`/`_url`) exists but stays `null` until Phase 6.
       semantics). On 1–8 detections: one draft per detection, each `extraction_ok=True`,
       `isolated_photo_path`/`isolated_photo_url` both `null` (Phase 6 populates them). Returns
       `PhotoExtractionListResponse`.
-- [ ] T010 Update `POST /closet/items/from-upload` (`closet.py`) and
+- [x] T010 Update `POST /closet/items/from-upload` (`closet.py`) and
       `create_wardrobe_item_from_upload` (`backend/src/whattowear/repositories/supabase_closet.
       py`): accept and persist `isolated_photo_path` (contracts/closet-items-from-upload.md); add
       the same `{user_id}/` ownership-prefix `422` check `photo_path` already gets. Extend
@@ -88,12 +93,12 @@ for it (`isolated_photo_path`/`_url`) exists but stays `null` until Phase 6.
       `GET /closet/items/{item_id}`, this route's own `201` response) to also sign
       `isolated_photo_url` from `isolated_photo_path` when present, batched alongside the
       existing `photo_paths` batch-sign call.
-- [ ] T011 [P] Regenerate `frontend/lib/api/schema.d.ts` (`npm run generate:api-types`, backend
+- [x] T011 [P] Regenerate `frontend/lib/api/schema.d.ts` (`npm run generate:api-types`, backend
       running) once T006/T009/T010's shapes are stable.
-- [ ] T012 [P] `backend/tests/unit/test_vision.py`: mocked `get_chat_model`. Cases: N detections
+- [x] T012 [P] `backend/tests/unit/test_vision.py`: mocked `get_chat_model`. Cases: N detections
       parsed with their own `region`+attributes; >8 raw detections → 8 kept, `truncated=True`;
       exactly 8 → `truncated=False`; empty list is returned as `([], False)`, not raised.
-- [ ] T013 [P] `backend/tests/integration/test_closet_routes.py`: extract route — N-detection
+- [x] T013 [P] `backend/tests/integration/test_closet_routes.py`: extract route — N-detection
       mocked response → `drafts` list of length N, each field traceable to its own detection;
       `truncated` passed through; every draft's `isolated_photo_path`/`_url` is `null` (not
       absent) at this phase.

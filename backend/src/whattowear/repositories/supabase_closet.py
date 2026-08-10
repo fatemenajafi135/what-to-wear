@@ -40,15 +40,15 @@ if TYPE_CHECKING:
 _session_scope = contextmanager(get_session)
 
 # Both tables share every one of these columns except `source`, `favorite`,
-# and `photo_background_color`, which only exist on `wardrobe_items` (the
-# last one added later by migration 0008, never backfilled onto
-# `catalog_items` — shared/read-only stock photos were never in scope for a
-# per-item backdrop colour) — the catalog query below projects literal
-# `'catalog'`/`false`/`NULL` in their place so both queries can share one
-# row->model mapping.
+# `photo_background_color`, and `isolated_photo_path`, which only exist on
+# `wardrobe_items` (added by migrations 0008 and 0013 respectively, never
+# backfilled onto `catalog_items` — shared/read-only stock photos were never
+# in scope for a per-item backdrop colour or isolation) — the catalog query
+# below projects literal `'catalog'`/`false`/`NULL` in their place so both
+# queries can share one row->model mapping.
 _ITEM_COLUMNS = (
     "id, category, colors, formality, warmth, season, fabric, pattern, fit, name, notes, source, photo_path, "
-    "photo_background_color, favorite"
+    "isolated_photo_path, photo_background_color, favorite"
 )
 
 
@@ -66,6 +66,7 @@ def _row_to_wardrobe_item(row: Row[Any]) -> WardrobeItem:
         pattern=m["pattern"],
         fit=m["fit"],
         photo_path=m["photo_path"],
+        isolated_photo_path=m["isolated_photo_path"],
         photo_background_color=m["photo_background_color"],
         name=m["name"],
         notes=m["notes"],
@@ -101,6 +102,7 @@ class SupabaseClosetRepository:
             columns = (
                 _ITEM_COLUMNS.replace("source", "'catalog' AS source")
                 .replace("favorite", "false AS favorite")
+                .replace("isolated_photo_path", "NULL AS isolated_photo_path")
                 .replace("photo_background_color", "NULL AS photo_background_color")
             )
             rows = session.execute(text(f"SELECT {columns} FROM catalog_items")).fetchall()
@@ -205,16 +207,20 @@ class SupabaseClosetRepository:
         item stored `casual`/`3`/all-four-seasons no matter what the VLM had
         detected (design-decisions.md §30). `fabric`/`pattern`/`fit` insert
         as `NULL` when omitted, matching the database's own nullability —
-        an honest "not supplied" rather than an invented value."""
+        an honest "not supplied" rather than an invented value.
+        `isolated_photo_path` (feature 018) inserts unmodified — this
+        method does not re-attempt isolation or re-validate the path
+        beyond the route's own ownership-prefix check (spec.md FR-013)."""
         with _session_scope() as session:
             _set_jwt_claim(session, user_id)
             row = session.execute(
                 text(
                     "INSERT INTO wardrobe_items "
                     "(user_id, category, colors, formality, warmth, season, fabric, pattern, fit, "
-                    "name, notes, photo_path, photo_background_color, source) "
+                    "name, notes, photo_path, isolated_photo_path, photo_background_color, source) "
                     "VALUES (:user_id, :category, :colors, :formality, :warmth, :season, :fabric, "
-                    ":pattern, :fit, :name, :notes, :photo_path, :photo_background_color, 'upload') "
+                    ":pattern, :fit, :name, :notes, :photo_path, :isolated_photo_path, "
+                    ":photo_background_color, 'upload') "
                     f"RETURNING {_ITEM_COLUMNS}"
                 ),
                 {
@@ -230,6 +236,7 @@ class SupabaseClosetRepository:
                     "name": request.name,
                     "notes": request.notes,
                     "photo_path": request.photo_path,
+                    "isolated_photo_path": request.isolated_photo_path,
                     "photo_background_color": request.photo_background_color,
                 },
             ).fetchone()

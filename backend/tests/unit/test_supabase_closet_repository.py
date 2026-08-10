@@ -63,6 +63,7 @@ _ROW = {
     "notes": "A bit worn",
     "source": "upload",
     "photo_path": None,
+    "isolated_photo_path": None,
     "photo_background_color": None,
     "favorite": False,
 }
