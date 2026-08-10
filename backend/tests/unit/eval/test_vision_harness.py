@@ -66,7 +66,7 @@ def test_multi_garment_cases_declare_expected_count_and_a_list_of_sub_expectatio
     cases = load_vision_cases()
     for case in cases:
         if case.expected_count is not None and case.expected_count > 1:
-            assert isinstance(
-                case.expected, list
-            ), f"{case.id}: expected_count={case.expected_count} but `expected` is not a list"
+            assert isinstance(case.expected, list), (
+                f"{case.id}: expected_count={case.expected_count} but `expected` is not a list"
+            )
             assert len(case.expected) > 0, f"{case.id}: expected_count > 1 but `expected` is empty"
