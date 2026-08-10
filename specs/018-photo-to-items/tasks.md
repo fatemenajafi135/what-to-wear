@@ -196,33 +196,41 @@ missed attributes, and vague naming.
 
 **Independent Test**: quickstart.md Scenario 4.
 
-- [ ] T027 [US3] Retire `evals/fixtures/vision_samples/navy_top_placeholder.png` and
+- [ ] T027 [US3] **Needs the human** (real closet photos, per T003) — retire
+      `evals/fixtures/vision_samples/navy_top_placeholder.png` and
       `beige_trousers_placeholder.png` (synthetic, not real — don't count toward spec.md's "at
       least ten real closet photos"); add the 10+ real photos identified in T003 to
       `backend/evals/fixtures/vision_samples/`, covering: ≥1 single garment on a hanger, ≥2
       flat-lay/multi-garment photos, ≥1 garment worn by a person, ≥1 partially occluded garment
       (spec.md Assumptions' minimum corpus — 10+ fixtures, all real).
-- [ ] T028 [US3] Extend `backend/evals/golden_set.yaml`'s `vision_cases:` — remove `v01`/`v02`
-      (the retired placeholders' cases); one new case per real fixture; multi-garment fixtures
-      gain `expected_count`; each case's comment names which named failure mode (#46) it targets.
-- [ ] T029 [US3] Extend `backend/src/whattowear/eval/vision_harness.py`'s `_check()`: call
+- [ ] T028 [US3] Blocked on T027 — extend `backend/evals/golden_set.yaml`'s `vision_cases:` —
+      remove `v01`/`v02` (the retired placeholders' cases); one new case per real fixture;
+      multi-garment fixtures gain `expected_count`; each case's comment names which named failure
+      mode (#46) it targets.
+- [x] T029 [US3] Extend `backend/src/whattowear/eval/vision_harness.py`'s `_check()`: call
       `detect_garments_from_image`; when `expected_count` is present, compare it to the returned
       detection count; apply the existing per-field loose checks per detection (matched to the
       closest `expected` sub-case by category group) instead of to one whole-photo result. Stays
       structurally separate from `eval/harness.py` (unchanged import boundary, Principle I).
-- [ ] T030 [P] [US3] `backend/tests/unit/eval/test_vision_harness.py` (new or extended):
-      fixture-shape assertions only (cases load, ids unique, `expected_count` present where
+      **Landed early**, in the T001-T013 commit — the `vision.py` rename forced a
+      `vision_harness.py` update anyway, so the multi-detection `_check` logic was written then
+      rather than left broken in the interim.
+- [x] T030 [P] [US3] `backend/tests/unit/eval/test_vision_harness.py`: fixture-shape assertions
+      only (cases load, ids unique, `expected_count`/list-shaped `expected` consistent where
       declared) — no live call, mirrors `test_golden_set.py`'s existing pattern.
-- [ ] T031 [US3] Run `uv run python -m whattowear.eval.vision_harness` against v2 (temporarily
-      restore the prior prompt file), record the pass count and failures.
-- [ ] T032 [US3] Restore v3 (T008), re-run the same command, record the pass count and failures.
-- [ ] T033 [US3] Record both runs — prompt version, model, pass counts, and the specific
-      before/after cases for wrong-category/missed-attribute/vague-naming — in a new
-      `docs/design-decisions.md` §61 entry (FR-009, Constitution Principle X's carve-out).
-- [ ] T034 [US3] Based on T033's remaining failures (if any), iterate `prompts/vision_system.md`
-      wording (still v3, content-only) targeting them specifically; re-run T031/T032's comparison
-      until the harness shows measurable improvement, or record the remaining gap as a known
-      limitation in the same §61 entry rather than silently dropping it.
+- [ ] T031 [US3] **Needs the human** (live `AI_GATEWAY_API_KEY` + T027's corpus) — run
+      `uv run python -m whattowear.eval.vision_harness` against v2 (temporarily restore the prior
+      prompt file), record the pass count and failures.
+- [ ] T032 [US3] **Needs the human** — restore v3 (T008), re-run the same command, record the
+      pass count and failures.
+- [ ] T033 [US3] **Needs the human** — record both runs — prompt version, model, pass counts, and
+      the specific before/after cases for wrong-category/missed-attribute/vague-naming — in
+      `docs/design-decisions.md` §61 (stub already written, FR-009, Constitution Principle X's
+      carve-out — see "Status: PENDING").
+- [ ] T034 [US3] **Needs the human** — based on T033's remaining failures (if any), iterate
+      `prompts/vision_system.md` wording (still v3, content-only) targeting them specifically;
+      re-run T031/T032's comparison until the harness shows measurable improvement, or record the
+      remaining gap as a known limitation in the same §61 entry rather than silently dropping it.
 
 **Checkpoint**: SC-003 is satisfied with recorded evidence, not a claim.
 

@@ -43,3 +43,30 @@ def test_every_golden_case_image_file_actually_exists() -> None:
     for case in cases:
         image_path = VISION_FIXTURES_DIR / case.image
         assert image_path.is_file(), f"{case.id}: {image_path} does not exist"
+
+
+# Feature 018 (photo-to-items): vision_cases can now describe a multi-
+# garment photo (`expected_count` + a list-shaped `expected`), not only the
+# single-garment shape every pre-018 case uses. These stay fixture-shape
+# assertions only — no live call, matching this file's own existing scope.
+
+
+def test_case_ids_are_unique() -> None:
+    cases = load_vision_cases()
+    ids = [c.id for c in cases]
+    assert len(ids) == len(set(ids)), f"duplicate vision_cases id(s): {[i for i in ids if ids.count(i) > 1]}"
+
+
+def test_multi_garment_cases_declare_expected_count_and_a_list_of_sub_expectations() -> None:
+    """A case describing several garments must say how many (so the
+    detection-count check in eval/vision_harness.py::_check has something
+    to check) and must shape `expected` as a list, one entry per garment —
+    the legacy single-dict shape doesn't have anywhere to name a second
+    garment's expectations."""
+    cases = load_vision_cases()
+    for case in cases:
+        if case.expected_count is not None and case.expected_count > 1:
+            assert isinstance(
+                case.expected, list
+            ), f"{case.id}: expected_count={case.expected_count} but `expected` is not a list"
+            assert len(case.expected) > 0, f"{case.id}: expected_count > 1 but `expected` is empty"
