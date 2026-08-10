@@ -125,6 +125,52 @@ def _build_human_message(image_bytes: bytes, mime_type: str) -> list:
     ]
 
 
+# Two regions overlapping this much are treated as the same garment.
+#
+# Deliberately high. The observed failure was near-identical full-frame boxes
+# (IoU ~0.96), so 0.8 catches it comfortably. A lower bar was tried and merged
+# detections overlapping ~0.6 — which in a folded stack or a rack of hangers
+# can be two real garments. Losing a genuine item is worse than showing one
+# duplicate the user can delete, so this errs toward keeping.
+_DUPLICATE_IOU = 0.8
+
+
+def _iou(a: BoundingBox, b: BoundingBox) -> float:
+    """Intersection-over-union of two regions."""
+    ax2, ay2 = a.x + a.width, a.y + a.height
+    bx2, by2 = b.x + b.width, b.y + b.height
+    ix = max(0.0, min(ax2, bx2) - max(a.x, b.x))
+    iy = max(0.0, min(ay2, by2) - max(a.y, b.y))
+    inter = ix * iy
+    union = a.width * a.height + b.width * b.height - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _drop_overlapping(detections: list[DetectedGarment]) -> list[DetectedGarment]:
+    """Discard detections that substantially cover one already kept.
+
+    A deliberately blunt, deterministic guard against the model returning the
+    same garment more than once. It was doing exactly that on ordinary
+    single-garment product shots: two near-identical full-frame regions came
+    back, so one skirt became two closet items with the same photo.
+
+    Detections arrive ordered most-confident-first (see the system prompt), so
+    the first occurrence is kept and later overlapping ones dropped.
+
+    This cannot fix every over-detection — a pair of earrings side by side, or
+    a dress split into bodice and skirt, produce regions that barely overlap.
+    Those are addressed in `prompts/vision_system.md`, which is the only place
+    that can reason about what *is* one garment. This handles the mechanical
+    duplicate case, which no prompt wording reliably prevents.
+    """
+    kept: list[DetectedGarment] = []
+    for detection in detections:
+        if any(_iou(detection.region, k.region) >= _DUPLICATE_IOU for k in kept):
+            continue
+        kept.append(detection)
+    return kept
+
+
 @traceable(name="vision.detect_garments", run_type="chain")
 def detect_garments_from_image(image_bytes: bytes, mime_type: str) -> tuple[list[DetectedGarment], bool]:
     """One VLM call. Raises on a genuine call failure (network/gateway
@@ -160,6 +206,7 @@ def detect_garments_from_image(image_bytes: bytes, mime_type: str) -> tuple[list
         DetectedGarment(region=BoundingBox(**entry["region"]), attributes=ExtractedAttributes(**entry["attributes"]))
         for entry in raw["detections"]
     ]
+    detections = _drop_overlapping(detections)
     max_detections = get_settings().wtw_max_detections_per_photo
     truncated = len(detections) > max_detections
     return detections[:max_detections], truncated

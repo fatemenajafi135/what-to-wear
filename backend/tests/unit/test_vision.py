@@ -140,3 +140,47 @@ def test_extracted_attributes_all_fields_optional():
     assert attrs.colors is None
     assert attrs.pattern is None
     assert attrs.fit is None
+
+
+class TestDuplicateDetectionFilter:
+    """The failure this filter exists for: ordinary single-garment product
+    shots came back with two near-identical full-frame detections, so one
+    skirt became two closet items showing the same photo."""
+
+    @staticmethod
+    def _det(x: float, y: float, w: float, h: float, category: str = "skirt") -> DetectedGarment:
+        return DetectedGarment(
+            region=BoundingBox(x=x, y=y, width=w, height=h),
+            attributes=ExtractedAttributes(category=category),
+        )
+
+    def test_two_full_frame_detections_collapse_to_one(self) -> None:
+        dets = [self._det(0, 0, 1, 1), self._det(0.01, 0.01, 0.98, 0.98)]
+        assert len(vision._drop_overlapping(dets)) == 1
+
+    def test_the_first_most_confident_detection_is_the_one_kept(self) -> None:
+        first = self._det(0, 0, 1, 1, category="skirt")
+        second = self._det(0.02, 0.0, 0.96, 1.0, category="trousers")
+        kept = vision._drop_overlapping([first, second])
+        assert [d.attributes.category for d in kept] == ["skirt"]
+
+    def test_genuinely_separate_garments_in_a_flat_lay_all_survive(self) -> None:
+        """A real flat-lay must not be collapsed — that would reintroduce the
+        single-item-per-photo behaviour this feature exists to remove."""
+        dets = [
+            self._det(0.0, 0.0, 0.45, 0.45),
+            self._det(0.55, 0.0, 0.45, 0.45),
+            self._det(0.0, 0.55, 0.45, 0.45),
+            self._det(0.55, 0.55, 0.45, 0.45),
+        ]
+        assert len(vision._drop_overlapping(dets)) == 4
+
+    def test_a_side_by_side_pair_is_not_merged_by_geometry(self) -> None:
+        """Two earrings side by side barely overlap, so this filter cannot fix
+        them — `prompts/vision_system.md` v4 rule 1 is what must. Recorded so a
+        future reader does not expect geometry to solve it."""
+        dets = [self._det(0.1, 0.4, 0.3, 0.2, "earrings"), self._det(0.6, 0.4, 0.3, 0.2, "earrings")]
+        assert len(vision._drop_overlapping(dets)) == 2
+
+    def test_an_empty_list_is_safe(self) -> None:
+        assert vision._drop_overlapping([]) == []
