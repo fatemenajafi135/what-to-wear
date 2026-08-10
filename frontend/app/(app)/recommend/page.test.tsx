@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import RecommendPage from "./page";
+import * as recommendChatStore from "@/lib/recommend/recommendChatStore";
 
 vi.mock("@/lib/api/client", () => ({
   apiClient: {
@@ -24,6 +25,12 @@ vi.mock("next/navigation", () => ({
 import { apiClient } from "@/lib/api/client";
 
 describe("RecommendPage", () => {
+  beforeEach(() => {
+    // specs/019-recommend-chat-persistence: same test-isolation primitive
+    // as RecommendChat.test.tsx — the store is a module singleton.
+    recommendChatStore.reset();
+  });
+
   it("renders the TopHeader title and subtitle", () => {
     render(<RecommendPage />);
     expect(screen.getByRole("heading", { name: "Styling" })).toBeInTheDocument();
