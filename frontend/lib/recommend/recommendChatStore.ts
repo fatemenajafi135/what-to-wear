@@ -1,3 +1,4 @@
+import { apiClient } from "@/lib/api/client";
 import type { ChatMessage } from "@/components/recommend/ChatMessageList";
 
 /**
@@ -63,4 +64,106 @@ export function getState(): RecommendChatState {
 export function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+function setState(patch: Partial<RecommendChatState>) {
+  state = { ...state, ...patch };
+  notify();
+}
+
+/** "New chat" (FR-003) — also the test-isolation primitive: Vitest doesn't
+ * reset a file's module graph between `it()` cases in the same file, so
+ * tests call this in `beforeEach` to avoid leaking conversation state
+ * across cases (research.md "Test isolation for a module singleton"). */
+export function reset(): void {
+  state = initialState();
+  notify();
+}
+
+/** The `?thread_id=` resume path (FR-004/005) — replaces the conversation
+ * wholesale. Callers only invoke this when `threadId` differs from
+ * `getState().threadId` (FR-006: the same thread already held is an
+ * in-app-navigation case, not a resume). */
+export function hydrate(threadId: string, messages: ChatMessage[]): void {
+  state = { ...initialState(), threadId, messages };
+  notify();
+}
+
+/**
+ * Every composer send (design-decisions.md §37/§47) — no retrieval, no
+ * wardrobe, no generation. Mutates the singleton and notifies subscribers
+ * directly rather than going through a component's setState, so a reply
+ * that arrives after the user has navigated away from Recommend still
+ * lands (FR-007) instead of silently no-oping against an unmounted
+ * component.
+ */
+export async function sendTurn(text: string): Promise<void> {
+  setState({
+    messages: [...state.messages, { id: crypto.randomUUID(), role: "user", text }],
+    pendingTexts: [...state.pendingTexts, text],
+    turnPending: true,
+  });
+
+  const requestThreadId = state.threadId;
+  const { data, error } = await apiClient.POST("/api/v1/recommend/turns", {
+    body: { message: text, thread_id: requestThreadId },
+  });
+
+  if (error || !data) {
+    // FR-010/SC-005: a genuine call/network failure leaves the
+    // conversation usable — no bubble invented for it (research.md §9),
+    // "Start styling" still works from whatever was already gathered.
+    setState({ turnPending: false });
+    return;
+  }
+
+  setState({
+    turnPending: false,
+    threadId: state.threadId ?? data.thread_id,
+    messages: [
+      ...state.messages,
+      { id: crypto.randomUUID(), role: "assistant", replyText: data.reply_text, plain: true },
+    ],
+  });
+}
+
+/**
+ * The sole trigger for outfit generation (design-decisions.md §37). Same
+ * mount-independence rationale as `sendTurn` above — the response must
+ * land in the persisted state whether or not `RecommendChat` is currently
+ * subscribed to observe it.
+ */
+export async function startStyling(): Promise<void> {
+  if (state.pendingTexts.length === 0) return;
+  const message = state.pendingTexts.join(" ");
+  const requestThreadId = state.threadId;
+  setState({ startStyling: "pending" });
+
+  const { data, error } = await apiClient.POST("/api/v1/recommend/messages", {
+    body: { message, thread_id: requestThreadId },
+  });
+
+  if (error || !data) {
+    setState({ startStyling: "error" });
+    return;
+  }
+
+  setState({
+    threadId: data.thread_id,
+    messages: [
+      ...state.messages,
+      // The wrap-up renders as its own assistant message before the
+      // outfits (design-decisions.md §49) — always present, never a
+      // second LLM call.
+      { id: crypto.randomUUID(), role: "assistant", replyText: data.wrap_up_text, plain: true },
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        outfits: data.outfits,
+        replyText: data.reply_text,
+      },
+    ],
+    pendingTexts: [],
+    startStyling: "idle",
+  });
 }
