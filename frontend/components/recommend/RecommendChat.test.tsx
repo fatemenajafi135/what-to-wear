@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RecommendChat } from "./RecommendChat";
+import * as recommendChatStore from "@/lib/recommend/recommendChatStore";
 
 vi.mock("@/lib/api/client", () => ({
   apiClient: { GET: vi.fn(), POST: vi.fn() },
@@ -84,6 +85,11 @@ function mockPostByUrl(overrides: { turns?: unknown; messages?: unknown } = {}) 
 
 describe("RecommendChat", () => {
   beforeEach(() => {
+    // specs/019-recommend-chat-persistence: conversation state now lives in
+    // a module singleton, which Vitest does not reset between `it()` cases
+    // in the same file — reset it explicitly so tests don't leak state into
+    // one another (the same primitive "New chat" uses in production).
+    recommendChatStore.reset();
     vi.mocked(apiClient.POST).mockReset().mockImplementation(mockPostByUrl() as never);
     vi.mocked(apiClient.GET).mockReset().mockImplementation(mockGetByUrl as never);
     Object.defineProperty(window.navigator, "onLine", { value: true, configurable: true });
@@ -296,12 +302,11 @@ describe("RecommendChat", () => {
   });
 
   it("011 US3: a message sent after resuming carries the resumed thread_id, verified at the request level", async () => {
-    render(
-      <RecommendChat
-        initialThreadId="resumed-thread"
-        initialMessages={[{ id: "m1", role: "user", text: "Rainy commute" }]}
-      />,
-    );
+    // specs/019-recommend-chat-persistence: resuming now hydrates the
+    // shared store directly (page.tsx's job) rather than being seeded via
+    // component props — RecommendChat has no props of its own anymore.
+    recommendChatStore.hydrate("resumed-thread", [{ id: "m1", role: "user", text: "Rainy commute" }]);
+    render(<RecommendChat />);
 
     // Resuming shows the prior turn immediately (chat state, not the hero) —
     // "New chat" correctness depends on this, not asserted by reading a reply.
@@ -322,5 +327,75 @@ describe("RecommendChat", () => {
         expect.objectContaining({ body: { message: "something warmer", thread_id: "resumed-thread" } }),
       ),
     );
+  });
+
+  it("019 US1: state survives an unmount/remount — no hero flash, no re-fetch of the conversation", async () => {
+    const { unmount } = render(<RecommendChat />);
+    await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
+    await waitFor(() => expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument());
+    await userEvent.click(screen.getByText("Start styling"));
+    await waitFor(() => expect(screen.getByText("Styling for business casual.")).toBeInTheDocument());
+
+    unmount();
+    const turnCallsBeforeRemount = vi
+      .mocked(apiClient.POST)
+      .mock.calls.filter((call) => call[0] === "/api/v1/recommend/turns").length;
+
+    // A fresh instance, exactly like page.tsx mounting a new `RecommendChat`
+    // on navigating back to /recommend — no props seed it; the store does.
+    // Readiness itself still refetches on this new mount (FR-009) — the
+    // fresh instance briefly shows its own loading skeleton for that call,
+    // never the hero state, before the persisted conversation renders.
+    render(<RecommendChat />);
+
+    expect(screen.queryByText("What to Wear")).not.toBeInTheDocument(); // no hero-state flash
+    await waitFor(() => expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument());
+    expect(screen.getByText("Styling for business casual.")).toBeInTheDocument();
+    expect(screen.getByText(/A relaxed pairing that works well here\./)).toBeInTheDocument();
+    expect(
+      vi.mocked(apiClient.POST).mock.calls.filter((call) => call[0] === "/api/v1/recommend/turns").length,
+    ).toBe(turnCallsBeforeRemount); // no new network call for the conversation itself
+  });
+
+  it("019 US1/FR-007: a turn response that arrives after unmount still lands, once, in the remounted instance", async () => {
+    let resolveTurn!: (value: unknown) => void;
+    vi.mocked(apiClient.POST).mockImplementation(
+      mockPostByUrl({ turns: new Promise((resolve) => (resolveTurn = resolve)) }) as never,
+    );
+
+    const { unmount } = render(<RecommendChat />);
+    await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+
+    // Navigate away before the response arrives.
+    unmount();
+    resolveTurn(defaultTurnResponse);
+
+    render(<RecommendChat />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Got it — what's the occasion?")).toHaveLength(1); // not duplicated
+  });
+
+  it("019 US1/FR-009: readiness re-fetches and reflects a changed closet on remount, independent of the persisted conversation", async () => {
+    const { unmount } = render(<RecommendChat />);
+    await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
+    await waitFor(() => expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument());
+    unmount();
+
+    // The closet changed while the user was away — readiness now reports sparse.
+    vi.mocked(apiClient.GET).mockReset().mockImplementation(((url: string) =>
+      url === "/api/v1/recommend/readiness"
+        ? Promise.resolve({ data: { ready: true, sparse: true, missing: [] } })
+        : Promise.resolve({ data: { picked: false, event: null } })) as never);
+
+    render(<RecommendChat />);
+
+    expect(await screen.findByText(/working with a small closet/)).toBeInTheDocument();
+    // The conversation itself is unaffected by the readiness refetch.
+    expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument();
   });
 });
