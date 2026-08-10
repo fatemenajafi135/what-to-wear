@@ -67,7 +67,7 @@ Frontend only, per plan.md's Project Structure — no backend, `infra/`, or `des
 
 **Independent Test**: With an active conversation, tap "New chat" → hero state. Navigate away and back → still hero state.
 
-- [ ] T011 [US2] Add tests in `frontend/app/(app)/recommend/page.test.tsx`: tapping "New chat" returns to hero state and disables the button again (extends the existing "New chat becomes enabled… and resets the thread on click" test if present, or adds alongside it); after tapping "New chat," unmounting and remounting `RecommendPage` (simulating navigate-away-and-back) still shows the hero state, not the pre-reset conversation. (depends on T007, T009)
+- [X] T011 [US2] Add tests in `frontend/app/(app)/recommend/page.test.tsx`: tapping "New chat" returns to hero state and disables the button again (extends the existing "New chat becomes enabled… and resets the thread on click" test if present, or adds alongside it); after tapping "New chat," unmounting and remounting `RecommendPage` (simulating navigate-away-and-back) still shows the hero state, not the pre-reset conversation. (depends on T007, T009)
 - [ ] T012 [US2] Manual validation: drive quickstart.md step 6 (New chat, then navigate away and back, confirm hero state holds) in a real browser. (depends on T011)
 
 **Checkpoint**: User Stories 1 and 2 both work, together and independently.

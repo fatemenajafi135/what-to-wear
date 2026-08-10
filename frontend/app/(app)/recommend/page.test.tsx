@@ -82,6 +82,42 @@ describe("RecommendPage", () => {
     expect(screen.getByLabelText("New chat")).toBeDisabled();
   });
 
+  it("019 US2: a New chat reset survives navigating away and back — still hero, not the pre-reset conversation", async () => {
+    vi.mocked(apiClient.POST).mockResolvedValue({
+      data: {
+        thread_id: "thread-1",
+        reply_text: null,
+        outfits: [
+          {
+            id: null,
+            occasion: "business casual",
+            rationale_text: "Reply.",
+            items: [],
+            match_label: "great",
+            meta_line: "business casual · Business casual",
+          },
+        ],
+      },
+      error: undefined,
+      response: new Response(),
+    } as never);
+
+    const { unmount } = render(<RecommendPage />);
+    await userEvent.type(await screen.findByLabelText("Message"), "business casual{Enter}");
+    await userEvent.click(screen.getByText("Start styling"));
+    await waitFor(() => expect(screen.getByText("Reply.")).toBeInTheDocument());
+    await userEvent.click(screen.getByLabelText("New chat"));
+    expect(screen.getByText("What to Wear")).toBeInTheDocument();
+
+    // Navigate away and back — a fresh RecommendPage instance, no props.
+    unmount();
+    render(<RecommendPage />);
+
+    expect(await screen.findByText("What to Wear")).toBeInTheDocument();
+    expect(screen.getByLabelText("New chat")).toBeDisabled();
+    expect(screen.queryByText("Reply.")).not.toBeInTheDocument();
+  });
+
   it("Chat history links to /history", async () => {
     render(<RecommendPage />);
     await screen.findByLabelText("Message");
