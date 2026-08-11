@@ -90,3 +90,11 @@
   padding: var(--space-sm) var(--space-md);
   min-height: 44px;
 }
+
+/* design-system.md §3's disabled convention, applied here: opacity 0.5 +
+   pointer-events none on the control's normal colors, no dedicated token.
+   issue #62: used while the current card's save request is in flight. */
+.skipLink:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}

@@ -227,6 +227,20 @@ export function BulkQueue({ files, onClose, onPositionChange }: BulkQueueProps) 
         saveError={current.status === "save-error"}
         onSave={handleSave}
       />
+      {/* issue #62: generalizes the upload-error skip above to the normal
+          review state — same copy, same style, same one-tap "just move on"
+          behaviour (docs/design-decisions.md §64). Sits below the form as a
+          sibling rather than inside ReviewCard's <form>, so a tap can never
+          be mistaken for (or trigger) a submit. Disabled mid-save so a skip
+          can't race an in-flight save request for the same card. */}
+      <button
+        type="button"
+        className={styles.skipLink}
+        onClick={advance}
+        disabled={current.status === "saving"}
+      >
+        {addItemCopy.review.skipCta(isLast)}
+      </button>
     </div>
   );
 }
