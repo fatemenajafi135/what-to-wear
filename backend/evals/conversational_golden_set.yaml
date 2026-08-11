@@ -50,3 +50,11 @@ cases:
     prior_slots: {occasion: "client dinner", formality: formal}
     expected_slots: {formality: smart_casual}
     voice_check: "Treats this as an update to formality, not a brand-new unrelated request."
+
+  - id: c08
+    # issue #68: location extraction must prefer the city over a full venue address, since
+    # `location` feeds a weather lookup by place name (prompts/conversational_turn_system.md).
+    utterance: "it's at Wedding Hall, MQVP+X67, Tbilisi, Georgia"
+    prior_slots: {occasion: wedding}
+    expected_slots: {location: Tbilisi}
+    voice_check: "Treats the location as new information; does not repeat the venue address or plus code back."
