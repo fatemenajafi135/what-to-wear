@@ -248,7 +248,7 @@ the conversation, without ever asserting a title-derived occasion/formality as f
 **Purpose**: Confirm the full verification suite is green and nothing regressed, per the task
 brief's baselines (backend 780, frontend 363, PWA e2e 11) — counts must not drop.
 
-- [ ] T019 [P] Confirm no OpenAPI contract drift: with the backend running locally, run
+- [X] T019 [P] Confirm no OpenAPI contract drift: with the backend running locally, run
       `npm run generate:api-types` in `frontend/` and diff `frontend/lib/api/schema.d.ts`
       against its committed version — expect **no diff** (research.md's "Confirmed: no
       OpenAPI contract change" finding); if a diff appears, investigate before proceeding

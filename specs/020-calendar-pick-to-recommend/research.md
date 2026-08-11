@@ -90,10 +90,15 @@ by `EventRow`) for the time half, so no second time-formatting convention is int
 **Task**: constitution VII/the task brief flag `schema.d.ts` regeneration as "likely." Checked
 before assuming it.
 
-**Finding**: not needed. `SendTurnRequest`/`SendTurnResponse` gain no field — the picked event
-is read server-side, from the authenticated caller's own `picked_events` row, the same way
-`GET /calendar/picked-event` already does. No route's request or response Pydantic model
-changes shape. Verified by re-reading every model touched (`SendTurnRequest`,
-`SendTurnResponse`, `CalendarEventView`, `PickedEventView`) — none gain, lose, or retype a
-field. `schema.d.ts` is left untouched; regenerating it would be a no-op diff at best and a
-false signal of an API change at worst.
+**Finding**: no *shape* change — confirmed as predicted. `SendTurnRequest`/`SendTurnResponse`
+gain no field; no route's request or response Pydantic model changes shape.
+
+**Correction, found when actually regenerating (T019)**: the prediction that this meant
+`schema.d.ts` would be "left untouched" was wrong in a small, expected way — FastAPI pulls a
+route function's docstring into the OpenAPI operation `description`, and `openapi-typescript`
+carries that into a JSDoc comment on the generated type. `send_turn`'s docstring gained a
+paragraph explaining the new seed behavior (T012), so regenerating produces a one-paragraph
+comment-only diff in `schema.d.ts` — no type, field, or shape changed. Regenerated and
+committed anyway, per the task brief's "CI fails on drift" rule: drift is drift even when it's
+only a comment, and the alternative (leaving a stale generated file) is worse than a
+docs-only diff.
