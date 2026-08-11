@@ -28,6 +28,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.runnables import RunnableConfig
 from sqlalchemy import text
 
 from whattowear import copy as turn_copy
@@ -370,6 +371,133 @@ class TestSendTurn:
         assert styling.status_code == 200
         invoke_input = mock_invoke.call_args.args[0]
         assert invoke_input["occasion"] == "wedding"
+
+
+class TestSendTurnCalendarSeed:
+    """specs/020-calendar-pick-to-recommend (issue #41 defect 3, design-decisions.md §61) —
+    a brand-new thread silently seeds `location` from the caller's picked event; occasion/
+    formality are never derived from its title. A dedicated user (not the module's shared
+    `USER_READY`) avoids leaking a `picked_events` row into unrelated tests in this file."""
+
+    USER = str(uuid.uuid4())
+
+    @pytest.fixture(autouse=True)
+    def _seeded_user(self) -> Iterator[None]:
+        _insert_item(self.USER, "t-shirt", name="Navy tee")
+        _insert_item(self.USER, "jeans", name="Blue jeans")
+        _insert_item(self.USER, "boots", name="Black boots")
+        _insert_item(self.USER, "belt", name="Brown belt")
+        _insert_item(self.USER, "cardigan", name="Grey cardigan")
+        yield
+        with get_engine().begin() as conn:
+            conn.execute(text("DELETE FROM wardrobe_items WHERE user_id = :u"), {"u": self.USER})
+            conn.execute(text("DELETE FROM outfits WHERE user_id = :u"), {"u": self.USER})
+            conn.execute(text("DELETE FROM messages WHERE user_id = :u"), {"u": self.USER})
+            conn.execute(text("DELETE FROM sessions WHERE user_id = :u"), {"u": self.USER})
+            conn.execute(text("DELETE FROM picked_events WHERE user_id = :u"), {"u": self.USER})
+
+    def _insert_picked_event(self, *, location: str | None) -> None:
+        with get_engine().begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO picked_events (user_id, google_event_id, title, start_time, location)"
+                    " VALUES (:u, 'evt-1', 'Dinner with Ana', now() + interval '1 day', :location)"
+                    " ON CONFLICT (user_id) DO UPDATE SET location = EXCLUDED.location"
+                ),
+                {"u": self.USER, "location": location},
+            )
+
+    def _location_in_checkpoint(self, thread_id: str) -> str | None:
+        from whattowear.adapters.closet_fixture import FixtureClosetRepository
+        from whattowear.pipeline.graph import get_compiled_graph as real_get_compiled_graph
+
+        graph = real_get_compiled_graph(FixtureClosetRepository())
+        config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+        return graph.get_state(config).values.get("location")
+
+    def test_fresh_thread_with_a_located_picked_event_seeds_location_before_the_llm_call(self) -> None:
+        self._insert_picked_event(location="Tanto")
+        fake_result = ConversationalTurnResult(reply_text="Got it.")
+        with _client_as(self.USER) as client:
+            with patch("whattowear.api.v1.routes.recommend.conversation.reply", return_value=fake_result) as mock_reply:
+                response = client.post("/api/v1/recommend/turns", json={"message": "what should I wear"})
+        assert response.status_code == 200
+        thread_id = response.json()["thread_id"]
+
+        # FR-006, at the deterministic level: the model's own prompt already carries the
+        # location as an "already known" fact, before it ever has a chance to ask for it.
+        known_slots_arg = mock_reply.call_args.args[1]
+        assert known_slots_arg.get("location") == "Tanto"
+        # ...and it's durably in the checkpoint, not just passed for this one call.
+        assert self._location_in_checkpoint(thread_id) == "Tanto"
+
+    def test_no_picked_event_leaves_location_unset(self) -> None:
+        fake_result = ConversationalTurnResult(reply_text="Got it.")
+        with _client_as(self.USER) as client:
+            with patch("whattowear.api.v1.routes.recommend.conversation.reply", return_value=fake_result) as mock_reply:
+                response = client.post("/api/v1/recommend/turns", json={"message": "what should I wear"})
+        assert response.status_code == 200
+        known_slots_arg = mock_reply.call_args.args[1]
+        assert known_slots_arg.get("location") is None
+
+    def test_picked_event_with_no_location_does_not_crash_and_leaves_location_unset(self) -> None:
+        self._insert_picked_event(location=None)
+        fake_result = ConversationalTurnResult(reply_text="Got it.")
+        with _client_as(self.USER) as client:
+            with patch("whattowear.api.v1.routes.recommend.conversation.reply", return_value=fake_result) as mock_reply:
+                response = client.post("/api/v1/recommend/turns", json={"message": "what should I wear"})
+        assert response.status_code == 200
+        known_slots_arg = mock_reply.call_args.args[1]
+        assert known_slots_arg.get("location") is None
+
+    def test_continuing_thread_never_reseeds_from_a_picked_event(self) -> None:
+        """FR-011 — a picked event that only exists (or changes) after a thread's first turn
+        must never retroactively rewrite what that thread already accumulated."""
+        with _client_as(self.USER) as client:
+            first = _send_turn(client, "what should I wear, heading downtown", location="Downtown")
+            thread_id = first["thread_id"]
+
+            # The pick happens only now — mid-conversation.
+            self._insert_picked_event(location="Tanto")
+
+            second_result = ConversationalTurnResult(reply_text="Got it.")
+            with patch(
+                "whattowear.api.v1.routes.recommend.conversation.reply", return_value=second_result
+            ) as mock_reply:
+                response = client.post(
+                    "/api/v1/recommend/turns",
+                    json={"message": "anything else I should know", "thread_id": thread_id},
+                )
+        assert response.status_code == 200
+        known_slots_arg = mock_reply.call_args.args[1]
+        assert known_slots_arg.get("location") == "Downtown"
+
+    def test_start_styling_on_a_fresh_thread_carries_the_seeded_location_through(self) -> None:
+        """Closes the FR-007/SC-004 gap found in /speckit-analyze: proves the existing,
+        unmodified `known_state.get("location")` read in `send_message` actually picks up
+        what `send_turn` seeded — end to end across both routes, not just at the checkpoint."""
+        self._insert_picked_event(location="Tanto")
+        fake_result = ConversationalTurnResult(reply_text="Got it.")
+        with _client_as(self.USER) as client:
+            with patch("whattowear.api.v1.routes.recommend.conversation.reply", return_value=fake_result):
+                turn = client.post("/api/v1/recommend/turns", json={"message": "what should I wear"})
+            thread_id = turn.json()["thread_id"]
+
+            result = SuggestResult(outfits=[], sources=[])
+            mock_graph = _real_graph_with_mocked_invoke(result, "Nothing to show.")
+            with (
+                patch("whattowear.api.v1.routes.recommend.get_compiled_graph", return_value=mock_graph),
+                patch.object(
+                    mock_graph, "invoke", return_value={"result": result, "note": "Nothing to show."}
+                ) as mock_invoke,
+            ):
+                styling = client.post(
+                    "/api/v1/recommend/messages",
+                    json={"message": "style me for it", "thread_id": thread_id},
+                )
+        assert styling.status_code == 200
+        invoke_input = mock_invoke.call_args.args[0]
+        assert invoke_input["location"] == "Tanto"
 
 
 class TestSendMessage:

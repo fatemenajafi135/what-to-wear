@@ -5,6 +5,8 @@ import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button/Button";
 import { RecommendCalendarContext } from "@/components/calendar/RecommendCalendarContext";
 import * as recommendChatStore from "@/lib/recommend/recommendChatStore";
+import * as pickedEventStore from "@/lib/calendar/pickedEventStore";
+import { formatEventTime } from "@/lib/calendar/formatEventTime";
 import { HeroState } from "./HeroState";
 import { ChatMessageList } from "./ChatMessageList";
 import { Composer } from "./Composer";
@@ -37,6 +39,11 @@ export function RecommendChat() {
     recommendChatStore.getState,
     recommendChatStore.getServerSnapshot,
   );
+  const pickedEvent = useSyncExternalStore(
+    pickedEventStore.subscribe,
+    pickedEventStore.getState,
+    pickedEventStore.getServerSnapshot,
+  ).event;
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -70,6 +77,17 @@ export function RecommendChat() {
   }, []);
 
   const hasUserMessage = chat.messages.some((m) => m.role === "user");
+
+  // specs/020-calendar-pick-to-recommend (design-decisions.md §61): a fresh conversation
+  // (no user turns yet, no active thread) with a picked event pre-fills the composer with a
+  // complete, editable, unsent message built from the event's own title, time and (when
+  // present) location — never sent, never asserted as occasion/formality fact, until the user
+  // takes an explicit send action. An already-in-progress conversation is left alone (FR-011)
+  // — the same `!hasUserMessage` condition that gates the hero state.
+  const composerPrefill = !hasUserMessage && pickedEvent
+    ? `I want an outfit for ${pickedEvent.title} on ${formatEventTime(pickedEvent.start)}` +
+      (pickedEvent.location ? ` at ${pickedEvent.location}` : "")
+    : undefined;
 
   if (readiness === null) {
     return (
@@ -127,6 +145,7 @@ export function RecommendChat() {
         <Composer
           onSend={recommendChatStore.sendTurn}
           inFlight={chat.turnPending || chat.startStyling === "pending"}
+          initialValue={composerPrefill}
         />
       </div>
     </div>

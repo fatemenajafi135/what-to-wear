@@ -3,6 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RecommendChat } from "./RecommendChat";
 import * as recommendChatStore from "@/lib/recommend/recommendChatStore";
+import * as pickedEventStore from "@/lib/calendar/pickedEventStore";
+import { formatEventTime } from "@/lib/calendar/formatEventTime";
 
 vi.mock("@/lib/api/client", () => ({
   apiClient: { GET: vi.fn(), POST: vi.fn() },
@@ -90,6 +92,10 @@ describe("RecommendChat", () => {
     // in the same file — reset it explicitly so tests don't leak state into
     // one another (the same primitive "New chat" uses in production).
     recommendChatStore.reset();
+    // specs/020-calendar-pick-to-recommend: same reason — RecommendCalendarContext now reads
+    // a module singleton (write-through, not fetch-on-mount) instead of calling
+    // `apiClient.GET` itself on every render.
+    pickedEventStore.reset();
     vi.mocked(apiClient.POST).mockReset().mockImplementation(mockPostByUrl() as never);
     vi.mocked(apiClient.GET).mockReset().mockImplementation(mockGetByUrl as never);
     Object.defineProperty(window.navigator, "onLine", { value: true, configurable: true });
@@ -397,5 +403,59 @@ describe("RecommendChat", () => {
     expect(await screen.findByText(/working with a small closet/)).toBeInTheDocument();
     // The conversation itself is unaffected by the readiness refetch.
     expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument();
+  });
+
+  it("020 US3: pre-fills the composer with a complete message from a picked event, including location", async () => {
+    pickedEventStore.set({
+      google_event_id: "e1",
+      title: "Dinner with Ana",
+      start: "2026-08-14T20:00:00Z",
+      location: "Tanto",
+    });
+
+    render(<RecommendChat />);
+
+    const input = (await screen.findByLabelText("Message")) as HTMLInputElement;
+    await waitFor(() =>
+      expect(input.value).toBe(`I want an outfit for Dinner with Ana on ${formatEventTime("2026-08-14T20:00:00Z")} at Tanto`),
+    );
+  });
+
+  it("020 US3: pre-fills the composer without a trailing 'at' when the picked event has no location", async () => {
+    pickedEventStore.set({
+      google_event_id: "e1",
+      title: "Dinner with Ana",
+      start: "2026-08-14T20:00:00Z",
+      location: null,
+    });
+
+    render(<RecommendChat />);
+
+    const input = (await screen.findByLabelText("Message")) as HTMLInputElement;
+    await waitFor(() =>
+      expect(input.value).toBe(`I want an outfit for Dinner with Ana on ${formatEventTime("2026-08-14T20:00:00Z")}`),
+    );
+  });
+
+  it("020 US3: no pre-fill in a fresh conversation with no picked event", async () => {
+    pickedEventStore.set(null);
+    render(<RecommendChat />);
+    const input = await screen.findByLabelText("Message");
+    expect(input).toHaveValue("");
+  });
+
+  it("020 US3: no pre-fill once the conversation already has a user message (FR-011)", async () => {
+    pickedEventStore.set({
+      google_event_id: "e1",
+      title: "Dinner with Ana",
+      start: "2026-08-14T20:00:00Z",
+      location: "Tanto",
+    });
+    recommendChatStore.hydrate("thread-already-active", [{ id: "m1", role: "user", text: "something casual" }]);
+
+    render(<RecommendChat />);
+
+    const input = await screen.findByLabelText("Message");
+    expect(input).toHaveValue("");
   });
 });

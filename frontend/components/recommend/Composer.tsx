@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import styles from "./Composer.module.css";
@@ -11,6 +11,16 @@ export interface ComposerProps {
    * disables the composer (design-system.md "Chat input behavior",
    * "Intended (production)": both `sending` and `styling` disable it). */
   inFlight: boolean;
+  /** specs/020-calendar-pick-to-recommend (design-decisions.md §61): a fresh conversation
+   * with a picked event pre-fills this with editable, unsent text built from the event —
+   * never asserted as fact, just an easy starting point. `pickedEventStore`'s hydration is
+   * async, so this often arrives a render or two AFTER mount (found in manual verification,
+   * T023: on a fresh page load the store hasn't hydrated yet when Composer first mounts, so
+   * capturing it only as the `useState` initializer misses it entirely) — adopted whenever it
+   * transitions to a real value WHILE the field is still untouched (`value === ""`), never
+   * once the user has typed anything, so an edit in progress or a later change to which event
+   * is picked can't clobber it. */
+  initialValue?: string;
 }
 
 /**
@@ -21,10 +31,14 @@ export interface ComposerProps {
  * actually calls `POST /recommend/turns`, mirroring how it already owns
  * the one other real network trigger, "Start styling".
  */
-export function Composer({ onSend, inFlight }: ComposerProps) {
-  const [value, setValue] = useState("");
+export function Composer({ onSend, inFlight, initialValue }: ComposerProps) {
+  const [value, setValue] = useState(initialValue ?? "");
   const isOnline = useOnlineStatus();
   const disabled = !isOnline || inFlight;
+
+  useEffect(() => {
+    setValue((current) => (current === "" && initialValue ? initialValue : current));
+  }, [initialValue]);
 
   function commit() {
     const text = value.trim();

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { CalendarIcon } from "lucide-react";
-import { apiClient } from "@/lib/api/client";
+import * as pickedEventStore from "@/lib/calendar/pickedEventStore";
 import styles from "./RecommendCalendarContext.module.css";
 
 /**
@@ -12,27 +12,33 @@ import styles from "./RecommendCalendarContext.module.css";
  * Change" (picked, with a small calendar glyph). Feature 012's one touch to
  * /recommend (feature 008's screen) — see the feature 012 report for
  * exactly what was added here.
+ *
+ * specs/020-calendar-pick-to-recommend (issue #41 defect 2): this used to
+ * fetch `/calendar/picked-event` itself, once, in a mount-scoped effect —
+ * stale for minutes because Next's Router Cache serves `/recommend` without
+ * remounting on in-app navigation, so the effect never reran. It now reads
+ * `pickedEventStore` (write-through — see that module's docstring), which
+ * is updated the instant a pick is confirmed elsewhere in the app, with no
+ * dependency on this component's own mount timing.
  */
 export function RecommendCalendarContext() {
-  const [pickedTitle, setPickedTitle] = useState<string | null>(null);
+  const { status, event } = useSyncExternalStore(
+    pickedEventStore.subscribe,
+    pickedEventStore.getState,
+    pickedEventStore.getServerSnapshot,
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    apiClient.GET("/api/v1/calendar/picked-event").then(({ data }) => {
-      if (!cancelled && data?.picked && data.event) {
-        setPickedTitle(data.event.title);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (status === "unknown") {
+      pickedEventStore.hydrate();
+    }
+  }, [status]);
 
-  if (pickedTitle) {
+  if (event) {
     return (
       <Link href="/calendar" className={`textBody ${styles.link}`}>
         <CalendarIcon size={14} aria-hidden="true" />
-        Styling for {pickedTitle} · Change
+        Styling for {event.title} · Change
       </Link>
     );
   }

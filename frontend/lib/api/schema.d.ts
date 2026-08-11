@@ -365,6 +365,16 @@ export interface paths {
          *     no wardrobe load, no pipeline invocation — `graph.get_state`/`update_state` read and patch the
          *     pipeline's own per-thread checkpoint without ever calling `graph.invoke` (design-decisions.md
          *     §47). Sole writer of `user_message` rows from this feature on (§50).
+         *
+         *     specs/020-calendar-pick-to-recommend (issue #41 defect 3, design-decisions.md §61): a
+         *     brand-new thread (`body.thread_id` absent — nothing to seed on a continuing one, whose own
+         *     accumulated state must never be silently rewritten) seeds `location` from the caller's
+         *     picked event, when one exists and carries a location. This is a plain field copy, not an
+         *     inference — the same trust level already given a `location` this same route's own
+         *     extraction later writes from a stated message. `occasion`/`formality` are never derived
+         *     from the picked event's title anywhere here or elsewhere in the backend — §61 treats that
+         *     as a stylist guess, not a fact, and leaves it to reach the pipeline only if the user's own
+         *     (possibly event-derived, possibly edited) message says so.
          */
         post: operations["send_turn_api_v1_recommend_turns_post"];
         delete?: never;

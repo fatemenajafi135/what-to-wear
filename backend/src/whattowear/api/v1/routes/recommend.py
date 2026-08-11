@@ -44,6 +44,7 @@ from whattowear.colors import nearest_names
 from whattowear.core.config import get_settings
 from whattowear.pipeline.graph import get_compiled_graph
 from whattowear.readiness import ReadinessResult, evaluate_wardrobe_readiness
+from whattowear.repositories.supabase_calendar import SupabaseCalendarRepository
 from whattowear.repositories.supabase_closet import SupabaseClosetRepository
 from whattowear.repositories.supabase_outfits import Sort, SupabaseOutfitRepository
 from whattowear.repositories.supabase_sessions import SupabaseSessionRepository
@@ -84,6 +85,10 @@ def _get_outfit_repository() -> SupabaseOutfitRepository:
 
 def _get_session_repository() -> SupabaseSessionRepository:
     return SupabaseSessionRepository()
+
+
+def _get_calendar_repository() -> SupabaseCalendarRepository:
+    return SupabaseCalendarRepository()
 
 
 def _parse_session_id(session_id: str) -> None:
@@ -432,16 +437,28 @@ def send_turn(
     user_id: str = Depends(get_current_user_id),  # noqa: B008
     repository: SupabaseClosetRepository = Depends(_get_repository),  # noqa: B008
     session_repository: SupabaseSessionRepository = Depends(_get_session_repository),  # noqa: B008
+    calendar_repository: SupabaseCalendarRepository = Depends(_get_calendar_repository),  # noqa: B008
 ) -> SendTurnResponse:
     """feature 016, contracts/recommend-turns.md. Separate from `/recommend/messages`: no
     readiness gate (a conversational reply never touches wardrobe, research.md §1), no retrieval,
     no wardrobe load, no pipeline invocation — `graph.get_state`/`update_state` read and patch the
     pipeline's own per-thread checkpoint without ever calling `graph.invoke` (design-decisions.md
-    §47). Sole writer of `user_message` rows from this feature on (§50)."""
+    §47). Sole writer of `user_message` rows from this feature on (§50).
+
+    specs/020-calendar-pick-to-recommend (issue #41 defect 3, design-decisions.md §61): a
+    brand-new thread (`body.thread_id` absent — nothing to seed on a continuing one, whose own
+    accumulated state must never be silently rewritten) seeds `location` from the caller's
+    picked event, when one exists and carries a location. This is a plain field copy, not an
+    inference — the same trust level already given a `location` this same route's own
+    extraction later writes from a stated message. `occasion`/`formality` are never derived
+    from the picked event's title anywhere here or elsewhere in the backend — §61 treats that
+    as a stylist guess, not a fact, and leaves it to reach the pipeline only if the user's own
+    (possibly event-derived, possibly edited) message says so."""
     settings = get_settings()
     if not body.message.strip():
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "message must not be empty")
 
+    is_new_thread = body.thread_id is None
     thread_id = body.thread_id or str(uuid.uuid4())
     session_repository.upsert_session(user_id, thread_id)
     session_repository.insert_message(user_id, thread_id, "user_message", body.message)
@@ -449,6 +466,11 @@ def send_turn(
     turn_number = session_repository.count_user_messages(user_id, thread_id)
     graph = get_compiled_graph(repository)
     config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+
+    if is_new_thread:
+        picked_event = calendar_repository.get_picked_event(user_id)
+        if picked_event is not None and picked_event.location is not None:
+            graph.update_state(config, {"location": picked_event.location})
 
     if turn_number > settings.wtw_conversation_turn_cap:
         # Deterministic, Python-owned steer — no LLM call at all past the cap (design-decisions.md
