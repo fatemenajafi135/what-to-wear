@@ -89,7 +89,7 @@ never on a failure.
 with no manual navigation. Repeat with the save failing — stay on Calendar, rows re-enable, an
 error shows.
 
-- [ ] T005 [US1] Rewrite `handlePick` in `frontend/app/(app)/calendar/page.tsx` per
+- [X] T005 [US1] Rewrite `handlePick` in `frontend/app/(app)/calendar/page.tsx` per
       contracts/calendar-pick-flow.md: add `savingEventId: string | null` and
       `pickError: CalendarEventView | null` (the event to retry) state; on tap, set
       `savingEventId` to the tapped event's id (rows disable via the existing
@@ -102,12 +102,12 @@ error shows.
       attempt), and set `pickError` to the attempted event so a retry can re-use it. Remove the
       old pre-await `setPickedEventId` call and the discarded PUT result — this is the literal
       bug (issue #41 defect 1), not something to preserve alongside the fix.
-- [ ] T006 [US1] In `frontend/app/(app)/calendar/page.tsx`, render a `Banner` (import from
+- [X] T006 [US1] In `frontend/app/(app)/calendar/page.tsx`, render a `Banner` (import from
       `@/components/ui/Banner/Banner`, `variant="error"`) above the event list when `pickError`
       is set: body copy "Couldn't save that pick." (voice-matched to the existing
       "Couldn't sync your calendar." on the same screen), `action={{ label: "Try again",
       onClick: () => handlePick(pickError) }}`.
-- [ ] T007 [P] [US1] Add cases to `frontend/app/(app)/calendar/page.test.tsx`: tapping an
+- [X] T007 [P] [US1] Add cases to `frontend/app/(app)/calendar/page.test.tsx`: tapping an
       event with `apiClient.PUT` resolving `{data: {picked: true, event: {...}}, error:
       undefined}` navigates to `/recommend` (mock `next/navigation`'s `useRouter`, assert
       `push` called with `"/recommend"`) and calls the (mocked) `pickedEventStore.set` with

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/lib/api/client";
 import * as connectionHook from "@/lib/calendar/useCalendarConnection";
 import * as primed from "@/lib/calendar/primed";
+import * as pickedEventStore from "@/lib/calendar/pickedEventStore";
 import CalendarPage from "./page";
 
 vi.mock("@/lib/api/client", () => ({
@@ -11,8 +12,30 @@ vi.mock("@/lib/api/client", () => ({
 }));
 vi.mock("@/lib/calendar/useCalendarConnection");
 
+const mockPush = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
 const mockedGet = vi.mocked(apiClient.GET);
+const mockedPut = vi.mocked(apiClient.PUT);
 const mockedUseCalendarConnection = vi.mocked(connectionHook.useCalendarConnection);
+
+const upcomingEvent = {
+  google_event_id: "e1",
+  title: "Dinner with Sam",
+  start: new Date(Date.now() + 3_600_000).toISOString(),
+  location: "Tanto",
+};
+
+function withOneEvent() {
+  mockedGet.mockImplementation(async (path) => {
+    if (path === "/api/v1/calendar/events") {
+      return { data: { events: [upcomingEvent] }, error: undefined } as never;
+    }
+    return { data: { picked: false, event: null }, error: undefined } as never;
+  });
+}
 
 function connectionState(overrides: Partial<connectionHook.CalendarConnectionState> = {}) {
   return {
@@ -28,6 +51,9 @@ function connectionState(overrides: Partial<connectionHook.CalendarConnectionSta
 
 beforeEach(() => {
   mockedGet.mockReset();
+  mockedPut.mockReset();
+  mockPush.mockReset();
+  pickedEventStore.reset();
   HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
     this.setAttribute("open", "");
   });
@@ -125,5 +151,63 @@ describe("CalendarPage — connected states", () => {
     render(<CalendarPage />);
     await waitFor(() => expect(screen.getByText("Dinner with Sam")).toBeInTheDocument());
     expect(screen.queryByText("Today, 7:30 PM")).not.toBeInTheDocument();
+  });
+});
+
+describe("CalendarPage — picking an event (issue #41 defect 1)", () => {
+  beforeEach(() => {
+    mockedUseCalendarConnection.mockReturnValue(connectionState({ connected: true }));
+    withOneEvent();
+  });
+
+  it("navigates to /recommend and writes through pickedEventStore once the save succeeds", async () => {
+    mockedPut.mockResolvedValue({
+      data: { picked: true, event: upcomingEvent },
+      error: undefined,
+    } as never);
+
+    render(<CalendarPage />);
+    await waitFor(() => expect(screen.getByText("Dinner with Sam")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /Dinner with Sam/ }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/recommend"));
+    expect(pickedEventStore.getState()).toEqual({ status: "loaded", event: upcomingEvent });
+  });
+
+  it("does not navigate, re-enables rows, and shows a retryable error when the save fails", async () => {
+    mockedPut.mockResolvedValue({ data: undefined, error: { detail: "boom" } } as never);
+
+    render(<CalendarPage />);
+    await waitFor(() => expect(screen.getByText("Dinner with Sam")).toBeInTheDocument());
+    const row = screen.getByRole("button", { name: /Dinner with Sam/ });
+    await userEvent.click(row);
+
+    await waitFor(() => expect(screen.getByText("Couldn't save that pick.")).toBeInTheDocument());
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(row).not.toBeDisabled();
+    expect(pickedEventStore.getState()).toEqual({ status: "unknown", event: null });
+
+    // "Try again" re-attempts the same event.
+    mockedPut.mockClear();
+    mockedPut.mockResolvedValue({ data: { picked: true, event: upcomingEvent }, error: undefined } as never);
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(mockedPut).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/recommend"));
+  });
+
+  it("disables every row while the pick is in flight, without marking it picked yet", async () => {
+    let resolvePut: (value: unknown) => void = () => {};
+    mockedPut.mockReturnValue(new Promise((resolve) => (resolvePut = resolve)) as never);
+
+    render(<CalendarPage />);
+    await waitFor(() => expect(screen.getByText("Dinner with Sam")).toBeInTheDocument());
+    const row = screen.getByRole("button", { name: /Dinner with Sam/ });
+    await userEvent.click(row);
+
+    await waitFor(() => expect(row).toBeDisabled());
+    expect(mockPush).not.toHaveBeenCalled();
+
+    resolvePut({ data: { picked: true, event: upcomingEvent }, error: undefined });
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/recommend"));
   });
 });
