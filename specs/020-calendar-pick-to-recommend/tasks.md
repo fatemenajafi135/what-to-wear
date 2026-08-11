@@ -33,7 +33,7 @@ Frontend: `frontend/`. Backend: `backend/src/whattowear/`, `backend/tests/`. No 
 **Purpose**: Stand up the write-through store's read side (contracts/picked-event-store.md)
 before any component or write path depends on it — both US1 and US2 need this to exist first.
 
-- [ ] T001 Create `frontend/lib/calendar/pickedEventStore.ts` with the `PickedEventState` type
+- [X] T001 Create `frontend/lib/calendar/pickedEventStore.ts` with the `PickedEventState` type
       (`status: "unknown" | "loaded"`, `event: CalendarEventView | null`), where
       `CalendarEventView` is `components["schemas"]["CalendarEventView"]` via
       `import type { components } from "@/lib/api/schema"` — the established convention for
@@ -57,17 +57,17 @@ triggers `hydrate` when needed) depend on these existing and being correct first
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 In `frontend/lib/calendar/pickedEventStore.ts`, implement `set(event:
+- [X] T002 In `frontend/lib/calendar/pickedEventStore.ts`, implement `set(event:
       CalendarEventView | null): void` — synchronously writes `{ status: "loaded", event }` and
       notifies listeners, no network call (contracts/picked-event-store.md point 3).
       (depends on T001)
-- [ ] T003 In `frontend/lib/calendar/pickedEventStore.ts`, implement `hydrate(): void` — a
+- [X] T003 In `frontend/lib/calendar/pickedEventStore.ts`, implement `hydrate(): void` — a
       no-op if `status !== "unknown"` or a hydration request is already in flight; otherwise
       calls `apiClient.GET("/api/v1/calendar/picked-event")` exactly once and writes the
       result via the same path `set()` uses (`status: "loaded"`, `event: data.event ?? null`
       when `data.picked`, else `null`) — contracts/picked-event-store.md points 2 and 4.
       (depends on T002)
-- [ ] T004 [P] Create `frontend/lib/calendar/pickedEventStore.test.ts` covering: initial
+- [X] T004 [P] Create `frontend/lib/calendar/pickedEventStore.test.ts` covering: initial
       `getState()`/`getServerSnapshot()` both return `{status: "unknown", event: null}`;
       `hydrate()` issues exactly one GET and updates state on resolution; a second `hydrate()`
       call while the first is still in flight does not issue a second GET; `hydrate()` is a
