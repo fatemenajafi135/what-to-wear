@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RecommendChat } from "./RecommendChat";
 import * as recommendChatStore from "@/lib/recommend/recommendChatStore";
+import * as pickedEventStore from "@/lib/calendar/pickedEventStore";
 
 vi.mock("@/lib/api/client", () => ({
   apiClient: { GET: vi.fn(), POST: vi.fn() },
@@ -90,6 +91,10 @@ describe("RecommendChat", () => {
     // in the same file — reset it explicitly so tests don't leak state into
     // one another (the same primitive "New chat" uses in production).
     recommendChatStore.reset();
+    // specs/020-calendar-pick-to-recommend: same reason — RecommendCalendarContext now reads
+    // a module singleton (write-through, not fetch-on-mount) instead of calling
+    // `apiClient.GET` itself on every render.
+    pickedEventStore.reset();
     vi.mocked(apiClient.POST).mockReset().mockImplementation(mockPostByUrl() as never);
     vi.mocked(apiClient.GET).mockReset().mockImplementation(mockGetByUrl as never);
     Object.defineProperty(window.navigator, "onLine", { value: true, configurable: true });

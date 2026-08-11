@@ -133,7 +133,7 @@ after a Story 1 navigation, and across any later in-app navigation.
 **Independent Test**: Pick an event, land on Recommend — the label is already correct on
 first paint. Navigate to another tab and back — still correct, no re-fetch flash.
 
-- [ ] T009 [US2] Rewrite `frontend/components/calendar/RecommendCalendarContext.tsx`: replace
+- [X] T009 [US2] Rewrite `frontend/components/calendar/RecommendCalendarContext.tsx`: replace
       the local `useState` + `useEffect` fetch with
       `useSyncExternalStore(pickedEventStore.subscribe, pickedEventStore.getState,
       pickedEventStore.getServerSnapshot)`; call `pickedEventStore.hydrate()` once, in a
@@ -141,7 +141,7 @@ first paint. Navigate to another tab and back — still correct, no re-fetch fla
       already `"loaded"`); render "Style for an event from calendar" when `event === null`,
       "Styling for {event.title} · Change" when set — copy and markup unchanged, only the data
       source changes. (depends on T002, T003)
-- [ ] T010 [P] [US2] Rewrite `frontend/components/calendar/RecommendCalendarContext.test.tsx`
+- [X] T010 [P] [US2] Rewrite `frontend/components/calendar/RecommendCalendarContext.test.tsx`
       to mock `@/lib/calendar/pickedEventStore` instead of `apiClient` directly: renders the
       unpicked prompt when the store's `event` is `null`; renders "Styling for {title} ·
       Change" when the store already holds a `"loaded"` event **synchronously on first
