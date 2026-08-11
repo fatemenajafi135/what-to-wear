@@ -81,4 +81,25 @@ describe("Composer", () => {
     rerender(<Composer onSend={vi.fn()} inFlight={false} initialValue="A different event" />);
     expect(screen.getByLabelText("Message")).toHaveValue("my own words");
   });
+
+  it("adopts initialValue once it becomes available after mount, while the field is still untouched", () => {
+    // Found in manual browser verification (specs/020-calendar-pick-to-recommend, T023):
+    // pickedEventStore's hydration is async, so on a fresh page load Composer often mounts
+    // BEFORE the picked event is known — initialValue arrives as undefined first, then a real
+    // string a render later. Capturing it only via useState's initializer misses this entirely.
+    const { rerender } = render(<Composer onSend={vi.fn()} inFlight={false} initialValue={undefined} />);
+    expect(screen.getByLabelText("Message")).toHaveValue("");
+
+    rerender(<Composer onSend={vi.fn()} inFlight={false} initialValue="Dinner with Ana, Fri 8:00 PM" />);
+    expect(screen.getByLabelText("Message")).toHaveValue("Dinner with Ana, Fri 8:00 PM");
+  });
+
+  it("does not adopt a late-arriving initialValue once the user has already typed something", async () => {
+    const { rerender } = render(<Composer onSend={vi.fn()} inFlight={false} initialValue={undefined} />);
+    const input = screen.getByLabelText("Message");
+    await userEvent.type(input, "already typing");
+
+    rerender(<Composer onSend={vi.fn()} inFlight={false} initialValue="Dinner with Ana, Fri 8:00 PM" />);
+    expect(screen.getByLabelText("Message")).toHaveValue("already typing");
+  });
 });

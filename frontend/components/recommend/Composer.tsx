@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import styles from "./Composer.module.css";
@@ -13,9 +13,13 @@ export interface ComposerProps {
   inFlight: boolean;
   /** specs/020-calendar-pick-to-recommend (design-decisions.md §61): a fresh conversation
    * with a picked event pre-fills this with editable, unsent text built from the event —
-   * never asserted as fact, just an easy starting point. Read once, as the input's initial
-   * value only — a later change to this prop (e.g. the picked event changing) must never
-   * clobber text the user has already started editing. */
+   * never asserted as fact, just an easy starting point. `pickedEventStore`'s hydration is
+   * async, so this often arrives a render or two AFTER mount (found in manual verification,
+   * T023: on a fresh page load the store hasn't hydrated yet when Composer first mounts, so
+   * capturing it only as the `useState` initializer misses it entirely) — adopted whenever it
+   * transitions to a real value WHILE the field is still untouched (`value === ""`), never
+   * once the user has typed anything, so an edit in progress or a later change to which event
+   * is picked can't clobber it. */
   initialValue?: string;
 }
 
@@ -31,6 +35,10 @@ export function Composer({ onSend, inFlight, initialValue }: ComposerProps) {
   const [value, setValue] = useState(initialValue ?? "");
   const isOnline = useOnlineStatus();
   const disabled = !isOnline || inFlight;
+
+  useEffect(() => {
+    setValue((current) => (current === "" && initialValue ? initialValue : current));
+  }, [initialValue]);
 
   function commit() {
     const text = value.trim();
