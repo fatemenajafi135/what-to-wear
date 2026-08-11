@@ -222,6 +222,56 @@ describe("BulkQueue", () => {
     });
   });
 
+  // issue #62: the same skip link the upload-error state already had,
+  // generalized to the normal `ready` state — abandoning a photo that
+  // scanned fine, not recovering from a failure.
+  describe("skipping a normal (ready) card", () => {
+    it("advances to the next card without calling the save endpoint", async () => {
+      mockedPost
+        .mockResolvedValueOnce(extractResponse("user-a/0.jpg", "top"))
+        .mockResolvedValueOnce(extractResponse("user-a/1.jpg", "bottom"));
+
+      render(<BulkQueueHarness files={makeFiles(2)} onClose={vi.fn()} />);
+      await screen.findByText("Reviewing item 1 of 2");
+      await userEvent.click(screen.getByRole("button", { name: "Skip this photo" }));
+
+      expect(await screen.findByText("Reviewing item 2 of 2")).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "Bottom" })).toHaveAttribute("aria-pressed", "true");
+      // Only the two upfront extract calls — never from-upload.
+      expect(mockedPost).toHaveBeenCalledTimes(2);
+      expect(mockedPost).not.toHaveBeenCalledWith("/api/v1/closet/items/from-upload", expect.anything());
+    });
+
+    it("closes the overlay when skipping the last card, without saving it", async () => {
+      mockedPost.mockResolvedValueOnce(extractResponse("user-a/0.jpg", "top"));
+
+      const onClose = vi.fn();
+      render(<BulkQueueHarness files={makeFiles(1)} onClose={onClose} />);
+      await userEvent.click(await screen.findByRole("button", { name: "Skip and finish" }));
+
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(mockedPost).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not skip a saved item — an already-saved card stays saved when a later one is skipped", async () => {
+      mockedPost
+        .mockResolvedValueOnce(extractResponse("user-a/0.jpg", "top"))
+        .mockResolvedValueOnce(extractResponse("user-a/1.jpg", "bottom"))
+        .mockResolvedValueOnce({ data: { id: "item-1" }, error: undefined, response: new Response() }); // save card 1
+
+      render(<BulkQueueHarness files={makeFiles(2)} onClose={vi.fn()} />);
+      await screen.findByText("Reviewing item 1 of 2");
+      await userEvent.click(screen.getByRole("button", { name: "Save & next" }));
+
+      await screen.findByText("Reviewing item 2 of 2");
+      await userEvent.click(screen.getByRole("button", { name: "Skip and finish" }));
+
+      // Card 1's save already went through; skipping card 2 never issues a
+      // second from-upload call, so nothing about card 1 is touched again.
+      expect(mockedPost).toHaveBeenCalledTimes(3);
+    });
+  });
+
   // Extraction SUCCEEDING but finding no colour is a different case: the
   // photo did land in Storage, so the card is saveable once the user fills
   // colour in. It must stay a normal review card, not an error.

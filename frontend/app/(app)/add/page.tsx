@@ -6,7 +6,7 @@ import { TopHeader } from "@/components/ui/TopHeader/TopHeader";
 import { CloseAddOverlay } from "./CloseAddOverlay";
 import { AddItemFlow } from "./AddItemFlow";
 import { BulkChoiceSheet } from "./BulkChoiceSheet";
-import { BulkQueue, type BulkQueuePosition } from "./BulkQueue";
+import { BulkQueue, type BulkQueuePosition, type BulkQueueSaveProgress } from "./BulkQueue";
 import { addItemCopy } from "@/lib/add-item-copy";
 import styles from "./page.module.css";
 
@@ -39,6 +39,7 @@ export default function AddItemPage() {
   const router = useRouter();
   const [entry, setEntry] = useState<EntryState>({ mode: "choice" });
   const [bulkPosition, setBulkPosition] = useState<BulkQueuePosition | null>(null);
+  const [bulkSaveProgress, setBulkSaveProgress] = useState<BulkQueueSaveProgress | null>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
   // Stable identity — BulkQueue's own effect that calls this depends on it,
@@ -46,6 +47,20 @@ export default function AddItemPage() {
   const handleBulkPosition = useCallback((position: BulkQueuePosition | null) => {
     setBulkPosition(position);
   }, []);
+
+  // issue #62: same stable-identity reasoning as handleBulkPosition above.
+  const handleBulkSaveProgress = useCallback((progress: BulkQueueSaveProgress) => {
+    setBulkSaveProgress(progress);
+  }, []);
+
+  // CloseAddOverlay only needs to confirm once a bulk batch has something to
+  // lose (docs/design-decisions.md §64) — the choice sheet and the
+  // single-item flow (nothing saved before its final Save tap) never do,
+  // and neither does a bulk batch nobody has saved into yet.
+  const closeConfirmation =
+    entry.mode === "bulk" && bulkSaveProgress && bulkSaveProgress.savedCount > 0
+      ? { savedCount: bulkSaveProgress.savedCount, total: bulkSaveProgress.total }
+      : null;
 
   const handleClose = () => {
     if (window.history.length > 1) {
@@ -70,7 +85,10 @@ export default function AddItemPage() {
   return (
     <>
       <div className={styles.stickyHeader}>
-        <TopHeader title="Add item" rightSlot={{ kind: "custom", node: <CloseAddOverlay /> }} />
+        <TopHeader
+          title="Add item"
+          rightSlot={{ kind: "custom", node: <CloseAddOverlay confirmation={closeConfirmation} /> }}
+        />
         {entry.mode === "bulk" && bulkPosition && (
           <h2 className={`textSectionTitle ${styles.bulkPosition}`} aria-live="polite">
             {addItemCopy.review.position(bulkPosition.current, bulkPosition.total)}
@@ -80,7 +98,12 @@ export default function AddItemPage() {
       <div className={styles.content}>
         {entry.mode === "single" && <AddItemFlow onClose={handleClose} />}
         {entry.mode === "bulk" && (
-          <BulkQueue files={entry.files} onClose={handleClose} onPositionChange={handleBulkPosition} />
+          <BulkQueue
+            files={entry.files}
+            onClose={handleClose}
+            onPositionChange={handleBulkPosition}
+            onSaveProgressChange={handleBulkSaveProgress}
+          />
         )}
       </div>
 

@@ -3198,3 +3198,135 @@ meaningful headroom above 5 for that same use case, just less than 20 did.
 | (b) Measure real review-queue timing first, per the issue's own instruction | Correct as stated, but not run; the product owner made the call directly instead. Recorded honestly above rather than backfilled as if measured. |
 | (c) 15, the top of the issue's range | Leaves the cost/session-length problem this issue exists to fix only partially addressed. |
 | (d) Leave 20 | The issue's whole premise — this is a real bill and a long uninterruptible session — remains true at 20. |
+
+## 64. Skip/cancel in the add-item flow (issue #62)
+
+**Status: decided.** The issue names three gaps in one sentence — skip the current photo, or
+cancel the batch — but they don't share a risk profile, and treating them identically was the
+wrong instinct to check before writing any code.
+
+### Skip the current photo: one tap, no confirmation, reused (not new) copy
+
+Once a photo scans successfully into the `ready` review card, there was previously no way to
+abandon just that item — the only forward path was Save. `BulkQueue.tsx` already had a skip
+link, but it only rendered for `upload-error` (a photo whose upload itself failed, which can
+never be saved). The issue's own note is explicit about what the *new* one should feel like:
+"skipping should feel like the same deliberate, quiet behaviour rather than an error state" —
+which reads directly as an instruction not to gate it behind a confirmation dialog. A confirm
+step on every skip would make the quiet, low-stakes action (abandoning one photo, nothing
+saved, nothing lost) feel as weighty as the batch-level cancel below, which is the wrong
+signal to send for a single "not this one" decision the user can make dozens of times in one
+sitting.
+
+**Decision:** generalize the existing skip link to the `ready`/`save-error` states too — same
+`.skipLink` style, same one-tap `advance()` call, disabled only while the current card's own
+save request is in flight (so a skip can't race a save). The copy ("Skip this photo" / "Skip
+and finish") is **reused verbatim**, not rewritten: it was already state-neutral (it never
+said anything about an error), so the same pair of strings correctly covers both the recovery
+case and the deliberate-pass case. It was hardcoded inline in `BulkQueue.tsx`; moved into
+`lib/add-item-copy.ts` (`review.skipCta`) while doing this, matching how every other string on
+this screen is owned.
+
+**Rejected:**
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — one-tap, no confirmation, existing copy reused | — |
+| Confirm every skip ("Skip this item?") | Directly contradicts the issue's own "deliberate, quiet behaviour rather than an error state" instruction; would make routine, low-stakes browsing friction-heavy in a flow #61 just shortened specifically to reduce friction. |
+| Write new copy for the ready-state skip, distinct from the error-state one | The existing string already doesn't reference an error — nothing about it needed to change for the new call site. Writing a second string for the identical action is exactly the "two skip affordances" failure mode flagged as a risk going in. |
+
+### Cancel the whole batch: confirm only when it would silently discard something
+
+`CloseAddOverlay`'s X previously closed unconditionally (`router.back()` / `/closet`, no
+dialog). The issue names the real risk directly: a user five items into a ten-item batch,
+several already saved, taps X and loses the rest with zero warning. But #61 (this same day)
+shortened bulk batches specifically to reduce friction and make them finishable in one
+sitting — so the fix here has to add exactly the friction the risk justifies, not more.
+
+**Decision, single-item flow: never confirm.** Nothing is saved before the final Save tap
+(`AddItemFlow`'s `onClose` only ever fires *after* a successful save), so there is nothing a
+close can silently discard. A confirmation here would be pure friction with no corresponding
+risk — `AddItemFlow.tsx` needed no code change for this issue at all (see "What I didn't
+touch" below).
+
+**Decision, bulk flow: confirm only once `savedCount > 0`.** Not "any progress" (e.g.
+currentIndex > 0 from skips alone) — specifically *saved* progress, because that's the exact
+harm the issue names: real, permanent closet writes the user might not realize they're about
+to strand behind an unwarned close. A batch abandoned before anything saved (browsed the first
+photo, decided not to bother) has nothing to lose and gets no dialog, matching the
+single-item flow's own reasoning. `BulkQueue` reports `{ savedCount, total }` upward the same
+way it already lifts `{ current, total }` for the position indicator (`onPositionChange` →
+`onSaveProgressChange`, same shape of lift, not a second queue owner); `page.tsx` derives
+whether `CloseAddOverlay` needs to confirm from `entry.mode === "bulk" && savedCount > 0`.
+
+**Already-saved items are never touched by canceling.** The confirmation dialog's copy says so
+explicitly ("already saved to your closet"), and the implementation backs it up: canceling
+only stops the component tree from issuing any further `from-upload` requests and then
+navigates away — it never calls `DELETE`, and the items already written are rows in the
+database, unaffected by anything happening in a browser tab that's about to close. Verified in
+`page.test.tsx`'s integration test by asserting the exact POST call count after a cancel (the
+upfront extracts plus the one save that happened — never a delete, never an extra save for the
+abandoned cards).
+
+**Dialog implementation:** `CancelBatchDialog` (new), reusing §22.2's exact bespoke `<dialog>`
+pattern (real `showModal()`, focus trap/restore, safe-area-aware bottom padding) the same way
+§40 reused it for outfit delete — a third instance of an already-established pattern, not a
+new component category. Not merged into a shared abstraction with `DeleteConfirmDialog`/
+`DeleteOutfitDialog`: the constitution's "two concrete implementations or a measured problem"
+bar is about introducing a *layer*, and this codebase's own precedent for this exact pattern is
+copy-and-adjust per entity (§40 didn't unify with §22.2 either), not a shared component: two
+existing instances is not evidence a third needs different treatment.
+
+**Rejected:**
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — confirm only in bulk mode once `savedCount > 0` | — |
+| Never confirm, anywhere | The named risk is real, not hypothetical — GH issue #62 exists specifically because this was silent. |
+| Always confirm on close, single-item included | Nothing is ever at stake in the single-item flow before the final Save tap; a dialog with no corresponding risk is friction with no benefit, and inconsistent with #61's own direction (fewer obstacles between opening the flow and finishing it). |
+| Confirm in bulk mode based on `currentIndex > 0` (any progress, saved or skipped) | Overcounts the risk: a batch where every prior card was *skipped*, not saved, has nothing real to lose on cancel — warning anyway would be friction unconnected to actual stakes, and dilutes the signal for when a dialog is genuinely warranted. |
+| Merge `CancelBatchDialog` into a new shared `ConfirmDialog` used by all three (this, closet-item delete, outfit delete) | Bigger diff than this issue needs, touches two files this issue has no other reason to change, and isn't how this codebase has handled the same shape of decision before (§40 copy-adjusted rather than unifying with §22.2). A future consolidation is plausible but is its own deliberate decision, not a side effect of this fix. |
+
+### Copy: mostly reused, one new draft
+
+Per Principle VIII, no UI copy is invented in code. Two different situations applied here:
+
+- The skip copy already existed and needed no rewrite (see above) — not a Principle VIII
+  question at all, just a relocation.
+- The cancel-batch dialog's copy is genuinely new; `design-system.md` §6's Add item table has
+  no entry for it. Following §53's precedent (`updateToastCopy.ts`) rather than §51's: this is
+  not a reply to unpredictable user input (§51's own "What this does not license" section says
+  its exception is specifically for that), so it's handled the ordinary way — **drafted,
+  flagged, and kept in exactly one place** (`lib/add-item-copy.ts`, the `cancelBatch` key, with
+  a comment a reader can't miss) pending design-owner sign-off. Register matches the existing
+  bespoke Delete dialogs (short, direct: "Delete {name}?" / "This can't be undone.") rather
+  than the first-person stylist voice used on Recommend, since this is an in-flow system
+  confirmation, not an assistant line.
+
+**Draft copy (pending design-owner sign-off):**
+
+| Element | Draft text |
+|---|---|
+| Title | "Cancel this batch?" |
+| Body | "{savedCount} of {total} items are already saved to your closet. The rest won't be added." |
+| Confirm action | "Cancel batch" |
+| Dismiss action | "Keep reviewing" |
+
+### Where skip lives relative to Save & next
+
+Directly below the review card, as a sibling of the `<form>` rather than inside it (so a tap
+can never be mistaken for, or trigger, a submit) — the same position the pre-existing
+upload-error skip already used, inside the same `.queue` flex column with its existing
+`var(--space-lg)` gap. No new spacing or placement value was introduced; `design-system.md`'s
+Add item section names the review card and its Save & next / Save to Closet actions but has
+nothing to say about a skip control, so the existing in-code precedent is what settles it
+(Principle VIII covers layout, not just copy).
+
+### What I didn't touch
+
+- **`AddItemFlow.tsx`:** no code change. Its single-item flow has no "skip the current photo"
+  concept (there's only one photo, and skipping it is indistinguishable from canceling), and
+  per the single-item cancel decision above, its `onClose` already only fires after a
+  successful save — nothing new to guard.
+- **No merge of the three bespoke confirmation dialogs** into a shared component — see the
+  rejected-alternatives table above.

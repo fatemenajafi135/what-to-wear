@@ -26,6 +26,11 @@ export interface BulkQueuePosition {
   total: number;
 }
 
+export interface BulkQueueSaveProgress {
+  savedCount: number;
+  total: number;
+}
+
 export interface BulkQueueProps {
   files: File[];
   onClose: () => void;
@@ -35,6 +40,11 @@ export interface BulkQueueProps {
    * the indicator shouldn't show (the same "scanning" gate the inline
    * version used). */
   onPositionChange?: (position: BulkQueuePosition | null) => void;
+  /** issue #62: `CloseAddOverlay`'s X button needs to know whether cancelling
+   * now would silently abandon anything, and BulkQueue's per-photo entries
+   * are the only place that's tracked — mirrors `onPositionChange`'s "lift it,
+   * don't duplicate the state" shape rather than a second queue owner. */
+  onSaveProgressChange?: (progress: BulkQueueSaveProgress) => void;
 }
 
 /**
@@ -68,7 +78,7 @@ export interface BulkQueueProps {
  * card shows Button's Error treatment in place; already-saved cards are
  * unaffected; the queue does not advance past it until retried.
  */
-export function BulkQueue({ files, onClose, onPositionChange }: BulkQueueProps) {
+export function BulkQueue({ files, onClose, onPositionChange, onSaveProgressChange }: BulkQueueProps) {
   const [entries, setEntries] = useState<QueueEntry[]>(() =>
     files.map((file) => ({ file, photoUrl: URL.createObjectURL(file), status: "scanning" }))
   );
@@ -136,6 +146,10 @@ export function BulkQueue({ files, onClose, onPositionChange }: BulkQueueProps) 
     onPositionChange?.(current && current.status !== "scanning" ? { current: currentIndex + 1, total } : null);
   }, [current, currentIndex, total, onPositionChange]);
 
+  useEffect(() => {
+    onSaveProgressChange?.({ savedCount, total });
+  }, [savedCount, total, onSaveProgressChange]);
+
   const advance = () => {
     if (isLast) {
       onClose();
@@ -198,7 +212,7 @@ export function BulkQueue({ files, onClose, onPositionChange }: BulkQueueProps) 
               the batch behind it — the queue only ever moves forward on a
               successful save. */}
           <button type="button" className={styles.skipLink} onClick={advance}>
-            {isLast ? "Skip and finish" : "Skip this photo"}
+            {addItemCopy.review.skipCta(isLast)}
           </button>
         </div>
       </div>
@@ -227,6 +241,20 @@ export function BulkQueue({ files, onClose, onPositionChange }: BulkQueueProps) 
         saveError={current.status === "save-error"}
         onSave={handleSave}
       />
+      {/* issue #62: generalizes the upload-error skip above to the normal
+          review state — same copy, same style, same one-tap "just move on"
+          behaviour (docs/design-decisions.md §64). Sits below the form as a
+          sibling rather than inside ReviewCard's <form>, so a tap can never
+          be mistaken for (or trigger) a submit. Disabled mid-save so a skip
+          can't race an in-flight save request for the same card. */}
+      <button
+        type="button"
+        className={styles.skipLink}
+        onClick={advance}
+        disabled={current.status === "saving"}
+      >
+        {addItemCopy.review.skipCta(isLast)}
+      </button>
     </div>
   );
 }
