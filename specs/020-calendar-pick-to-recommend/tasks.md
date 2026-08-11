@@ -115,7 +115,7 @@ error shows.
       {...}}` does NOT navigate, re-enables every row (not left `disabled`), and renders a
       "Couldn't save that pick." `Banner` with a "Try again" action; tapping "Try again"
       re-invokes the `PUT` for the same event. (depends on T005, T006)
-- [ ] T008 [US1] Manual validation: drive quickstart.md Scenario A (success navigates;
+- [X] T008 [US1] Manual validation: drive quickstart.md Scenario A (success navigates;
       simulated failure re-enables rows and shows the Banner) against the local dev stack.
       (depends on T005, T006, T007)
 
@@ -149,7 +149,7 @@ first paint. Navigate to another tab and back — still correct, no re-fetch fla
       "just navigated from a successful pick" case, the actual regression this feature fixes);
       calls `hydrate()` once when the store starts `"unknown"`; does not call `hydrate()` again
       if the store is already `"loaded"` when a second instance mounts. (depends on T009)
-- [ ] T011 [US2] Manual validation: drive quickstart.md Scenario B (label correct immediately
+- [X] T011 [US2] Manual validation: drive quickstart.md Scenario B (label correct immediately
       after a Story-1 navigation; stays correct across a tab-away-and-back; updates again after
       picking a different event) against the local dev stack. (depends on T005, T009, T010)
 
@@ -232,7 +232,7 @@ location; Start Styling carries that location into context assembly regardless.
       behavior); a conversation that already has a user message renders no pre-fill even if a
       picked event exists (spec.md FR-011/Acceptance Scenario 5 — an in-progress conversation
       is left alone). (depends on T016)
-- [ ] T018 [US3] Manual validation: drive quickstart.md Scenario C in full, including the
+- [X] T018 [US3] Manual validation: drive quickstart.md Scenario C in full, including the
       contradiction check (step 6) — pre-filled Composer text on arrival; the first reply
       doesn't ask for a location the event supplied; Start Styling carries the location
       through; a user-edited/contradicting location overrides the seeded one on a later turn.
@@ -262,7 +262,7 @@ brief's baselines (backend 780, frontend 363, PWA e2e 11) — counts must not dr
       be ≥ 363 (367+ once T004/T007/T010/T015/T017's new cases are counted).
 - [X] T022 Run `npm run e2e:pwa` from `frontend/` against a production build — count must be
       ≥ 11, no regression.
-- [ ] T023 Full manual pass in a real browser (see final report): pick an event → land on
+- [X] T023 Full manual pass in a real browser (see final report): pick an event → land on
       Recommend immediately → context current → ask "what should I wear" → confirm the
       stylist doesn't ask for what the event already gave it. Document what was verified
       against a mock vs. a real Google Calendar connection, per spec.md's Assumptions.
