@@ -34,8 +34,12 @@ Frontend: `frontend/`. Backend: `backend/src/whattowear/`, `backend/tests/`. No 
 before any component or write path depends on it — both US1 and US2 need this to exist first.
 
 - [ ] T001 Create `frontend/lib/calendar/pickedEventStore.ts` with the `PickedEventState` type
-      (`status: "unknown" | "loaded"`, `event: CalendarEventView | null`, reusing
-      `CalendarEventView` from `@/lib/api/schema.d.ts` rather than redefining it), a
+      (`status: "unknown" | "loaded"`, `event: CalendarEventView | null`), where
+      `CalendarEventView` is `components["schemas"]["CalendarEventView"]` via
+      `import type { components } from "@/lib/api/schema"` — the established convention for
+      consuming a generated type in this codebase (`components/recommend/OutfitCard.tsx`'s
+      `type StylingOutfit = components["schemas"]["StylingOutfit"]`), not a redefinition
+      (Constitution VII). A
       module-scoped snapshot variable initialized to `{ status: "unknown", event: null }`, a
       `listeners: Set<() => void>` set, and `getState()`/`getServerSnapshot()`/`subscribe(listener)`
       — mirroring `frontend/lib/recommend/recommendChatStore.ts`'s existing shape for these
@@ -192,7 +196,14 @@ location; Start Styling carries that location into context assembly regardless.
       picked event that has `location: None` leaves `location` unset (no crash); a
       **continuing** thread (`body.thread_id` provided) never re-reads or re-seeds the picked
       event, even if one exists, so an in-progress conversation's own stated location is never
-      clobbered (spec.md FR-011). (depends on T012)
+      clobbered (spec.md FR-011). **Also** (closing the FR-007/SC-004 gap identified in
+      `/speckit-analyze`, so this is verified automatically and not only by T018's manual
+      pass): after seeding, call `send_message` (mocking `graph.invoke` the same way this
+      route's existing tests already do) for the first turn on that same thread and assert the
+      `invoke_input` dict `graph.invoke` was called with contains `"location"` equal to the
+      seeded value — proving the existing, unmodified `known_state.get("location")` read in
+      `send_message` actually picks up what `send_turn` seeded, end to end across both routes.
+      (depends on T012)
 
 ### Frontend (composer pre-fill)
 
