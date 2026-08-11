@@ -13,7 +13,7 @@ def test_golden_path_resolves_to_the_tracked_evals_directory() -> None:
 
 def test_loads_all_cases() -> None:
     cases = load_cases()
-    assert len(cases) == 7
+    assert len(cases) == 8
 
 
 def test_case_ids_are_unique() -> None:

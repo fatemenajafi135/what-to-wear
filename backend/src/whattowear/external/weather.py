@@ -80,23 +80,51 @@ def month_to_season(month: int, southern: bool = False) -> Season:
     return s  # type: ignore[return-value]
 
 
+def _geocode_once(name: str, timeout: float) -> tuple[float, float] | None:
+    geo = requests.get(GEOCODE_URL, params={"name": name, "count": "1"}, timeout=timeout).json()
+    results = geo.get("results")
+    if not results:
+        return None
+    return results[0]["latitude"], results[0]["longitude"]
+
+
+def _geocode(location: str, timeout: float) -> tuple[float, float]:
+    """Geocodes `location` as given first, then — on a miss — retries against progressively
+    coarser comma-separated segments, dropping the left-most (most specific) one each time.
+
+    issue #68: `location` isn't always a bare city. A picked calendar event's location is
+    Google's own raw free text (`adapters/google_calendar.py`), and a conversational mention can
+    carry a venue name along with the city even after the extraction prompt is told to prefer
+    the city (prompts/conversational_turn_system.md) — e.g. "Wedding hall, MQVP+X67, Tbilisi,
+    Georgia" fails whole, but "Tbilisi, Georgia" (dropping the venue name and the plus code)
+    succeeds. Dropping from the left rather than guessing which single segment is "the city"
+    means this needs no knowledge of what a segment contains.
+
+    A location with no commas (already just a city) makes exactly one request, same as before
+    this fallback existed."""
+    segments = [s.strip() for s in location.split(",") if s.strip()]
+    candidates = [", ".join(segments[i:]) for i in range(len(segments))] if segments else [location]
+    for candidate in candidates:
+        coords = _geocode_once(candidate, timeout)
+        if coords is not None:
+            return coords
+    raise ValueError(f"could not geocode location: {location!r}")
+
+
 @traceable(name="external.open_meteo", run_type="tool")
 def get_weather(location: str, timeout: float = 10.0) -> dict:
     """Return {temp_c, condition, temp_band, season} for a location name.
 
     Raises on network failure — callers that want a fallback should catch
     and supply temp_c manually (see context_assembler)."""
-    geo = requests.get(GEOCODE_URL, params={"name": location, "count": "1"}, timeout=timeout).json()
-    results = geo.get("results")
-    if not results:
-        raise ValueError(f"could not geocode location: {location!r}")
-    lat, lon = results[0]["latitude"], results[0]["longitude"]
+    lat, lon = _geocode(location, timeout)
 
-    fc = requests.get(
-        FORECAST_URL,
-        params={"latitude": lat, "longitude": lon, "current": "temperature_2m,weather_code"},
-        timeout=timeout,
-    ).json()
+    forecast_params: dict[str, str | float] = {
+        "latitude": lat,
+        "longitude": lon,
+        "current": "temperature_2m,weather_code",
+    }
+    fc = requests.get(FORECAST_URL, params=forecast_params, timeout=timeout).json()
     current = fc["current"]
     temp_c = float(current["temperature_2m"])
     condition = _WMO.get(int(current["weather_code"]), "unknown")

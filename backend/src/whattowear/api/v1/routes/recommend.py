@@ -692,8 +692,20 @@ def send_message(
     # populated identically on both paths. Reuses `_meta_line`'s own humanized labels (found live:
     # the raw `Formality` literal, e.g. "black_tie", reads as a bug in user-visible copy) rather
     # than the raw enum value.
+    #
+    # issue #67 (design-decisions.md §65): the weather fields ride along from the same
+    # `result.context` — `condition` when this is a thread's first invoke (weather was just
+    # looked up), `temp_band` alone on a refinement invoke (`condition` doesn't survive that
+    # path, `temp_c`/`temp_band` do; see context_assembler.py). `wrap_up_text` picks the right
+    # emoji table itself.
     wrap_up_formality = _FORMALITY_LABELS[result.context.formality] if result.context is not None else None
-    wrap_up = turn_copy.wrap_up_text(occasion, wrap_up_formality)
+    wrap_up = turn_copy.wrap_up_text(
+        occasion,
+        wrap_up_formality,
+        temp_c=result.context.temp_c if result.context is not None else None,
+        condition=result.context.condition if result.context is not None else None,
+        temp_band=result.context.temp_band if result.context is not None else None,
+    )
     session_repository.insert_message(user_id, thread_id, "wrap_up", wrap_up)
 
     return SendMessageResponse(

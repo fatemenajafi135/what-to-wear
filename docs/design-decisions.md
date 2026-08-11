@@ -3330,3 +3330,157 @@ nothing to say about a skip control, so the existing in-code precedent is what s
   successful save — nothing new to guard.
 - **No merge of the three bespoke confirmation dialogs** into a shared component — see the
   rejected-alternatives table above.
+
+## 65. Weather shown in the wrap-up line, with an emoji (issue #67)
+
+**Status: decided.** The emoji-per-condition mapping and its temp_band fallback are the
+product owner's explicit, exact direction (issue #67) — recorded here, not re-derived.
+
+### The situation
+
+`context_assembler.assemble_context()` already resolves real weather (`temp_c`, `condition`,
+`temp_band`) into every `Context`, and `SendMessageResponse` already carries `temp_c` on every
+turn — none of it ever reached the user except as an accidental, unlabeled word-swap in the
+outfit meta line (`_meta_line`, which prefers `condition` over formality when known, but only
+on a thread's first message; a refinement turn never recomputes `condition`, so it silently
+reverts to formality without saying why). §49 already established the wrap-up line
+(`copy.wrap_up_text`) as the deterministic, Python-composed summary shown the moment "Start
+styling" is tapped — the model extracts, Python composes, exactly the pattern this issue
+extends rather than departs from.
+
+### Decision: append a weather clause to `wrap_up_text` when `temp_c` is known, two independent emoji tables, layered
+
+`wrap_up_text(occasion, formality, *, temp_c=None, condition=None, temp_band=None)` appends
+`" — {emoji} {temp_c:g}°C."` to the existing occasion/formality sentence whenever `temp_c` is
+not `None`. The emoji is chosen from whichever of two tables applies:
+
+1. **`condition` known** (a thread's first invoke, weather was just looked up) — the condition
+   table below.
+2. **`condition` is `None` but `temp_band` is known** (a refinement invoke — `condition`
+   doesn't survive a refinement today, `temp_band` does; see `context_assembler.py`) — the
+   temp_band fallback table below.
+3. **Neither known** — no weather clause at all; today's occasion/formality-only text,
+   unchanged, byte-identical. Never a placeholder or an empty slot (same standard §49 already
+   set for the formality-unknown case).
+
+**Why two layers, not one:** `temp_band` is not a subset or a coarsening of `condition` —
+they're independent signals the pipeline computes at different points (`condition` only from a
+live weather lookup; `temp_band` from either that lookup or a bare `temp_c`), and only one of
+the two given emoji sets is temperature-shaped at all. Falling back from condition to temp_band
+mirrors exactly which of the two fields actually survives a refinement turn, so the fallback
+layer exists because the data layer already has one.
+
+**Condition → emoji** (`_CONDITION_EMOJI`, covers every string `external/weather.py`'s `_WMO`
+table can produce):
+
+| Condition | Emoji |
+|---|---|
+| clear | ☀️ |
+| mostly clear | 🌤 |
+| partly cloudy | 🌤 (reused — not meaningfully distinct from "mostly clear") |
+| overcast | ☁️ |
+| fog | ☁️ (reused — no fog emoji in the given set; closest available concept) |
+| drizzle | 🌦 |
+| rain | 🌧 |
+| heavy rain | 🌩 |
+| showers | 🌦 (reused, same as drizzle) |
+| heavy showers | 🌧 (reused, same as rain) |
+| snow | 🌨 |
+| heavy snow | ❄️ |
+| thunderstorm | ⛈ |
+
+**`temp_band` → emoji** (`_TEMP_BAND_EMOJI`, fallback only — used when `condition` is `None`):
+
+| temp_band | Emoji |
+|---|---|
+| freezing, cold | ❄️ |
+| cool, mild | 🌤 |
+| warm, hot | ☀️ |
+
+**🌪 (tornado) is deliberately unused.** Nothing in `_WMO`'s condition set means tornado;
+forcing it onto an unrelated condition would be worse than leaving it unused. It stays reserved
+for a genuinely tornado-appropriate condition, if `_WMO` ever gets one — not assigned as a
+"best guess" now.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — one weather clause on `wrap_up_text`, condition table then temp_band fallback | — |
+| A new dedicated weather chip/badge UI element | The issue names this explicitly as a separate, later ask — this slice reuses an existing, already-deterministic, already-approved mechanism instead of introducing new UI. |
+| Fix the outfit meta line's silent-drop-on-refinement quirk in the same slice | Explicitly out of scope per the issue; filed separately if worth fixing on its own. |
+| Derive a single merged emoji table (temp_band values folded into the condition table) instead of two | `temp_band` and `condition` are different vocabularies describing different things (six bands vs. thirteen WMO-derived conditions) — merging them would mean picking, per band, one representative condition-flavored emoji that no actual condition produced, which is exactly the kind of invented mapping the product owner's exact table was meant to foreclose. |
+
+## 66. Location resolves to weather more reliably — city extraction + geocoding fallback (issue #68)
+
+**Status: decided.**
+
+### The situation
+
+Verifying #67 against real conversational turns surfaced why the weather clause it added often
+never appears: `location` reaches `get_weather()` (`external/weather.py`) as raw free text from
+two sources — the conversational extraction (`conversation.reply()`) and a picked calendar
+event's own `location` field (Google's raw text, `adapters/google_calendar.py`) — and
+`get_weather()` made exactly one geocoding attempt against the string as given. A full venue
+address resolves as neither: confirmed live, `"Wedding hall, MQVP+X67, Tbilisi, Georgia"`
+(exactly what the extraction produced, unprompted, for a real message naming that venue) returns
+zero results from Open-Meteo's geocoder, while `"Tbilisi"` alone resolves fine. `condition`/
+`temp_c` then never populate, `assemble_context()` degrades silently (by design — see
+`context_assembler.py`'s own docstring), and #67's clause correctly shows nothing — the fix
+worked, the input feeding it just never arrived.
+
+### Decision: two independent, additive fixes — extraction is nudged toward a city, geocoding gets a coarsening fallback
+
+Neither fix depends on the other; both are needed because they close different gaps upstream and
+downstream of the same string.
+
+1. **`prompts/conversational_turn_system.md` (v3 → v4):** a new instruction, alongside the
+   existing formality-mapping rule, that `location` must be the city (plus region/country only
+   to disambiguate), never a venue name or street address — with a worked example using the
+   exact Tbilisi wedding-hall text this issue was found from. Verified live, same input:
+   `location` now extracts as `"Tbilisi"`. This is an extraction-shaping instruction, not new
+   user-facing copy, so it doesn't route through the design-owner review §63 established for
+   this prompt's *voice* section — the same distinction the existing formality-mapping paragraph
+   already relies on.
+2. **`external/weather.py`'s new `_geocode()`:** on a miss, retries against progressively
+   coarser comma-separated segments (dropping the left-most/most-specific one each time) before
+   raising. A bare city (no comma) makes exactly one request, unchanged from before. This is the
+   layer that also covers calendar-event locations, which have no LLM extraction step to fix
+   them at the source.
+
+Together: the prompt fix means most new free-text mentions never need the fallback at all: the
+fallback is what catches everything the prompt can't reach — calendar events, and any address
+that still slips through despite the extraction instruction.
+
+**Why both, not just the prompt fix:** the prompt only shapes one of the two sources of
+`location`. A picked calendar event's location is never passed through an LLM at all (design-
+decisions.md §61 — a plain field copy), so a prompt-only fix would leave that path exactly as
+fragile as it was found.
+
+**Why both, not just the geocoding fallback:** the fallback still has to guess which segment is
+the city by position (left-to-right, most-specific-first) — it has no semantic understanding of
+what it dropped. The prompt fix gets the common case (a stated free-text location) right at the
+source, with an actual understanding of what's a venue versus a place name, rather than relying
+on comma-position heuristics for input the extraction could have gotten right the first time.
+
+### Explicitly not built (product direction, not a resource cut)
+
+- **Device/browser geolocation (lat/lon).** Considered and explicitly declined — the ask was
+  "based on city and location of the event," not the user's live coordinates. `get_weather()`'s
+  forecast call already accepts raw lat/lon (Open-Meteo's endpoint takes them directly — only
+  the geocoding step needed a place name), so this remains a small, separable addition if wanted
+  later, but nothing here builds toward it.
+- **Weather forecasting for a future date/time.** `get_weather()` only ever resolves *current*
+  conditions — there is no date parameter anywhere in this call. A styling request made today
+  for an event tomorrow night reflects today's weather, not tomorrow's. Noted as a real,
+  separate gap (found during the same investigation), not fixed here.
+- **Calendar-location seeding beyond a brand-new thread** (§61's existing scope) — unchanged.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — prompt-level city preference + geocoding-level coarsening fallback, both additive | — |
+| Geocoding fallback only, no prompt change | Leaves the extraction producing full addresses by default; works, but every free-text mention pays the cost of 2-4 wasted geocode calls before landing on the city, instead of getting there in one. |
+| Prompt change only, no geocoding fallback | Leaves calendar-event locations exactly as fragile as found — no LLM sits in that path to apply the same instruction. |
+| Parse/strip the address in Python (e.g. regex for the last comma-separated segment) instead of a request-level fallback | Indistinguishable from the fallback already built for the *common* case, but a single fixed position (e.g. "always the last segment") breaks for addresses that end in a plus code or postal code rather than a country; trying multiple positions in order, cheaply, against the real geocoder is what the fallback already does. |
