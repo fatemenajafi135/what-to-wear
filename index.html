@@ -119,7 +119,7 @@
   </div>
   <div style="flex:1; background:var(--color-bg); display:flex; flex-direction:column; justify-content:center; gap:40px; padding:0 var(--pad-x);">
     <h1 style="margin:0; font-size:var(--type-title); font-weight:700; letter-spacing:2px; color:var(--color-text);">WHAT TO WEAR</h1>
-    <p style="margin:0; font-size:var(--type-subtitle); font-weight:500; color:var(--color-primary); max-width:900px; line-height:1.3;">A styling agent that reads your real closet, your body, the weather <br> ... and returns one outfit</p>
+    <p style="margin:0; font-size:var(--type-subtitle); font-weight:500; color:var(--color-primary); max-width:900px; line-height:1.3; text-align:justify;">... is the stylist that actually knows your closet. Every outfit it suggests is grounded in what you already own, reasoned through real styling logic instead of a guess. It doesn't hand you a single verdict, it ranks a few options and explains why each one works, then gets sharper about your taste the more you use it.</p>    
   </div>
 </section>
 
@@ -192,46 +192,56 @@
   </div>
 </section>
 
-<section data-label="Architecture: the stack" data-screen-label="14" data-speaker-notes="Next.js on Vercel, FastAPI on Render, Supabase for auth and data, LangGraph checkpointing conversations into Postgres. Qdrant for the knowledge base. Every model call goes through a gateway with mandatory tracing." style="background:var(--color-surface); display:flex; flex-direction:column; padding:var(--pad-top) var(--pad-x) var(--pad-bottom) var(--pad-x); gap:44px;">
-  <h2 style="margin:0; font-size:var(--type-title); font-weight:700; color:var(--color-text);">The stack</h2>
-  <div style="position:relative; width:100%; height:660px; flex-shrink:0;">
-    <svg viewBox="0 0 1720 660" style="position:absolute; inset:0; width:100%; height:100%;">
-      <line x1="860" y1="90" x2="860" y2="150" stroke="#4b2e52" stroke-width="2"></line>
-      <line x1="860" y1="240" x2="860" y2="300" stroke="#4b2e52" stroke-width="2"></line>
-      <line x1="220" y1="300" x2="1500" y2="300" stroke="#4b2e52" stroke-width="2"></line>
-      <line x1="220" y1="300" x2="220" y2="390" stroke="#4b2e52" stroke-width="2"></line>
-      <line x1="540" y1="300" x2="540" y2="390" stroke="#4b2e52" stroke-width="2"></line>
-      <line x1="860" y1="300" x2="860" y2="390" stroke="#4b2e52" stroke-width="2"></line>
-      <line x1="1180" y1="300" x2="1180" y2="390" stroke="#4b2e52" stroke-width="2"></line>
-      <line x1="1500" y1="300" x2="1500" y2="390" stroke="#4b2e52" stroke-width="2"></line>
+
+<section data-label="Architecture: the stack" data-screen-label="14" data-speaker-notes="Next.js on Vercel, FastAPI on Render, Supabase for auth and data, Google Calendar through its own OAuth flow. LangGraph orchestrates a nine-node pipeline, checkpointing into Postgres. Qdrant for the knowledge base. Every model call goes through a gateway with mandatory tracing, except reranking, which calls Cohere directly. The AI modules — pipeline, retrieval, scoring, memory — can never import FastAPI; that's enforced in CI, not just convention." style="background:var(--color-surface); display:flex; flex-direction:column; padding:var(--pad-top) var(--pad-x) var(--pad-bottom) var(--pad-x); gap:44px;">
+  <h2 style="margin:0; font-size:var(--type-title); font-weight:700; color:var(--color-text);">System architecture</h2>
+  <div style="position:relative; width:100%; height:700px; flex-shrink:0;">
+    <svg viewBox="0 0 1720 700" style="position:absolute; inset:0; width:100%; height:100%;">
+      <line x1="860" y1="90"  x2="860" y2="135" stroke="#4b2e52" stroke-width="2"></line>
+      <line x1="860" y1="225" x2="860" y2="274" stroke="#4b2e52" stroke-width="2"></line>
+      <line x1="480"  y1="274" x2="1240" y2="274" stroke="#4b2e52" stroke-width="2"></line>
+      <line x1="480"  y1="274" x2="480"  y2="298" stroke="#4b2e52" stroke-width="2"></line>
+      <line x1="1240" y1="274" x2="1240" y2="298" stroke="#4b2e52" stroke-width="2"></line>
+      <line x1="860" y1="274" x2="860" y2="484" stroke="#4b2e52" stroke-width="2"></line>
+      <line x1="380"  y1="484" x2="1340" y2="484" stroke="#4b2e52" stroke-width="2"></line>
+      <line x1="380"  y1="484" x2="380"  y2="506" stroke="#4b2e52" stroke-width="2"></line>
+      <line x1="700"  y1="484" x2="700"  y2="506" stroke="#4b2e52" stroke-width="2"></line>
+      <line x1="1020" y1="484" x2="1020" y2="506" stroke="#4b2e52" stroke-width="2"></line>
+      <line x1="1340" y1="484" x2="1340" y2="506" stroke="#4b2e52" stroke-width="2"></line>
     </svg>
-    <div style="position:absolute; left:650px; top:0; width:420px; height:90px; background:var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;">
-      <p style="margin:0; font-size:28px; font-weight:700; color:var(--color-on-primary);">Frontend</p>
-      <p style="margin:0; font-size:24px; color:var(--color-accent-soft);">Next.js on Vercel, web + installed PWA</p>
+    <div style="position:absolute; left:650px; top:0px; width:420px; height:90px; background:var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;">
+      <p style="margin:0; font-size:26px; font-weight:700; color:var(--color-on-primary);">Frontend</p>
+      <p style="margin:0; font-size:22px; color:var(--color-accent-soft);">Next.js on Vercel, web + installed PWA</p>
     </div>
-    <div style="position:absolute; left:650px; top:150px; width:420px; height:90px; background:var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;">
-      <p style="margin:0; font-size:28px; font-weight:700; color:var(--color-on-primary);">Backend</p>
-      <p style="margin:0; font-size:24px; color:var(--color-accent-soft);">FastAPI, Dockerized, on Render</p>
+    <div style="position:absolute; left:650px; top:135px; width:420px; height:90px; background:var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;">
+      <p style="margin:0; font-size:26px; font-weight:700; color:var(--color-on-primary);">Backend</p>
+      <p style="margin:0; font-size:22px; color:var(--color-accent-soft);">FastAPI, Dockerized, on Render</p>
     </div>
-    <div style="position:absolute; left:70px; top:390px; width:300px; height:230px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:16px; text-align:center;">
-      <p style="margin:0; font-size:26px; font-weight:700; color:var(--color-primary);">Auth, storage, data</p>
-      <p style="margin:0; font-size:24px; color:var(--color-text-secondary); line-height:1.35;">Supabase: JWT auth, closet, outfits, calendar, sessions</p>
+    <p style="position:absolute; left:0; top:236px; width:1720px; margin:0; text-align:center; font-size:20px; font-weight:700; letter-spacing:2px; color:var(--color-primary);">APP DATA &amp; IDENTITY</p>
+    <div style="position:absolute; left:160px; top:298px; width:640px; height:150px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:14px; text-align:center;">
+      <p style="margin:0; font-size:24px; font-weight:700; color:var(--color-primary);">Auth, storage and data</p>
+      <p style="margin:0; font-size:22px; color:var(--color-text-secondary); line-height:1.3;">Supabase — JWT verified locally (ES256/JWKS), Postgres, private Storage via signed URLs</p>
     </div>
-    <div style="position:absolute; left:390px; top:390px; width:300px; height:230px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:16px; text-align:center;">
-      <p style="margin:0; font-size:26px; font-weight:700; color:var(--color-primary);">Conversation memory</p>
-      <p style="margin:0; font-size:24px; color:var(--color-text-secondary); line-height:1.35;">Chats survive redeploys, RLS-hardened Postgres</p>
+    <div style="position:absolute; left:920px; top:298px; width:640px; height:150px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:14px; text-align:center;">
+      <p style="margin:0; font-size:24px; font-weight:700; color:var(--color-primary);">Calendar integration</p>
+      <p style="margin:0; font-size:22px; color:var(--color-text-secondary); line-height:1.3;">Google OAuth (PKCE flow), tokens encrypted at rest — independent of Supabase sign-in</p>
     </div>
-    <div style="position:absolute; left:710px; top:390px; width:300px; height:230px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:16px; text-align:center;">
-      <p style="margin:0; font-size:26px; font-weight:700; color:var(--color-primary);">Knowledge base</p>
-      <p style="margin:0; font-size:24px; color:var(--color-text-secondary); line-height:1.35;">Style knowledge only, closet lives in Postgres. Qdrant Cloud, chunks tagged by layer</p>
+    <p style="position:absolute; left:0; top:458px; width:1720px; margin:0; text-align:center; font-size:20px; font-weight:700; letter-spacing:2px; color:var(--color-primary);">AI SUBSYSTEM</p>
+    <div style="position:absolute; left:230px; top:506px; width:300px; height:190px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:14px; text-align:center;">
+      <p style="margin:0; font-size:24px; font-weight:700; color:var(--color-primary);">LangGraph orchestration</p>
+      <p style="margin:0; font-size:21px; color:var(--color-text-secondary); line-height:1.3;">9-node graph; thread + long-term memory, RLS-hardened Postgres</p>
     </div>
-    <div style="position:absolute; left:1030px; top:390px; width:300px; height:230px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:16px; text-align:center;">
-      <p style="margin:0; font-size:26px; font-weight:700; color:var(--color-primary);">Models</p>
-      <p style="margin:0; font-size:24px; color:var(--color-text-secondary); line-height:1.35;">LiteLLM / Vercel AI Gateway. Chat, embeddings, vision, rerank. Tracing</p>
+    <div style="position:absolute; left:550px; top:506px; width:300px; height:190px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:14px; text-align:center;">
+      <p style="margin:0; font-size:24px; font-weight:700; color:var(--color-primary);">Knowledge base</p>
+      <p style="margin:0; font-size:21px; color:var(--color-text-secondary); line-height:1.3;">Qdrant Cloud, corpus chunked by layer — harmony, trends, dress-code/weather</p>
     </div>
-    <div style="position:absolute; left:1350px; top:390px; width:300px; height:230px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:16px; text-align:center;">
-      <p style="margin:0; font-size:26px; font-weight:700; color:var(--color-primary);">Live data</p>
-      <p style="margin:0; font-size:24px; color:var(--color-text-secondary); line-height:1.35;">Tavily web search at request time</p>
+    <div style="position:absolute; left:870px; top:506px; width:300px; height:190px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:14px; text-align:center;">
+      <p style="margin:0; font-size:24px; font-weight:700; color:var(--color-primary);">Models</p>
+      <p style="margin:0; font-size:21px; color:var(--color-text-secondary); line-height:1.3;">LiteLLM Gateway — chat, embeddings, vision. Cohere — rerank. LangSmith traces every call.</p>
+    </div>
+    <div style="position:absolute; left:1190px; top:506px; width:300px; height:190px; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:14px; text-align:center;">
+      <p style="margin:0; font-size:24px; font-weight:700; color:var(--color-primary);">Live data</p>
+      <p style="margin:0; font-size:21px; color:var(--color-text-secondary); line-height:1.3;">Tavily web search at request time</p>
     </div>
   </div>
 </section>
@@ -265,17 +275,17 @@
       <div style="background:var(--color-primary); padding:18px 26px;"><p style="margin:0; font-size:24px; font-weight:700; letter-spacing:1px; color:var(--color-on-primary);">STYLE RETRIEVAL, FIRST</p></div>
       <div style="padding:26px; display:flex; flex-direction:column; gap:16px;">
         <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">Gates which closet items are even eligible</p>
-        <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">Structured lookup: dress-code and weather rules</p>
-        <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">Semantic search: color and style rules</p>
-        <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">Live web search, not a stale corpus</p>
+        <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">L4 — structured lookup: dress-code and weather rules</p>
+        <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">L1 — semantic search: Munsell, Chevreul, curated style corpus</p>
+        <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">L3 — live web search, not a stale corpus</p>
       </div>
     </div>
     <div id="qw-box-wardrobe" style="flex:1; background:var(--color-surface); border:2px solid var(--color-primary); border-radius:16px; overflow:hidden; display:flex; flex-direction:column;">
       <div style="background:var(--color-primary); padding:18px 26px;"><p style="margin:0; font-size:24px; font-weight:700; letter-spacing:1px; color:var(--color-on-primary);">CLOSET, PRUNED AND SCORED</p></div>
       <div style="padding:26px; display:flex; flex-direction:column; gap:16px;">
         <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">Pruned by warmth band and formality first</p>
-        <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">Model path: LLM assembles, scoring ranks</p>
-        <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">Engine path: pure-Python enumeration and scoring</p>
+        <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">Grounded path (default): LLM assembles, scoring ranks</p>
+        <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">Engine path (opt-in): pure-Python enumeration and scoring</p>
         <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">Scored on color, formality, weather, silhouette</p>
       </div>
     </div>
@@ -288,7 +298,16 @@
         <p style="margin:0; font-size:24px; color:var(--color-text); line-height:1.3;">The model never overrides this check</p>
       </div>
     </div>
-  </div><p style="margin-top:auto; max-width:calc(100% - 320px); font-size:var(--type-body); color:var(--color-text-secondary); border-top:1px solid var(--color-border); padding-top:28px;">I measured this against a golden set with an eval harness that imports the exact same scoring functions the pipeline uses, then built and compared three retrieval strategies, including a deliberately naive baseline kept as the control</p>
+   </div>
+  <div style="align-self:flex-start; max-width:900px; background:var(--color-primary); border-radius:16px; padding:28px 40px; display:flex; flex-direction:column; gap:14px;">
+    <p style="margin:0; font-size:20px; font-weight:700; letter-spacing:2px; color:var(--color-accent-soft);">EVALUATED, NOT ASSUMED</p>
+    <p style="margin:0; font-size:28px; font-weight:700; color:var(--color-on-primary);">Same scoring functions as production. Not a separate metric.</p>
+    <div style="display:flex; gap:12px; margin-top:4px;">
+      <span style="background:var(--color-accent-soft); border-radius:999px; padding:10px 18px; font-size:20px; font-weight:600; color:var(--color-primary); white-space:nowrap;">Baseline · control</span>
+      <span style="background:var(--color-accent-soft); border-radius:999px; padding:10px 18px; font-size:20px; font-weight:600; color:var(--color-primary); white-space:nowrap;">Hybrid</span>
+      <span style="background:var(--color-accent-soft); border-radius:999px; padding:10px 18px; font-size:20px; font-weight:600; color:var(--color-primary); white-space:nowrap;">Advanced · Cohere rerank</span>
+    </div>
+  </div>
   <svg id="qw-arrow-svg" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; z-index:4;">
     <defs>
       <marker id="qw-arrowhead" markerWidth="8" markerHeight="8" refX="5.5" refY="4" orient="auto">
