@@ -56,4 +56,21 @@ describe("AddItemPage", () => {
 
     expect(await screen.findByText("Reviewing item 1 of 1")).toBeInTheDocument();
   });
+
+  it("selecting more than 10 files truncates the bulk queue to 10 (issue #61)", async () => {
+    vi.mocked(apiClient.POST).mockResolvedValue({
+      data: { photo_path: "user-a/0.jpg", extraction_ok: true, extracted: { category: "top" }, color_names: [] },
+      error: undefined,
+      response: new Response(),
+    });
+
+    const { container } = render(<AddItemPage />);
+    await userEvent.click(screen.getByText("Add bulk items"));
+
+    const bulkInput = container.querySelector('input[type="file"][multiple]') as HTMLInputElement;
+    const files = Array.from({ length: 15 }, (_, i) => new File(["fake"], `item-${i}.jpg`, { type: "image/jpeg" }));
+    await userEvent.upload(bulkInput, files);
+
+    expect(await screen.findByText("Reviewing item 1 of 10")).toBeInTheDocument();
+  });
 });

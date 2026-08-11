@@ -10,7 +10,14 @@ import { BulkQueue, type BulkQueuePosition } from "./BulkQueue";
 import { addItemCopy } from "@/lib/add-item-copy";
 import styles from "./page.module.css";
 
-const MAX_BULK_PHOTOS = 20; // research.md §6 addendum
+// Was 20 (research.md §6 addendum, matching wtw_closet_page_size's "one
+// screenful" precedent) — reduced per issue #61: each photo is a separate
+// billed vision call, and the review queue is one-at-a-time, so 20 was both
+// a large bill and a long uninterruptible session. 10 is the product
+// owner's explicit choice (docs/design-decisions.md §63), the low end of
+// the issue's 10–15 range, favoring session length over the original
+// decision's "cataloging a whole wardrobe in one sitting" framing.
+const MAX_BULK_PHOTOS = 10;
 
 type EntryState = { mode: "choice" } | { mode: "single" } | { mode: "bulk"; files: File[] };
 

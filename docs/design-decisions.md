@@ -3158,3 +3158,43 @@ so it reads as a deliberate boundary, not an oversight.
 | (e) Do nothing beyond making the existing label current (defects 1/2 only) | Leaves defect 3 — the actual subject of this issue's "desired" section — unresolved; the pick would remain a label with no effect on styling output. |
 
 ---
+
+## 63. Bulk-add photo ceiling reduced from 20 to 10 (issue #61)
+
+**Status: decided.** `MAX_BULK_PHOTOS` (`frontend/app/(app)/add/page.tsx`) drops from 20 to
+10, amending the ceiling `specs/006-photo-upload-vision/research.md` §6's addendum set.
+
+### Why the original 20 was reconsidered
+
+20 was chosen to match `wtw_closet_page_size` — "one screenful," a borrowed precedent, not a
+number derived from this flow's own cost. Two things that precedent didn't weigh: each queued
+photo is a separate billed vision call, and the review queue is one-at-a-time with no way to
+save progress and pause partway through. Twenty photos is both a real bill and a long
+uninterruptible sitting.
+
+### The number
+
+10, the low end of the issue's requested 10–15 range. **This is the product owner's explicit
+choice, not a measured one** — the issue asked for the number to come from timing a real review
+queue, and that measurement was not run. Recorded here rather than silently presented as
+derived, per the same "say what you actually did" standard the rest of this file holds to.
+
+Chosen deliberately at the low end: a 10-item queue is finishable in one sitting without feeling
+open-ended, and it's more conservative on cost than 15 while still comfortably above the original
+decision's own rejected floor (5, called "overly restrictive").
+
+### What last time's decision got right and still holds
+
+The original addendum rejected *no limit* (unbounded full-resolution photos in browser memory,
+each up to `wtw_max_upload_bytes`) and rejected *5* (too restrictive for cataloging a whole
+wardrobe in one sitting). Both of those reasons are unaffected by this change — 10 still leaves
+meaningful headroom above 5 for that same use case, just less than 20 did.
+
+### Rejected
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — 10 | — |
+| (b) Measure real review-queue timing first, per the issue's own instruction | Correct as stated, but not run; the product owner made the call directly instead. Recorded honestly above rather than backfilled as if measured. |
+| (c) 15, the top of the issue's range | Leaves the cost/session-length problem this issue exists to fix only partially addressed. |
+| (d) Leave 20 | The issue's whole premise — this is a real bill and a long uninterruptible session — remains true at 20. |
