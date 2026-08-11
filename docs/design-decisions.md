@@ -3330,3 +3330,83 @@ nothing to say about a skip control, so the existing in-code precedent is what s
   successful save — nothing new to guard.
 - **No merge of the three bespoke confirmation dialogs** into a shared component — see the
   rejected-alternatives table above.
+
+## 65. Weather shown in the wrap-up line, with an emoji (issue #67)
+
+**Status: decided.** The emoji-per-condition mapping and its temp_band fallback are the
+product owner's explicit, exact direction (issue #67) — recorded here, not re-derived.
+
+### The situation
+
+`context_assembler.assemble_context()` already resolves real weather (`temp_c`, `condition`,
+`temp_band`) into every `Context`, and `SendMessageResponse` already carries `temp_c` on every
+turn — none of it ever reached the user except as an accidental, unlabeled word-swap in the
+outfit meta line (`_meta_line`, which prefers `condition` over formality when known, but only
+on a thread's first message; a refinement turn never recomputes `condition`, so it silently
+reverts to formality without saying why). §49 already established the wrap-up line
+(`copy.wrap_up_text`) as the deterministic, Python-composed summary shown the moment "Start
+styling" is tapped — the model extracts, Python composes, exactly the pattern this issue
+extends rather than departs from.
+
+### Decision: append a weather clause to `wrap_up_text` when `temp_c` is known, two independent emoji tables, layered
+
+`wrap_up_text(occasion, formality, *, temp_c=None, condition=None, temp_band=None)` appends
+`" — {emoji} {temp_c:g}°C."` to the existing occasion/formality sentence whenever `temp_c` is
+not `None`. The emoji is chosen from whichever of two tables applies:
+
+1. **`condition` known** (a thread's first invoke, weather was just looked up) — the condition
+   table below.
+2. **`condition` is `None` but `temp_band` is known** (a refinement invoke — `condition`
+   doesn't survive a refinement today, `temp_band` does; see `context_assembler.py`) — the
+   temp_band fallback table below.
+3. **Neither known** — no weather clause at all; today's occasion/formality-only text,
+   unchanged, byte-identical. Never a placeholder or an empty slot (same standard §49 already
+   set for the formality-unknown case).
+
+**Why two layers, not one:** `temp_band` is not a subset or a coarsening of `condition` —
+they're independent signals the pipeline computes at different points (`condition` only from a
+live weather lookup; `temp_band` from either that lookup or a bare `temp_c`), and only one of
+the two given emoji sets is temperature-shaped at all. Falling back from condition to temp_band
+mirrors exactly which of the two fields actually survives a refinement turn, so the fallback
+layer exists because the data layer already has one.
+
+**Condition → emoji** (`_CONDITION_EMOJI`, covers every string `external/weather.py`'s `_WMO`
+table can produce):
+
+| Condition | Emoji |
+|---|---|
+| clear | ☀️ |
+| mostly clear | 🌤 |
+| partly cloudy | 🌤 (reused — not meaningfully distinct from "mostly clear") |
+| overcast | ☁️ |
+| fog | ☁️ (reused — no fog emoji in the given set; closest available concept) |
+| drizzle | 🌦 |
+| rain | 🌧 |
+| heavy rain | 🌩 |
+| showers | 🌦 (reused, same as drizzle) |
+| heavy showers | 🌧 (reused, same as rain) |
+| snow | 🌨 |
+| heavy snow | ❄️ |
+| thunderstorm | ⛈ |
+
+**`temp_band` → emoji** (`_TEMP_BAND_EMOJI`, fallback only — used when `condition` is `None`):
+
+| temp_band | Emoji |
+|---|---|
+| freezing, cold | ❄️ |
+| cool, mild | 🌤 |
+| warm, hot | ☀️ |
+
+**🌪 (tornado) is deliberately unused.** Nothing in `_WMO`'s condition set means tornado;
+forcing it onto an unrelated condition would be worse than leaving it unused. It stays reserved
+for a genuinely tornado-appropriate condition, if `_WMO` ever gets one — not assigned as a
+"best guess" now.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(a) chosen** — one weather clause on `wrap_up_text`, condition table then temp_band fallback | — |
+| A new dedicated weather chip/badge UI element | The issue names this explicitly as a separate, later ask — this slice reuses an existing, already-deterministic, already-approved mechanism instead of introducing new UI. |
+| Fix the outfit meta line's silent-drop-on-refinement quirk in the same slice | Explicitly out of scope per the issue; filed separately if worth fixing on its own. |
+| Derive a single merged emoji table (temp_band values folded into the condition table) instead of two | `temp_band` and `condition` are different vocabularies describing different things (six bands vs. thirteen WMO-derived conditions) — merging them would mean picking, per band, one representative condition-flavored emoji that no actual condition produced, which is exactly the kind of invented mapping the product owner's exact table was meant to foreclose. |
