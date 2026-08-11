@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { RecommendChat } from "./RecommendChat";
 import * as recommendChatStore from "@/lib/recommend/recommendChatStore";
 import * as pickedEventStore from "@/lib/calendar/pickedEventStore";
+import { formatEventTime } from "@/lib/calendar/formatEventTime";
 
 vi.mock("@/lib/api/client", () => ({
   apiClient: { GET: vi.fn(), POST: vi.fn() },
@@ -404,7 +405,7 @@ describe("RecommendChat", () => {
     expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument();
   });
 
-  it("020 US3: pre-fills the composer from a picked event in a fresh conversation", async () => {
+  it("020 US3: pre-fills the composer with a complete message from a picked event, including location", async () => {
     pickedEventStore.set({
       google_event_id: "e1",
       title: "Dinner with Ana",
@@ -415,7 +416,25 @@ describe("RecommendChat", () => {
     render(<RecommendChat />);
 
     const input = (await screen.findByLabelText("Message")) as HTMLInputElement;
-    await waitFor(() => expect(input.value).toContain("Dinner with Ana"));
+    await waitFor(() =>
+      expect(input.value).toBe(`I want an outfit for Dinner with Ana on ${formatEventTime("2026-08-14T20:00:00Z")} at Tanto`),
+    );
+  });
+
+  it("020 US3: pre-fills the composer without a trailing 'at' when the picked event has no location", async () => {
+    pickedEventStore.set({
+      google_event_id: "e1",
+      title: "Dinner with Ana",
+      start: "2026-08-14T20:00:00Z",
+      location: null,
+    });
+
+    render(<RecommendChat />);
+
+    const input = (await screen.findByLabelText("Message")) as HTMLInputElement;
+    await waitFor(() =>
+      expect(input.value).toBe(`I want an outfit for Dinner with Ana on ${formatEventTime("2026-08-14T20:00:00Z")}`),
+    );
   });
 
   it("020 US3: no pre-fill in a fresh conversation with no picked event", async () => {
