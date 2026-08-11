@@ -253,11 +253,11 @@ brief's baselines (backend 780, frontend 363, PWA e2e 11) — counts must not dr
       against its committed version — expect **no diff** (research.md's "Confirmed: no
       OpenAPI contract change" finding); if a diff appears, investigate before proceeding
       rather than committing an unexplained schema change.
-- [ ] T020 Run the backend verification suite from `backend/`: `uv run pytest`,
+- [X] T020 Run the backend verification suite from `backend/`: `uv run pytest`,
       `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src`,
       `uv run lint-imports` — all must pass; `pytest` count must be ≥ 780 (781+ once T013's
       new cases are counted).
-- [ ] T021 Run the frontend verification suite from `frontend/`: `npm run lint`,
+- [X] T021 Run the frontend verification suite from `frontend/`: `npm run lint`,
       `npm run typecheck`, `npm test`, `npm run build` — all must pass; `npm test` count must
       be ≥ 363 (367+ once T004/T007/T010/T015/T017's new cases are counted).
 - [ ] T022 Run `npm run e2e:pwa` from `frontend/` against a production build — count must be
