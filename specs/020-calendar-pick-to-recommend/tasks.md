@@ -260,7 +260,7 @@ brief's baselines (backend 780, frontend 363, PWA e2e 11) — counts must not dr
 - [X] T021 Run the frontend verification suite from `frontend/`: `npm run lint`,
       `npm run typecheck`, `npm test`, `npm run build` — all must pass; `npm test` count must
       be ≥ 363 (367+ once T004/T007/T010/T015/T017's new cases are counted).
-- [ ] T022 Run `npm run e2e:pwa` from `frontend/` against a production build — count must be
+- [X] T022 Run `npm run e2e:pwa` from `frontend/` against a production build — count must be
       ≥ 11, no regression.
 - [ ] T023 Full manual pass in a real browser (see final report): pick an event → land on
       Recommend immediately → context current → ask "what should I wear" → confirm the
