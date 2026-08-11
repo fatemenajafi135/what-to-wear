@@ -3022,3 +3022,139 @@ named as outstanding is done; §59 is settled.
 | (e) Have the deployed instance ingest on boot | Needs the corpus (which it does not have), re-embeds on every cold start, and on Render's free tier that is every ~15 idle minutes. |
 
 ---
+
+## 61. Feature 020 (Calendar pick reaches Recommend) — what a picked event does to the conversation
+
+**Status: decided.** GitHub issue #41, defect 3: `recommend.py` never reads a user's picked
+event, so picking one today changes a label and nothing else. This section settles what
+"seed the conversation" means before any pipeline code was touched, per the issue's own
+instruction not to shortcut past it.
+
+### The three options, weighed
+
+**(a) Silent full pre-fill.** Read the picked event and write `occasion` (from the title),
+`formality` (via `context_assembler.infer_formality(title)`), and `location` straight into
+the graph checkpoint the moment a fresh thread starts, exactly as if the user had typed
+them. This is the cheapest reading of "mostly wiring" — and it is rejected outright.
+`infer_formality` maps free text to one of six formality values by keyword match
+(`context_assembler.py`'s own `OCCASION_KEYWORDS`); "Dinner with Ana" contains no keyword
+that table recognizes, so it would silently resolve to the `smart_casual` fallback and
+present that guess to the scoring/rationale pipeline as though the user had stated it.
+Constitution IV requires every rationale to cite retrieved principles or scorer output —
+never a fabricated premise — and an unstated formality guess dressed as a fact is exactly
+that fabrication, just moved one step earlier than a citation. This is the literal failure
+mode the issue names and tells the implementer to stop and reconsider if they find
+themselves about to build.
+
+**(b) Seed a first assistant message.** Before any user turn exists, insert an
+assistant-authored bubble — the issue's own example: *"Styling for Dinner with Ana, Friday
+8pm — anything I should know?"* Rejected, for two independent reasons:
+
+1. **Principle VIII.** `design-system.md` § Screen anatomy → Recommend, item 2 fully
+   specifies the hero state's one assistant line as a fixed welcome bubble with fixed copy.
+   There is no design-owner-approved copy for a second, dynamic, event-derived bubble, and
+   §51 already establishes the boundary for when this codebase is allowed to let something
+   other than a human-authored string appear as assistant copy: *only* the five conversational
+   situations that are themselves a reply to unpredictable user input. A greeting authored
+   before the user has said anything is not that — it is closer to the three Python-owned
+   lines §51 keeps fixed, and none of those three were ever left to be invented per-feature
+   without design review.
+2. **Structural cost for a "mostly wiring" feature.** Every assistant line today is either
+   `conversation.reply`'s per-turn LLM output or one of `copy.py`'s three fixed strings, and
+   both only ever fire *after* a user turn creates the thread (`POST /recommend/turns`
+   inserts the `user_message` row first, then produces the reply). An event-seeded opening
+   line would be the first assistant-authored content with no preceding user turn anywhere
+   in this codebase — a new shape, for a feature the issue explicitly frames as wiring, not
+   new capability.
+
+**(c) Split by reliability — the decision.** Location (and the weather/season context
+`assemble_context` derives from it) is treated as fact and silently carried into the
+conversation. Occasion/formality is never asserted — the event's title and time are offered
+back to the user as their own editable, not-yet-sent text, requiring an explicit Send before
+either reaches the pipeline.
+
+Concretely:
+
+- **Location — silent, deterministic slot seed.** The moment `POST /recommend/turns` opens a
+  brand-new thread (`thread_id` absent from the request) for a user who has a picked event,
+  the route calls `graph.update_state(config, {"location": event.location})` *before*
+  `known_slots` is read and `conversation.reply` is called — the same checkpoint write
+  `/recommend/turns` already performs after every turn's extraction, just seeded once,
+  deterministically, with no LLM involved. Two consequences fall out of code that already
+  exists (`recommend.py`'s existing `known_state.get(key)` loop, `context_assembler`'s
+  existing `location` param and free `get_weather` call): the conversational model's own
+  "already known" line (`conversation._known_slots_line`) already lists location, so the
+  prompt itself steers the model away from re-asking it; and if "Start styling" is tapped
+  before location comes up in conversation at all, `POST /recommend/messages`'s existing
+  first-invoke branch still carries it through to `assemble_context`, so weather-aware output
+  follows without any pipeline change.
+- **Occasion/time — composer pre-fill, not assertion.** The Recommend screen's `Composer`
+  gains an optional initial value. When the store's conversation is genuinely fresh (no
+  thread yet, no messages — the same condition that shows the hero state) and a picked event
+  exists, the input is pre-filled with a plain template of the event's own title and time
+  (`"{title}, {relative day/time}"`, the same time formatting `EventRow` already renders) —
+  fully editable, sending nothing until the user taps Send. No new component and no new
+  chat-surface copy: the input box already exists: this uses it in an already-supported way
+  (a non-empty initial value) rather than adding a bubble, a chip, or a confirmation dialog.
+  It is deliberately **not** wired into the hero's three suggestion chips
+  (`HeroState.tsx`'s `SUGGESTION_CHIPS`) — that row is `design-system.md`'s literal "row of 3
+  suggestion chips" with named copy; changing its count or contents for a state the design
+  system was never asked about is exactly the kind of invented visual Principle VIII forbids,
+  where pre-filling the one form control that has never had specified content is not.
+
+### Why occasion and location are not treated the same
+
+The issue's own instruction: *"location and start time are reliable, occasion is not."*
+Location is not an inference — it is the address the user put on their own calendar event,
+structurally identical in trustworthiness to a user typing "I'm at Tanto" mid-conversation
+(which `conversation.reply`'s extraction already writes to the same slot without
+confirmation). Occasion-as-formality-signal is a real interpretive step:
+`infer_formality` has to guess whether "Dinner with Ana" means a rooftop first date or a
+work obligation, and those guesses produce different, contradictory scoring. The reliability
+gap is exactly the line Constitution IV draws between "user data" and "stylist inference" —
+so the two slots get different treatment on purpose, not the same wiring applied twice.
+
+### What happens when the user's own words contradict the event
+
+The event never gets special authority to defend. `location` seeded from the calendar and
+`location` extracted from a later message live in the exact same graph-state key, written by
+the exact same `graph.update_state(config, updates)` call `POST /recommend/turns` already
+makes after every turn's extraction (`recommend.py`, the `updates` dict built from
+`result.location`). A later turn that extracts a different location overwrites the seed the
+same way it would overwrite anything said in an earlier turn — no new precedence code, no
+"is this from a calendar or from the user" flag anywhere. The user always wins, by the
+mechanism that already existed for correcting any other stated fact.
+
+### Scope boundary: only a fresh thread
+
+Both halves of (c) are gated on the conversation being new (`thread_id` absent /
+`hasUserMessage` false). A picked event does not retroactively inject itself into an
+already-running conversation — reaching Recommend mid-conversation with a newly picked event
+still updates the "Styling for {event} · Change" label (defects 1/2), but leaves the
+in-progress thread's own state alone. Rewriting live conversation state out from under an
+in-progress exchange is a materially different, riskier feature than seeding a conversation
+that has not started yet, and the issue's acceptance criteria describe only the latter.
+
+### What this does not build
+
+`design-system.md` §"Connected, has events" (all rows disabled once any event is picked,
+opacity 0.5 / `cursor:not-allowed`) is unchanged — explicitly out of scope per the issue.
+The only way back to an un-picked state remains disconnecting the calendar entirely
+(`SupabaseCalendarRepository.disconnect` cascades `picked_events`); no dedicated "unpick"
+affordance is added. The issue's acceptance criterion "a way to change/clear" is read as
+preserving the existing "Styling for {event} · Change" link (already routes to `/calendar`,
+untouched by this feature) — not as a request for new unpick UI, which nothing in
+`design-system.md` specifies and which defects 1–3 do not require to be fixed. Recorded here
+so it reads as a deliberate boundary, not an oversight.
+
+### Rejected alternatives
+
+| Option | Rejected because |
+|---|---|
+| **(c) chosen** — location silently seeded as a deterministic slot; occasion/time offered as editable, unsent composer text | — |
+| (a) Silent full pre-fill, including occasion/formality from the title | Constitution IV: presents a title-derived formality guess to the pipeline as though it were user-stated fact. The issue names this exact failure mode directly. |
+| (b) Event seeds a first assistant-authored message | No design-owned copy exists for it (Principle VIII, §51's boundary); would be the first assistant line with no preceding user turn anywhere in the codebase, for a feature framed as wiring. |
+| (d) Add the event as a 4th `HeroState` suggestion chip | Same tap-to-send mechanism as the composer pre-fill, but changes the hero's specified "row of 3" chip content for a case `design-system.md` never considered — smaller win than the composer pre-fill for a larger Principle VIII risk. |
+| (e) Do nothing beyond making the existing label current (defects 1/2 only) | Leaves defect 3 — the actual subject of this issue's "desired" section — unresolved; the pick would remain a label with no effect on styling output. |
+
+---
