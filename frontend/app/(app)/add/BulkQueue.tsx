@@ -198,7 +198,7 @@ export function BulkQueue({ files, onClose, onPositionChange }: BulkQueueProps) 
               the batch behind it — the queue only ever moves forward on a
               successful save. */}
           <button type="button" className={styles.skipLink} onClick={advance}>
-            {isLast ? "Skip and finish" : "Skip this photo"}
+            {addItemCopy.review.skipCta(isLast)}
           </button>
         </div>
       </div>

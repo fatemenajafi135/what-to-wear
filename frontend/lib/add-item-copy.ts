@@ -26,6 +26,13 @@ export const addItemCopy = {
   },
   review: {
     position: (position: number, total: number) => `Reviewing item ${position} of ${total}`,
+    // Moved from BulkQueue.tsx (issue #62), where it was hardcoded inline —
+    // not rewritten. It only ever fired from the upload-error state; #62
+    // reuses it verbatim for a quiet, one-tap skip from the normal `ready`
+    // state too ("skipping should feel like the same deliberate, quiet
+    // behaviour rather than an error state" — the issue's own words), so
+    // one state-neutral pair of strings now covers both call sites.
+    skipCta: (isLast: boolean) => (isLast ? "Skip and finish" : "Skip this photo"),
   },
   color: {
     // docs/design-decisions.md §1.7's generic `field.required`, reused here
