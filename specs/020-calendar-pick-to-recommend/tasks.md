@@ -207,17 +207,17 @@ location; Start Styling carries that location into context assembly regardless.
 
 ### Frontend (composer pre-fill)
 
-- [ ] T014 [P] [US3] Add an optional `initialValue?: string` prop to
+- [X] T014 [P] [US3] Add an optional `initialValue?: string` prop to
       `frontend/components/recommend/Composer.tsx`; seed `useState(initialValue ?? "")` from
       it — a plain initial-value read, not a `useEffect` sync, so a later change to
       `initialValue` (e.g. the picked event changing after the user has already started
       typing) never overwrites what the user has typed.
-- [ ] T015 [P] [US3] Add cases to `frontend/components/recommend/Composer.test.tsx`: with
+- [X] T015 [P] [US3] Add cases to `frontend/components/recommend/Composer.test.tsx`: with
       `initialValue="Dinner with Ana, Fri 8:00 PM"`, the input renders that text on mount and
       it is editable; typing over it and calling `onSend` sends the edited text, not the
       original; re-rendering with a different `initialValue` prop after the user has typed
       does not replace what they typed. (depends on T014)
-- [ ] T016 [US3] In `frontend/components/recommend/RecommendChat.tsx`, compute the Composer
+- [X] T016 [US3] In `frontend/components/recommend/RecommendChat.tsx`, compute the Composer
       pre-fill: when `!hasUserMessage` (the same condition already gating `HeroState`) and
       `pickedEventStore.getState().event` is non-null, build
       `` `${event.title}, ${formatEventTime(event.start)}` `` (import `formatEventTime` from
@@ -225,7 +225,7 @@ location; Start Styling carries that location into context assembly regardless.
       it as `<Composer initialValue={...} .../>`; otherwise pass no `initialValue`. Read the
       store via the same `useSyncExternalStore` subscription pattern already used for
       `recommendChatStore` in this file. (depends on T009, T014)
-- [ ] T017 [P] [US3] Add cases to `frontend/components/recommend/RecommendChat.test.tsx`: a
+- [X] T017 [P] [US3] Add cases to `frontend/components/recommend/RecommendChat.test.tsx`: a
       fresh conversation (`!hasUserMessage`) with a picked event in the (mocked)
       `pickedEventStore` renders the Composer with the expected pre-filled text; a fresh
       conversation with no picked event renders the Composer with no pre-fill (unchanged

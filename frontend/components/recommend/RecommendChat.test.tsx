@@ -403,4 +403,40 @@ describe("RecommendChat", () => {
     // The conversation itself is unaffected by the readiness refetch.
     expect(screen.getByText("Got it — what's the occasion?")).toBeInTheDocument();
   });
+
+  it("020 US3: pre-fills the composer from a picked event in a fresh conversation", async () => {
+    pickedEventStore.set({
+      google_event_id: "e1",
+      title: "Dinner with Ana",
+      start: "2026-08-14T20:00:00Z",
+      location: "Tanto",
+    });
+
+    render(<RecommendChat />);
+
+    const input = (await screen.findByLabelText("Message")) as HTMLInputElement;
+    await waitFor(() => expect(input.value).toContain("Dinner with Ana"));
+  });
+
+  it("020 US3: no pre-fill in a fresh conversation with no picked event", async () => {
+    pickedEventStore.set(null);
+    render(<RecommendChat />);
+    const input = await screen.findByLabelText("Message");
+    expect(input).toHaveValue("");
+  });
+
+  it("020 US3: no pre-fill once the conversation already has a user message (FR-011)", async () => {
+    pickedEventStore.set({
+      google_event_id: "e1",
+      title: "Dinner with Ana",
+      start: "2026-08-14T20:00:00Z",
+      location: "Tanto",
+    });
+    recommendChatStore.hydrate("thread-already-active", [{ id: "m1", role: "user", text: "something casual" }]);
+
+    render(<RecommendChat />);
+
+    const input = await screen.findByLabelText("Message");
+    expect(input).toHaveValue("");
+  });
 });

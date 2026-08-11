@@ -11,6 +11,12 @@ export interface ComposerProps {
    * disables the composer (design-system.md "Chat input behavior",
    * "Intended (production)": both `sending` and `styling` disable it). */
   inFlight: boolean;
+  /** specs/020-calendar-pick-to-recommend (design-decisions.md §61): a fresh conversation
+   * with a picked event pre-fills this with editable, unsent text built from the event —
+   * never asserted as fact, just an easy starting point. Read once, as the input's initial
+   * value only — a later change to this prop (e.g. the picked event changing) must never
+   * clobber text the user has already started editing. */
+  initialValue?: string;
 }
 
 /**
@@ -21,8 +27,8 @@ export interface ComposerProps {
  * actually calls `POST /recommend/turns`, mirroring how it already owns
  * the one other real network trigger, "Start styling".
  */
-export function Composer({ onSend, inFlight }: ComposerProps) {
-  const [value, setValue] = useState("");
+export function Composer({ onSend, inFlight, initialValue }: ComposerProps) {
+  const [value, setValue] = useState(initialValue ?? "");
   const isOnline = useOnlineStatus();
   const disabled = !isOnline || inFlight;
 

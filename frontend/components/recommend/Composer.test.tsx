@@ -53,4 +53,32 @@ describe("Composer", () => {
     expect(screen.getByLabelText("Send")).toBeInTheDocument();
     expect(screen.queryByLabelText("Sending")).not.toBeInTheDocument();
   });
+
+  it("renders with initialValue pre-filled and editable", async () => {
+    const onSend = vi.fn();
+    render(<Composer onSend={onSend} inFlight={false} initialValue="Dinner with Ana, Fri 8:00 PM" />);
+    const input = screen.getByLabelText("Message");
+    expect(input).toHaveValue("Dinner with Ana, Fri 8:00 PM");
+
+    await userEvent.clear(input);
+    await userEvent.type(input, "actually let's do the beach{Enter}");
+    expect(onSend).toHaveBeenCalledWith("actually let's do the beach");
+  });
+
+  it("sends initialValue as-is when the user submits without editing it", async () => {
+    const onSend = vi.fn();
+    render(<Composer onSend={onSend} inFlight={false} initialValue="Dinner with Ana, Fri 8:00 PM" />);
+    await userEvent.click(screen.getByLabelText("Send"));
+    expect(onSend).toHaveBeenCalledWith("Dinner with Ana, Fri 8:00 PM");
+  });
+
+  it("does not clobber text the user has already typed when initialValue changes", async () => {
+    const { rerender } = render(<Composer onSend={vi.fn()} inFlight={false} initialValue="First event" />);
+    const input = screen.getByLabelText("Message");
+    await userEvent.clear(input);
+    await userEvent.type(input, "my own words");
+
+    rerender(<Composer onSend={vi.fn()} inFlight={false} initialValue="A different event" />);
+    expect(screen.getByLabelText("Message")).toHaveValue("my own words");
+  });
 });
