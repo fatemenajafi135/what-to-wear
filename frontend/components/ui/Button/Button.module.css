@@ -9,6 +9,12 @@
   padding: 11px var(--space-lg);
   border: 1px solid transparent;
   cursor: pointer;
+  /* This class also renders as a next/link <a> in href mode (Button.tsx) —
+   * without this, every link-styled Button gets the browser's default anchor
+   * underline under its label (issue #60). One rule on the shared base class
+   * fixes every href-mode Button at once, current and future, rather than
+   * patching each screen that happens to use one. */
+  text-decoration: none;
   transition:
     background-color var(--motion-duration-fast) var(--motion-easing-standard),
     border-color var(--motion-duration-fast) var(--motion-easing-standard);
