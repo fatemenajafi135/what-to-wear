@@ -170,7 +170,7 @@ location; Start Styling carries that location into context assembly regardless.
 
 ### Backend (location seed)
 
-- [ ] T012 [US3] In `backend/src/whattowear/api/v1/routes/recommend.py`, add
+- [X] T012 [US3] In `backend/src/whattowear/api/v1/routes/recommend.py`, add
       `_get_calendar_repository() -> SupabaseCalendarRepository` (mirrors the existing
       `_get_repository`/`_get_session_repository` pattern) and import
       `SupabaseCalendarRepository` from `whattowear.repositories.supabase_calendar`. In
@@ -183,7 +183,7 @@ location; Start Styling carries that location into context assembly regardless.
       `graph`/`config` are established and **before** `known_slots = graph.get_state(config).values`
       is read, per contracts/recommend-turns-seed.md. No other field is written from the
       picked event.
-- [ ] T013 [P] [US3] Create `backend/tests/unit/test_recommend_turns_calendar_seed.py` (or
+- [X] T013 [P] [US3] Create `backend/tests/unit/test_recommend_turns_calendar_seed.py` (or
       the equivalent existing test module for `recommend.py`'s `/recommend/turns` route if one
       already exists — extend it instead of creating a duplicate) covering: a brand-new
       thread with a picked event that has a `location` results in
