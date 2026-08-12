@@ -5,6 +5,8 @@
   </picture>
 </p>
 
+<h1 align="center">What to Wear</h1>
+
 <p align="center">
   A personal styling agent that recommends outfits from the clothes you actually own.
 </p>
