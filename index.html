@@ -25,6 +25,7 @@
   body{margin:0; font-family:var(--font-body);}
   .ph{display:flex; align-items:center; justify-content:center; text-align:center; background:var(--color-surface-sunken); border:2px dashed var(--color-border); color:var(--color-text-secondary); font-size:22px; padding:24px;}
   #cam-box{position:fixed; width:280px; height:210px; background:rgba(75,46,82,0.12); border:3px solid var(--color-primary); border-radius:8px; display:flex; align-items:center; justify-content:center; z-index:1000; pointer-events:none; right:24px; bottom:60px;}
+  #cam-box.cam-hidden{display:none;}
 </style>
 </head>
 <body>
@@ -429,12 +430,42 @@
 
 
 </deck-stage>
-<div id="cam-box">
+<div id="cam-box" class="cam-hidden">
   <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#4b2e52" stroke-width="1.6" opacity="0.7"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2"></rect></svg>
 </div>
 <script>
 (function(){
-  var INSET = 40, box = document.getElementById('cam-box'), lastR = null, lastB = null;
+  // Adds a "toggle camera preview" button into deck-stage's own overlay
+  // toolbar (next to Reset / thumbnail-rail toggle), so showing the cam
+  // box is opt-in — it starts hidden (see .cam-hidden) and only appears
+  // once the button is tapped.
+  var box = document.getElementById('cam-box'), injected = false;
+  function tryInject(){
+    if (injected) return;
+    var stage = document.querySelector('deck-stage');
+    var overlay = stage && stage.shadowRoot && stage.shadowRoot.querySelector('.overlay');
+    var railToggle = overlay && overlay.querySelector('.rail-toggle');
+    if (!overlay || !railToggle) return;
+    injected = true;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn cam-toggle';
+    btn.setAttribute('aria-label', 'Toggle camera preview');
+    btn.setAttribute('title', 'Toggle camera preview');
+    btn.setAttribute('aria-pressed', box.classList.contains('cam-hidden') ? 'false' : 'true');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2"></rect></svg>';
+    btn.addEventListener('click', function(){
+      var hidden = box.classList.toggle('cam-hidden');
+      btn.setAttribute('aria-pressed', hidden ? 'false' : 'true');
+    });
+    railToggle.insertAdjacentElement('afterend', btn);
+  }
+  var poll = setInterval(function(){
+    tryInject();
+    if (injected) clearInterval(poll);
+  }, 200);
+
+  var INSET = 40, lastR = null, lastB = null;
   function tick(){
     var stage = document.querySelector('deck-stage');
     var canvas = stage && stage.shadowRoot && stage.shadowRoot.querySelector('.canvas');
